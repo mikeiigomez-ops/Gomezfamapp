@@ -367,12 +367,14 @@ function extraEventsOn(s) {
   return out;
 }
 
-const WHATS_NEW = 'v9';
+const WHATS_NEW = 'v10';
 function whatsNewCard() {
   if (state.settings.whatsNewSeen === WHATS_NEW) return '';
   const item = (attrs, emoji, title, text) => `<button class="row tap" style="width:100%;text-align:left;padding:10px 0;background:none" ${attrs}><div class="avatar">${emoji}</div><div class="grow"><div class="title">${title}</div><div class="sub" style="white-space:normal">${text}</div></div>${ICON.chev}</button>`;
   return `<div class="card install-tip">
-    <h3>🧸 Squishies, Niddos & Friends</h3>
+    <h3>🏡 Dream House is here!</h3>
+    ${item('data-action="go" data-to="house"', '🏡', 'Dream House', 'Your own dollhouse — decorate rooms, adopt pets, show off squishies, flip the lights to night')}
+    ${item('data-action="go" data-to="town"', '🏘️', 'Gomez Town', 'Visit each other, leave ❤️ & notes, vote House of the Week (winner gets 30 💎)')}
     ${item('data-action="go" data-to="gems"', '💎', 'Gems', 'Kids earn Gems from chores, routines & high-fives — or trade allowance for them (with your OK)')}
     ${item('data-action="go" data-to="squishies"', '🧸', 'Squishies', '54 collectible squishies: mystery boxes with fair odds, a daily free box, a shop, fusing & a collection book')}
     ${item('data-action="go" data-to="squishies" data-sq-tab="unlocks"', '👑', '183 collectibles to find', 'Niddos you press & hold to squeeze, 🎃 Spooky season, ✨ shinies, and Ultimates you earn by doing chores')}
