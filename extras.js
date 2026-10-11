@@ -367,19 +367,16 @@ function extraEventsOn(s) {
   return out;
 }
 
-const WHATS_NEW = 'v2';
+const WHATS_NEW = 'v3';
 function whatsNewCard() {
   if (state.settings.whatsNewSeen === WHATS_NEW) return '';
-  const item = (to, emoji, title, text, extra = '') => `<button class="row tap" style="width:100%;text-align:left;padding:10px 0" data-action="go" data-to="${to}" ${extra}><div class="avatar">${emoji}</div><div class="grow"><div class="title">${title}</div><div class="sub" style="white-space:normal">${text}</div></div>${ICON.chev}</button>`;
+  const item = (attrs, emoji, title, text) => `<button class="row tap" style="width:100%;text-align:left;padding:10px 0;background:none" ${attrs}><div class="avatar">${emoji}</div><div class="grow"><div class="title">${title}</div><div class="sub" style="white-space:normal">${text}</div></div>${ICON.chev}</button>`;
   return `<div class="card install-tip">
-    <h3>✨ New in the app</h3>
-    ${item('budget', '📊', 'Spending trends', 'Budget → Trends: 6-month chart & where it went', 'data-btab="trends"')}
-    ${item('budget', '🤖', 'Smarter bills', 'Autopay logs itself; electric-style bills ask for the real amount', 'data-btab="bills"')}
-    ${item('goals', '🎯', 'Savings goals', 'Save for trips, emergencies, anything')}
-    ${item('upkeep', '🔧', 'Home upkeep', 'Filter changes, smoke detectors, gutters — reminded on time')}
-    ${item('binder', '📒', 'Family binder', 'Doctors, insurance, Wi-Fi, emergency numbers')}
-    ${item('meals', '📖', 'Recipe box', 'Save recipes, plan them, shop the ingredients', 'data-mtab="recipes"')}
-    <div class="small muted" style="margin:6px 0 10px">Plus 🔎 search (top right) and quick-add buttons below.</div>
+    <h3>✨ The app got a makeover</h3>
+    ${item('data-action="magic-add"', '✨', 'Magic Add', 'Type “$40 Costco” or “Dentist Fri 3pm” — it figures out the rest')}
+    ${item('data-action="go" data-to="shop"', '🛍️', 'Store Mode', 'Big one-handed checklist, screen stays on, logs the receipt')}
+    ${item('data-action="go" data-to="settings"', '🎨', 'Pick your color', 'Six accent themes in Settings — each phone can choose its own')}
+    <div class="small muted" style="margin:8px 0 10px">Tip: swipe a list row <b>right</b> to check it off, <b>left</b> to delete. Drag any sheet down to close it.</div>
     <button class="btn secondary block" data-action="whats-new-ok">Got it</button>
   </div>`;
 }
