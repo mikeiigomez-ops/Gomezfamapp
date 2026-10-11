@@ -15,6 +15,7 @@ const AV_MOUTH = { smile: 'Smile', grin: 'Grin', open: 'Wow', cat: 'Kitty', tong
 const AV_TOP = { tee: ['T-shirt', 0], tank: ['Tank top', 0], hoodie: ['Hoodie', 0], sweater: ['Striped sweater', 0], jacket: ['Jacket', 20], dress: ['Dress', 0], overalls: ['Overalls', 0], gown: ['Princess gown', 80], cape: ['Hero cape', 60] };
 const AV_GRAPHIC = { none: ['None', 0], heart: ['💖 Heart', 0], star: ['⭐ Star', 0], bolt: ['⚡ Bolt', 15], rainbow: ['🌈 Rainbow', 30], squish: ['🧸 Squishy', 40] };
 const AV_BOTTOM = { pants: 'Pants', shorts: 'Shorts', skirt: 'Skirt', leggings: 'Leggings' };
+const AV_FACIAL = { none: 'None', stubble: 'Stubble', mustache: 'Mustache', goatee: 'Goatee', beard: 'Beard' };
 const AV_SHOES = { sneakers: ['Sneakers', 0], boots: ['Boots', 15], sandals: ['Sandals', 0], slippers: ['Bunny slippers', 40] };
 const AV_ACC = {
   none: ['None', 0], glasses: ['Glasses', 0], sunglasses: ['Sunglasses', 15], bow: ['Bow', 0], flower: ['Flower', 0], cap: ['Cap', 0], beanie: ['Beanie', 0],
@@ -27,7 +28,24 @@ function defaultAvatar(mid) {
   const r = rnd(hashStr(mid || 'x'));
   return { skin: Math.floor(r() * 5), hair: ['bob', 'short', 'ponytail', 'curly', 'long', 'spiky'][i % 6], hairC: ['dark', 'brown', 'black', 'blonde'][i % 4], eyes: 'round', eyeC: 0, mouth: 'smile', blush: true, freckles: false, top: ['tee', 'hoodie', 'dress', 'overalls'][i % 4], topC: [0, 5, 6, 3, 1][i % 5], graphic: ['heart', 'star', 'none'][i % 3], bottom: 'pants', bottomC: 5, shoes: 'sneakers', shoesC: 7, acc: 'none', own: {} };
 }
-const avatarOf = (mid) => ({ ...defaultAvatar(mid), ...(state.avatars?.[mid] || {}) });
+// Starter looks: one tap sets hair, clothes and face; everything stays mix-and-match afterwards.
+const AV_LOOKS = {
+  boy: { hair: 'short', top: 'tee', graphic: 'star', topC: 5, bottom: 'pants', bottomC: 8, eyes: 'round', blush: true, facial: 'none', acc: 'none' },
+  girl: { hair: 'ponytail', top: 'tee', graphic: 'heart', topC: 0, bottom: 'leggings', bottomC: 6, eyes: 'lashes', blush: true, facial: 'none', acc: 'bow' },
+  man: { hair: 'short', top: 'hoodie', graphic: 'none', topC: 5, bottom: 'pants', bottomC: 8, eyes: 'round', blush: false, facial: 'stubble', acc: 'none' },
+  woman: { hair: 'long', top: 'sweater', graphic: 'none', topC: 9, bottom: 'pants', bottomC: 8, eyes: 'lashes', blush: true, facial: 'none', acc: 'none' },
+};
+const isKidMember = (mid) => !!state.members.find((m) => m.id === mid)?.kid || (typeof kids === 'function' && kids().some((k) => k.id === mid));
+function lookFromEmoji(mid) {
+  const e = state.members.find((m) => m.id === mid)?.emoji || '';
+  const male = /👨|👦|🧔|👴|🤴|♂/u.test(e), female = /👩|👧|👵|👸|♀/u.test(e);
+  if (!male && !female) return null;
+  return male ? (/👦/u.test(e) || isKidMember(mid) ? 'boy' : 'man') : (/👧/u.test(e) || isKidMember(mid) ? 'girl' : 'woman');
+}
+const avatarOf = (mid) => {
+  const look = lookFromEmoji(mid);
+  return { ...defaultAvatar(mid), ...(look ? { ...AV_LOOKS[look], look } : {}), ...(state.avatars?.[mid] || {}) };
+};
 
 /* =========================================================
    Drawing
@@ -87,6 +105,12 @@ function avatarSVG(a, opts = {}) {
     tongue: `<path d="M44 ${my} Q50 ${my + 6} 56 ${my}" stroke="${ink}" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M48 ${my + 2.6} Q50 ${my + 8} 53 ${my + 2.4}Z" fill="#ff6b8a"/>`,
     smirk: `<path d="M45 ${my + 1} Q52 ${my + 4} 57 ${my - 2}" stroke="${ink}" stroke-width="2" fill="none" stroke-linecap="round"/>`,
   }[a.mouth] || '';
+  const facial = {
+    stubble: `<path d="M27 50 Q29 70 50 70 Q71 70 73 50 Q68 63 50 63 Q32 63 27 50Z" fill="${H}" opacity=".3"/><path d="M41 54.5 Q50 51.5 59 54.5 Q50 53.5 41 54.5Z" fill="${H}" opacity=".35"/>`,
+    goatee: `<path d="M44 61 Q50 73 56 61 Q50 64.5 44 61Z" fill="${H}"/>`,
+    beard: `<path d="M24 44 Q23 75 50 75 Q77 75 76 44 L72 45 Q71 61 61 62 Q57 59.5 50 60 Q43 59.5 39 62 Q29 61 28 45Z" fill="${H}"/>`,
+  }[a.facial] || '';
+  const stache = ['mustache', 'goatee', 'beard'].includes(a.facial) ? `<path d="M40.5 55.5 Q44 51 50 53.6 Q56 51 59.5 55.5 Q55 57.6 50 55.8 Q45 57.6 40.5 55.5Z" fill="${H}"/>` : '';
   const cheeks = (a.blush !== false ? `<ellipse cx="33" cy="54" rx="5" ry="3" fill="#ff8fab" opacity=".5"/><ellipse cx="67" cy="54" rx="5" ry="3" fill="#ff8fab" opacity=".5"/>` : '')
     + (a.freckles ? [[34, 51], [37, 53], [31, 53], [66, 51], [63, 53], [69, 53]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r=".9" fill="${skinD}"/>`).join('') : '');
   // --- body & clothes ---
@@ -143,7 +167,7 @@ function avatarSVG(a, opts = {}) {
   const shadow = opts.noShadow ? '' : `<ellipse cx="50" cy="141" rx="22" ry="4" fill="#000" opacity=".14"/>`;
   return `<svg class="av-svg${opts.cls ? ' ' + opts.cls : ''}" viewBox="${opts.head ? '12 -8 76 76' : '0 -12 100 158'}" role="img" aria-label="Avatar"><defs>${hairDefs}</defs>
     ${shadow}<g class="av-body">${capeBack}${hairBack}${a.acc === 'bunnyears' || a.acc === 'halo' ? acc : ''}${legs}${skirt}${pantsTop}<g class="arm-back">${arm('l')}</g>${outfit}<rect x="45" y="64" width="10" height="9" fill="${skin}"/>${arm('r')}
-    <g class="av-head"><circle cx="23" cy="47" r="5" fill="${skin}"/><circle cx="77" cy="47" r="5" fill="${skin}"/><circle cx="50" cy="42" r="27" fill="${skin}"/>${cheeks}<g class="av-eyes">${eyes}</g>${mouth}${hairFront}${a.acc === 'bunnyears' || a.acc === 'halo' ? '' : acc}${accBehind}</g></g></svg>`;
+    <g class="av-head"><circle cx="23" cy="47" r="5" fill="${skin}"/><circle cx="77" cy="47" r="5" fill="${skin}"/><circle cx="50" cy="42" r="27" fill="${skin}"/>${cheeks}<g class="av-eyes">${eyes}</g>${facial}${mouth}${stache}${hairFront}${a.acc === 'bunnyears' || a.acc === 'halo' ? '' : acc}${accBehind}</g></g></svg>`;
 }
 
 /* =========================================================
@@ -176,12 +200,14 @@ views.avatar = (pid) => {
   const swatches = (kind, list, cls = '') => `<div class="av-swatches">${list.map(([key, color, lockKind]) => { const lock = lockKind ? avItemLock(mid, lockKind, key) : null; return `<button class="av-sw${a[kind] === key ? ' on' : ''}${cls}" data-action="av-set" data-k="${kind}" data-v="${key}" data-id="${mid}" style="background:${color}" aria-label="${esc(String(key))}">${lock ? `<i>${lock.price ? GEM : '🔒'}</i>` : ''}</button>`; }).join('')}</div>`;
   const hairSw = Object.entries(AV_HAIRC).map(([k, [c]]) => [k, c === 'rainbow' ? 'linear-gradient(135deg,#ff8fab,#ffd43b,#69db7c,#4dabf7,#b197fc)' : c === 'galaxy' ? 'radial-gradient(circle at 30% 30%,#9d7bea,#140f33)' : c, 'hairC']);
   const body = {
-    face: `<div class="av-label">Skin</div>${swatches('skin', AV_SKIN.map((c, i) => [i, c]))}
+    face: `<div class="av-label">Start with a look</div><div class="av-looks">${(isKidMember(mid) ? [['boy', '👦', 'Boy'], ['girl', '👧', 'Girl']] : [['man', '👨', 'Man'], ['woman', '👩', 'Woman']]).map(([k, e, l]) => `<button class="${a.look === k ? 'on' : ''}" data-action="av-look" data-look="${k}" data-id="${mid}"><span>${e}</span>${l}</button>`).join('')}</div>
+      <div class="av-label">Skin</div>${swatches('skin', AV_SKIN.map((c, i) => [i, c]))}
       <div class="av-label">Eyes</div><div class="av-grid">${Object.entries(AV_EYES).map(([k, [l]]) => opt('eyes', k, l)).join('')}</div>
       <div class="av-label">Eye color</div>${swatches('eyeC', AV_EYEC.map((c, i) => [i, c]))}
       <div class="av-label">Mouth</div><div class="av-grid">${Object.entries(AV_MOUTH).map(([k, l]) => opt('mouth', k, l)).join('')}</div>
       <div class="av-toggles"><button class="${a.blush !== false ? 'on' : ''}" data-action="av-toggle" data-k="blush" data-id="${mid}">🌸 Blush</button><button class="${a.freckles ? 'on' : ''}" data-action="av-toggle" data-k="freckles" data-id="${mid}">✨ Freckles</button></div>`,
-    hair: `<div class="av-label">Color</div>${swatches('hairC', hairSw)}<div class="av-label">Style</div><div class="av-grid">${Object.entries(AV_HAIR).map(([k, l]) => opt('hair', k, l)).join('')}</div>`,
+    hair: `<div class="av-label">Color</div>${swatches('hairC', hairSw)}<div class="av-label">Style</div><div class="av-grid">${Object.entries(AV_HAIR).map(([k, l]) => opt('hair', k, l)).join('')}</div>
+      <div class="av-label">Facial hair</div><div class="av-grid">${Object.entries(AV_FACIAL).map(([k, l]) => opt('facial', k, l)).join('')}</div>`,
     outfit: `<div class="av-label">Top</div><div class="av-grid">${Object.entries(AV_TOP).map(([k, [l]]) => opt('top', k, l, 'body')).join('')}</div>
       <div class="av-label">Color</div>${swatches('topC', AV_CLOTH.map((c, i) => [i, c]))}
       <div class="av-label">Shirt picture</div><div class="av-grid">${Object.entries(AV_GRAPHIC).map(([k, [l]]) => opt('graphic', k, l, 'body')).join('')}</div>
@@ -203,7 +229,7 @@ function setAvatar(mid, patch) {
   save();
 }
 KID_ROUTES.push('avatar');
-for (const a of ['av-set', 'av-tab', 'av-toggle', 'av-random']) KID_ACTIONS.add(a);
+for (const a of ['av-set', 'av-tab', 'av-toggle', 'av-random', 'av-look']) KID_ACTIONS.add(a);
 Object.assign(actions, {
   'av-tab': (el) => { ui.avTab = el.dataset.tab; render(); },
   'av-toggle': (el) => { const a = avatarOf(el.dataset.id); setAvatar(el.dataset.id, { [el.dataset.k]: el.dataset.k === 'blush' ? a.blush === false : !a.freckles }); render(); },
@@ -231,10 +257,25 @@ Object.assign(actions, {
     render();
     $('.av-big')?.classList.add('bounce');
   },
+  'av-look': (el) => {
+    const mid = el.dataset.id, look = el.dataset.look, a = avatarOf(mid);
+    const p = { ...AV_LOOKS[look] };
+    if (p.acc !== 'none' && avItemLock(mid, 'acc', p.acc)) p.acc = 'none';
+    setAvatar(mid, { ...p, look, skin: a.skin, hairC: a.hairC, eyeC: a.eyeC });
+    render();
+    $('.av-big')?.classList.add('bounce');
+  },
   'av-random': (el) => {
-    const mid = el.dataset.id, a = avatarOf(mid), pick = (o) => { const ks = Object.keys(o).filter((k) => !avItemLock(mid, o === AV_HAIRC ? 'hairC' : o === AV_EYES ? 'eyes' : o === AV_TOP ? 'top' : o === AV_GRAPHIC ? 'graphic' : o === AV_SHOES ? 'shoes' : o === AV_ACC ? 'acc' : 'x', k)); return ks[Math.floor(Math.random() * ks.length)]; };
+    const mid = el.dataset.id, a = avatarOf(mid), pick = (o, kind = 'x') => { const ks = Object.keys(o).filter((k) => !avItemLock(mid, kind, k)); return ks[Math.floor(Math.random() * ks.length)]; };
     const n = (len) => Math.floor(Math.random() * len);
-    setAvatar(mid, { hair: pick(AV_HAIR), hairC: pick(AV_HAIRC), eyes: pick(AV_EYES), eyeC: n(AV_EYEC.length), mouth: pick(AV_MOUTH), top: pick(AV_TOP), topC: n(AV_CLOTH.length), graphic: pick(AV_GRAPHIC), bottom: pick(AV_BOTTOM), bottomC: n(AV_CLOTH.length), shoes: pick(AV_SHOES), shoesC: n(AV_CLOTH.length), acc: Math.random() < 0.5 ? 'none' : pick(AV_ACC), skin: a.skin });
+    const masc = a.look === 'boy' || a.look === 'man';
+    const only = (o, drop) => Object.fromEntries(Object.entries(o).filter(([k]) => !drop.includes(k)));
+    const hairs = masc ? only(AV_HAIR, ['long', 'pigtails', 'buns', 'braid', 'ponytail', 'bob']) : AV_HAIR;
+    const tops = masc ? only(AV_TOP, ['dress', 'gown']) : AV_TOP;
+    const bottoms = masc ? only(AV_BOTTOM, ['skirt', 'leggings']) : AV_BOTTOM;
+    const accs = masc ? only(AV_ACC, ['bow', 'flower', 'tiara', 'starclips', 'bunnyears']) : AV_ACC;
+    const eyesList = masc ? only(AV_EYES, ['lashes']) : AV_EYES;
+    setAvatar(mid, { hair: pick(hairs), hairC: pick(AV_HAIRC, 'hairC'), eyes: pick(eyesList, 'eyes'), eyeC: n(AV_EYEC.length), mouth: pick(AV_MOUTH), top: pick(tops, 'top'), topC: n(AV_CLOTH.length), graphic: pick(AV_GRAPHIC, 'graphic'), bottom: pick(bottoms), bottomC: n(AV_CLOTH.length), shoes: pick(AV_SHOES, 'shoes'), shoesC: n(AV_CLOTH.length), acc: Math.random() < 0.5 ? 'none' : pick(accs, 'acc'), facial: a.look === 'man' ? pick(AV_FACIAL) : 'none', skin: a.skin });
     render();
     $('.av-big')?.classList.add('bounce');
   },

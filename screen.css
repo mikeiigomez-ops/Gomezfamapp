@@ -238,3 +238,9 @@ body.house-editing .h-drawer-space { display: none; }
   .hero-greet { font-size: 24px; margin-top: 4px; }
   .hero-stats { margin-top: 10px; }
 }
+
+/* Avatar: starter looks */
+.av-looks { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.av-looks button { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; border-radius: 16px; background: var(--surface-2); font-size: 15px; font-weight: 800; color: var(--text); }
+.av-looks button span { font-size: 24px; }
+.av-looks button.on { background: var(--accent-soft); box-shadow: 0 0 0 2.5px var(--accent); }
