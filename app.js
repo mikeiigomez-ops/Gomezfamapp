@@ -89,6 +89,9 @@ function defaultState() {
     binder: [],
     maintenance: [],
     recipes: [],
+    activity: [],
+    rewards: [],
+    redemptions: [],
     settings: { currency: 'USD', theme: 'auto', showHolidays: true, giftBudget: 0, welcomeDismissed: false },
   };
 }
@@ -135,6 +138,9 @@ function migrate(s) {
   s.binder ??= [];
   s.maintenance ??= [];
   s.recipes ??= [];
+  s.activity ??= [];
+  s.rewards ??= [];
+  s.redemptions ??= [];
   for (const pr of s.projects) { pr.items ??= []; pr.steps ??= []; }
   s.settings = { ...d.settings, ...(s.settings || {}) };
   s.version = 1;
@@ -148,6 +154,7 @@ function save() {
   saveTimer = setTimeout(() => {
     try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
     catch (e) { toast('⚠️ Could not save — storage may be full'); }
+    if (typeof onLocalSave === 'function') onLocalSave();
     if (typeof syncAfterSave === 'function') syncAfterSave();
   }, 120);
 }
@@ -437,7 +444,9 @@ views.home = () => {
 
   return `
     ${homeHero({ t, greet, todays, sumry, frac, listCount, lowCount, dinner, choresDue, billsDue, payday })}
-    ${typeof homeQuickAdd === 'function' ? homeQuickAdd() : ''}
+    ${typeof homeQuickAdd === 'function' ? `<div data-home="quick">${homeQuickAdd()}</div>` : ''}
+    ${typeof homeInsights === 'function' ? `<div data-home="insights">${homeInsights()}</div>` : ''}
+    ${typeof homeLive === 'function' ? homeLive() : ''}
 
     ${!state.settings.welcomeDismissed && state.members.length < 2 ? `
       <div class="card install-tip">
@@ -450,38 +459,38 @@ views.home = () => {
         </div>
       </div>` : ''}
 
-    ${countdowns.length ? `<div class="countdown">${countdowns.map((c) => {
+    ${countdowns.length ? `<div data-home="countdowns"><div class="countdown">${countdowns.map((c) => {
       const n = daysBetween(t, c.date);
       return `<div class="card"><div class="days">${n === 0 ? '🎉' : n}</div><div class="small muted">${n === 0 ? 'Today!' : n === 1 ? 'day until' : 'days until'}</div><div class="small" style="font-weight:650;margin-top:2px">${esc(c.title)}</div></div>`;
-    }).join('')}</div>` : ''}
+    }).join('')}</div></div>` : ''}
 
 
-    <div class="section-title">Today<button data-action="add-event" data-date="${t}">+ Event</button></div>
+    <div data-home="today"><div class="section-title">Today<button data-action="add-event" data-date="${t}">+ Event</button></div>
     <div class="card flush">
       ${todays.length ? todays.map((e) => eventRow(e)).join('') : `<div class="empty small">Nothing on the calendar today.</div>`}
       <button class="row tap" style="width:100%;text-align:left" data-action="edit-meal" data-date="${t}">
         <div class="avatar">🍽️</div>
         <div class="grow"><div class="title">${dinner ? esc(dinner) : 'What\'s for dinner?'}</div><div class="sub">${dinner ? 'Tonight\'s dinner' : 'Tap to plan tonight'}</div></div>${ICON.chev}
       </button>
-    </div>
+    </div></div>
 
-    ${typeof weekStrip === 'function' ? weekStrip() : upcoming.length ? `
+    ${typeof weekStrip === 'function' ? `<div data-home="week">${weekStrip()}</div>` : upcoming.length ? `
       <div class="section-title">Next 7 days<button data-action="go" data-to="calendar">Calendar</button></div>
       <div class="card flush">${upcoming.slice(0, 8).map((e) => eventRow(e, true)).join('')}</div>` : ''}
 
-    ${billsDue.length || payday ? `
+    ${billsDue.length || payday ? `<div data-home="bills">
       <div class="section-title">Bills this week<button data-action="go" data-to="budget" data-btab="bills">Recurring</button></div>
       <div class="card flush">
         ${payday ? `<div class="row"><div class="avatar" style="background:var(--good-soft)">💰</div><div class="grow"><div class="title">Payday ${dueLabel(payday.date)}</div><div class="sub">${esc(payday.b.name)} · ${fmtDate(payday.date)}</div></div><span class="amount income">+${money(payday.amount, { maximumFractionDigits: 0 })}</span></div>` : ''}
         ${billsDue.map(recurRow).join('')}
         ${billsDue.length ? `<div class="row"><div class="grow small muted">${billsDue.length} bill${billsDue.length > 1 ? 's' : ''} due</div><b>${money(sum(billsDue, (x) => x.amount))}</b></div>` : ''}
-      </div>` : ''}
+      </div></div>` : ''}
 
-    ${choresDue.length ? `
+    ${choresDue.length ? `<div data-home="chores">
       <div class="section-title">Chores to do<button data-action="go" data-to="chores">All chores</button></div>
-      <div class="card flush">${choresDue.slice(0, 4).map(choreRow).join('')}</div>` : ''}
+      <div class="card flush">${choresDue.slice(0, 4).map(choreRow).join('')}</div></div>` : ''}
 
-    ${bdays.length ? `
+    ${bdays.length ? `<div data-home="birthdays">
       <div class="section-title">Birthdays coming up<button data-action="go" data-to="gifts">Gifts</button></div>
       <div class="card flush">${bdays.map(({ p, date }) => {
         const gifts = state.gifts.filter((g) => g.personId === p.id && g.occasion === 'Birthday' && Number(g.year) === parse(date).getFullYear());
@@ -491,13 +500,13 @@ views.home = () => {
           <div class="grow"><div class="title">${esc(p.name)}</div><div class="sub">${relDays(daysBetween(t, date))} · ${fmtDate(date, { month: 'short', day: 'numeric' })}</div></div>
           <span class="pill ${ready ? 'good' : gifts.length ? 'warn' : 'bad'}">${ready ? 'Gift ready' : gifts.length ? 'Ideas only' : 'No gift yet'}</span>
         </button>`;
-      }).join('')}</div>` : ''}
+      }).join('')}</div></div>` : ''}
 
-
+    ${typeof homeActivity === 'function' ? homeActivity() : ''}
     ${typeof homeExtras === 'function' ? homeExtras() : ''}
 
-    <div class="section-title">More</div>
-    ${typeof moreGrid === 'function' ? moreGrid() : ''}
+    <div data-home="more"><div class="section-title">More</div>
+    ${typeof moreGrid === 'function' ? moreGrid() : ''}</div>
   `;
 };
 
@@ -516,7 +525,7 @@ function homeHero({ t, greet, todays, sumry, frac, listCount, lowCount, dinner, 
       <div class="hero-date">${fmtDate(t, { weekday: 'long', month: 'long', day: 'numeric' })}</div>
       <button class="avatars" data-action="go" data-to="settings" aria-label="Family">${fam.map((m) => `<span style="--c:${m.color}">${esc(m.emoji)}</span>`).join('')}</button>
     </div>
-    <div class="hero-greet">${greet}${state.members.length > 1 ? ',<br>Gomez family' : ''}</div>
+    <div class="hero-greet">${greet}${state.settings.me && state.members.some((m) => m.id === state.settings.me) ? `, ${esc(member(state.settings.me).name)}` : state.members.length > 1 ? ',<br>Gomez family' : ''}</div>
     ${bits.length ? `<div class="hero-sub">${esc(bits.join(' · '))}</div>` : `<div class="hero-sub">${realEvents.length ? 'Here\'s your day' : 'A calm day ahead ✨'}</div>`}
     ${typeof heroWeather === 'function' ? heroWeather() : ''}
     <div class="hero-stats">
@@ -730,6 +739,7 @@ function recurringView() {
       <div class="wk">${['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d) => `<div class="dow">${d}</div>`).join('')}${strip}</div>
     </div>
     ${payCard}
+    ${typeof forecastCard === 'function' ? forecastCard() : ''}
     ${section('Coming soon', soon)}
     ${section('Coming later', later)}
     ${section('Recent', recent)}

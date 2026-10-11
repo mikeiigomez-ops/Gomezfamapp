@@ -367,17 +367,22 @@ function extraEventsOn(s) {
   return out;
 }
 
-const WHATS_NEW = 'v4';
+const WHATS_NEW = 'v5';
 function whatsNewCard() {
   if (state.settings.whatsNewSeen === WHATS_NEW) return '';
   const item = (attrs, emoji, title, text) => `<button class="row tap" style="width:100%;text-align:left;padding:10px 0;background:none" ${attrs}><div class="avatar">${emoji}</div><div class="grow"><div class="title">${title}</div><div class="sub" style="white-space:normal">${text}</div></div>${ICON.chev}</button>`;
   return `<div class="card install-tip">
-    <h3>✨ New this week</h3>
-    ${item('data-action="wx-enable"', '🌤️', 'Local weather', 'Turn it on for today’s forecast up top and on the week strip')}
-    ${item('data-action="magic-add"', '✨', 'Magic Add', 'Type “$40 Costco” or “Dentist Fri 3pm” — it figures out the rest')}
-    ${item('data-action="go" data-to="calendar"', '🗓️', 'Agenda + family filter', 'See what’s coming as a list, or just one person’s schedule')}
-    ${item('data-action="go" data-to="shop"', '🛍️', 'Store Mode', 'Big one-handed checklist that keeps the screen on')}
-    ${item('data-action="go" data-to="settings"', '🎨', 'Pick your color', 'Six accent themes — each phone chooses its own')}
+    <h3>🚀 10 new features</h3>
+    ${item('data-action="go" data-to="wrapped"', '🎬', 'Family Wrapped', 'Your month as a story — spending, chores MVP, favorite dinner')}
+    ${item('data-action="go" data-to="settings"', '🔐', 'Face ID lock', 'Settings → Privacy lock')}
+    ${item('data-action="magic-add"', '🎙️', 'Talk to Magic Add', 'Tap the mic and say “spent 40 dollars at Costco”')}
+    ${item('data-action="go" data-to="activity"', '📰', 'Family activity', 'See who added, paid and finished what')}
+    ${item('data-action="go" data-to="shop"', '🛒', 'Shop together, live', 'See when someone’s at the store and add to their list')}
+    ${item('data-action="go" data-to="budget" data-btab="bills"', '📈', '30-day forecast', 'Where your checking balance is headed')}
+    ${item('data-action="go" data-to="chores" data-ctab="rewards"', '🏆', 'Rewards store', 'Kids trade chore points for treats')}
+    ${item('data-action="go" data-to="meals"', '🍽️', 'Plan my week', 'Fill every open night in one tap')}
+    ${item('data-action="go" data-to="settings"', '🗣️', 'Siri & Shortcuts', '“Hey Siri, Gomez add …” — setup in Settings')}
+    ${item('data-action="home-customize"', '🧩', 'Customize Home', 'Reorder or hide anything on this screen')}
     <div class="small muted" style="margin:8px 0 10px">Tip: swipe a list row <b>right</b> to check it off, <b>left</b> to delete. Drag any sheet down to close it.</div>
     <button class="btn secondary block" data-action="whats-new-ok">Got it</button>
   </div>`;
@@ -390,7 +395,7 @@ function homeQuickAdd() {
     <button class="chip" data-action="quick-grocery"><span class="qi">🛒</span>Grocery</button>
     <button class="chip" data-action="add-event" data-date="${today()}"><span class="qi">📅</span>Event</button>
     <button class="chip" data-action="add-chore"><span class="qi">🧹</span>Chore</button>
-  </div>${homeInsights()}`;
+  </div>`;
 }
 
 function homeExtras() {
@@ -398,16 +403,16 @@ function homeExtras() {
   const upkeep = state.maintenance.filter((u) => { const st = upkeepStatus(u); return st.key === 'overdue' || (st.key === 'soon' && st.n <= 7); });
   const active = state.projects.filter((p) => p.status === 'active');
   let html = '';
-  if (upkeep.length) html += `<div class="section-title">Around the house<button data-action="go" data-to="upkeep">Upkeep</button></div><div class="card flush">${upkeep.map(upkeepRow).join('')}</div>`;
-  if (active.length) html += `<div class="section-title">Projects in progress<button data-action="go" data-to="projects">All</button></div><div class="card flush">${active.map((p) => {
+  if (upkeep.length) html += `<div data-home="upkeep"><div class="section-title">Around the house<button data-action="go" data-to="upkeep">Upkeep</button></div><div class="card flush">${upkeep.map(upkeepRow).join('')}</div></div>`;
+  if (active.length) html += `<div data-home="projects"><div class="section-title">Projects in progress<button data-action="go" data-to="projects">All</button></div><div class="card flush">${active.map((p) => {
     const st = projectStats(p);
     return `<button class="row tap" style="width:100%;text-align:left" data-action="go" data-to="project/${p.id}"><div class="avatar">${esc(p.emoji || '🔨')}</div><div class="grow"><div class="title">${esc(p.name)}</div><div class="bar" style="margin-top:4px"><i style="width:${st.pct * 100}%"></i></div></div><span class="small muted">${Math.round(st.pct * 100)}%</span></button>`;
-  }).join('')}</div>`;
+  }).join('')}</div></div>`;
   const goals = state.goals.filter((g) => goalPlan(g).pct < 1);
-  if (goals.length) html += `<div class="section-title">Savings goals<button data-action="go" data-to="goals">All</button></div><div class="card flush">${goals.slice(0, 3).map((g) => {
+  if (goals.length) html += `<div data-home="goals"><div class="section-title">Savings goals<button data-action="go" data-to="goals">All</button></div><div class="card flush">${goals.slice(0, 3).map((g) => {
     const pl = goalPlan(g);
     return `<button class="row tap" style="width:100%;text-align:left" data-action="go" data-to="goal/${g.id}"><div class="avatar">${esc(g.emoji || '🎯')}</div><div class="grow"><div class="title">${esc(g.name)}</div><div class="bar" style="margin-top:4px"><i style="width:${pl.pct * 100}%;background:var(--accent)"></i></div></div><span class="small muted">${money(pl.saved, { maximumFractionDigits: 0 })}</span></button>`;
-  }).join('')}</div>`;
+  }).join('')}</div></div>`;
   void t;
   return html;
 }
@@ -424,6 +429,9 @@ function moreGrid() {
     ${tile('goals', '🎯', 'Goals', state.goals.length ? `${money(sum(state.goals, goalSaved), { maximumFractionDigits: 0 })} saved` : 'Start saving')}
     ${tile('upkeep', '🔧', 'Upkeep', upkeepDue ? `${upkeepDue} overdue` : 'House care', upkeepDue)}
     ${tile('binder', '📒', 'Binder', 'Info & contacts')}
+    ${tile('activity', '📰', 'Activity', (state.activity || []).length ? `${state.activity.length} updates` : 'Who did what')}
+    ${tile('wrapped', '🎬', 'Wrapped', 'Monthly recap')}
+    <button class="card mini-tile" data-action="go" data-to="chores" data-ctab="rewards"><div class="emoji">🏆</div><b>Rewards</b><div class="small muted">Spend chore points</div></button>
   </div>`;
 }
 

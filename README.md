@@ -16,6 +16,15 @@ A family web app you can install on your iPhone home screen. It has no build ste
 - **Family binder**: emergency numbers, doctors, insurance, school, Wi-Fi and codes. Private entries stay hidden until tapped, and phone numbers are tap-to-call
 - **Home upkeep**: recurring maintenance (filters, smoke detectors, gutters…) with next-due dates, common tasks to pick from, and reminders on Home and the Calendar
 - **Search** across everything, plus quick-add buttons on Home
+- **Family Wrapped**: a monthly recap told as swipeable stories, with a shareable summary image
+- **Privacy lock**: Face ID (passkey) or a 4-digit PIN, set per phone
+- **Voice + Siri**: speak to Magic Add, or use a Shortcut that opens `#add=<text>` (add `&go` to save immediately)
+- **Family activity feed**: who added, paid or finished what, with each phone set to its owner
+- **Shopping together**: a live "Ana is shopping now" banner while someone uses Store Mode
+- **30-day cash-flow forecast**: projected balance from your checking balance, paychecks, bills and normal spending
+- **Rewards store**: kids redeem chore points for rewards, and a grown-up approves
+- **Plan my week**: fills open nights from your recipes and favorites, skipping recent repeats, and shops the ingredients
+- **Customize Home**: reorder and hide sections, per phone
 - **Settings**: family members, currency, dark mode, and backup/restore
 
 ## Install on iPhone

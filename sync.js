@@ -10,7 +10,7 @@
 const SYNC_KEY = 'gomezfam:sync'; // { config, familyId, joining }
 const BASE_KEY = 'gomezfam:base'; // { rev, data } — last server copy merged into this phone
 const FIREBASE_URL = 'https://www.gstatic.com/firebasejs/10.14.1/';
-const LOCAL_ONLY = ['theme', 'accent', 'welcomeDismissed', 'whatsNewSeen', 'weather']; // per-phone settings that never sync
+const LOCAL_ONLY = ['theme', 'accent', 'welcomeDismissed', 'whatsNewSeen', 'weather', 'me', 'homeLayout']; // per-phone settings that never sync
 const INVITE_PREFIX = 'GFAM1.';
 
 const readJSON = (k) => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } };
@@ -140,7 +140,7 @@ function listen() {
       state = adopt(remote);
       setBase(remote, rev);
       Sync.cfg.joining = false;
-      saveCfg(); persistLocal(); applyTheme(); render();
+      saveCfg(); persistLocal(); applyTheme(); if (typeof activityResync === 'function') activityResync(); render();
       toast('Connected to the family ✓');
     } else {
       applyRemote(remote, rev);
@@ -156,7 +156,7 @@ function applyRemote(remote, rev) {
   const local = shared(state);
   const merged = Sync.base ? merge3(Sync.base.data, local, remote) : remote;
   setBase(remote, rev);
-  if (!same(merged, local)) { state = adopt(merged); persistLocal(); render(); }
+  if (!same(merged, local)) { state = adopt(merged); persistLocal(); if (typeof activityResync === 'function') activityResync(); render(); }
   if (!same(merged, remote)) schedulePush();
 }
 
@@ -188,7 +188,7 @@ async function push() {
     // Fold in anything changed on this phone while the write was in flight.
     const now = shared(state);
     const next = merge3(start, now, merged);
-    if (!same(next, now)) { state = adopt(next); persistLocal(); render(); }
+    if (!same(next, now)) { state = adopt(next); persistLocal(); if (typeof activityResync === 'function') activityResync(); render(); }
     if (!same(next, merged)) Sync.dirty = true;
     markSynced();
     const size = JSON.stringify(merged).length;
