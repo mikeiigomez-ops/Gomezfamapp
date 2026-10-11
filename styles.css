@@ -284,7 +284,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 
 /* ---------- Chores ---------- */
 .leader { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
-.leader .who { flex: 1; min-width: 80px; text-align: center; }
+.leader .who { flex: 1; min-width: 62px; text-align: center; }
 .leader .who .avatar { margin: 0 auto 4px; width: 44px; height: 44px; font-size: 22px; }
 .leader .pts { font-weight: 800; font-size: 18px; }
 

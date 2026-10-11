@@ -210,13 +210,18 @@ main { padding-bottom: calc(var(--tabbar-h) + var(--tab-gap) + 110px); }
   box-shadow: 0 14px 28px -10px color-mix(in srgb, var(--accent) 85%, transparent), inset 0 1px 0 rgba(255, 255, 255, .25);
 }
 .fab:active { transform: scale(.92) rotate(90deg); }
+/* Toasts drop in from the top like an iOS banner, so they never cover inputs or the keyboard. */
 .toast {
-  bottom: calc(var(--tabbar-h) + var(--tab-gap) + 88px);
-  border-radius: 16px; padding: 12px 16px;
-  background: color-mix(in srgb, var(--text) 92%, transparent);
-  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-  box-shadow: var(--shadow-lg);
+  top: calc(var(--safe-top) + 8px); bottom: auto;
+  transform: translate(-50%, -140%) scale(.96);
+  border-radius: 22px; padding: 12px 18px; min-height: 44px; max-width: min(92vw, 440px);
+  background: color-mix(in srgb, var(--text) 94%, transparent); color: var(--bg);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 12px 30px -8px rgba(0, 0, 0, .35);
+  transition: transform .45s var(--spring), opacity .25s;
+  z-index: 80; font-size: 14.5px;
 }
+.toast.show { transform: translate(-50%, 0) scale(1); }
 
 /* ---------- Sheet ---------- */
 .sheet-backdrop { background: rgba(10, 8, 6, .38); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
@@ -322,3 +327,26 @@ html[data-accent][data-theme="dark"] .hero { background: linear-gradient(145deg,
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* ---------- Budget ring label ---------- */
+.ring { position: relative; }
+.ring-label { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; font: 800 20px/1 var(--font-display); letter-spacing: -.02em; }
+.ring-label small { font: 600 11px/1.4 -apple-system, system-ui, sans-serif; color: var(--muted); letter-spacing: 0; }
+.ring circle { stroke-width: 9; }
+
+/* ---------- Magic Add ---------- */
+.magic-bar {
+  width: 100%; display: flex; align-items: center; gap: 12px; text-align: left;
+  padding: 14px 16px; margin: 0 0 12px; border-radius: 18px;
+  background: var(--surface); box-shadow: var(--shadow), inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 22%, transparent);
+  font-weight: 650; color: var(--text); transition: transform .18s var(--ease);
+}
+.magic-bar:active { transform: scale(.98); }
+.magic-bar .grow { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.magic-bar .muted { font-weight: 500; font-size: 14px; }
+.magic-bar .spark { width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; background: var(--grad); font-size: 17px; box-shadow: 0 6px 14px -6px var(--accent); }
+.magic-hint { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: -4px 0 12px; font-size: 14px; color: var(--muted); }
+.magic-hint > div { width: 100%; }
+.magic-card { padding: 14px 16px; border-radius: 16px; margin: -4px 0 14px; background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent); animation: fade-up .25s var(--ease); }
+.magic-label { font-weight: 750; font-size: 16px; }
+.magic-detail { margin-top: 3px; }

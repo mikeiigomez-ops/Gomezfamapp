@@ -516,9 +516,9 @@ function homeHero({ t, greet, todays, sumry, frac, listCount, lowCount, dinner, 
     <div class="hero-greet">${greet}${state.members.length > 1 ? ',<br>Gomez family' : ''}</div>
     ${bits.length ? `<div class="hero-sub">${esc(bits.join(' · '))}</div>` : `<div class="hero-sub">${realEvents.length ? 'Here\'s your day' : 'A calm day ahead ✨'}</div>`}
     <div class="hero-stats">
-      <button class="hstat" data-action="go" data-to="calendar"><b>${realEvents.length}</b><span>${realEvents.length === 1 ? 'event today' : 'events today'}</span></button>
-      <button class="hstat" data-action="go" data-to="budget"><b>${money(sumry.left, { maximumFractionDigits: 0 })}</b><span>left in ${parse(t).toLocaleDateString(undefined, { month: 'short' })}</span>${sumry.limit ? `<div class="hbar"><i style="width:${Math.min(100, frac * 100)}%"></i></div>` : ''}</button>
-      <button class="hstat" data-action="go" data-to="shop"><b>${listCount}</b><span>${lowCount ? `to buy · ${lowCount} low` : 'to buy'}</span></button>
+      <button class="hstat" data-action="go" data-to="calendar"><b data-count="${realEvents.length}">${realEvents.length}</b><span>${realEvents.length === 1 ? 'event today' : 'events today'}</span></button>
+      <button class="hstat" data-action="go" data-to="budget"><b data-count="${Math.round(sumry.left)}" data-money>${money(sumry.left, { maximumFractionDigits: 0 })}</b><span>left in ${parse(t).toLocaleDateString(undefined, { month: 'short' })}</span>${sumry.limit ? `<div class="hbar"><i style="width:${Math.min(100, frac * 100)}%"></i></div>` : ''}</button>
+      <button class="hstat" data-action="go" data-to="shop"><b data-count="${listCount}">${listCount}</b><span>${lowCount ? `to buy · ${lowCount} low` : 'to buy'}</span></button>
     </div>
     <button class="hero-dinner" data-action="edit-meal" data-date="${t}">
       <span style="font-size:22px">🍽️</span>
@@ -570,7 +570,7 @@ views.budget = () => {
       </div>` : ''}
       <div class="card">
         <div class="ring-wrap">
-          <div class="ring"><svg viewBox="0 0 96 96"><circle class="track" cx="48" cy="48" r="42"/><circle class="val ${levelCls(s.limit ? s.spent / s.limit : 0)}" cx="48" cy="48" r="42" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - frac)}" stroke-linecap="round"/></svg></div>
+          <div class="ring"><span class="ring-label">${s.limit ? Math.round((s.spent / s.limit) * 100) : 0}%<small>used</small></span><svg viewBox="0 0 96 96"><circle class="track" cx="48" cy="48" r="42"/><circle class="val ${levelCls(s.limit ? s.spent / s.limit : 0)}" cx="48" cy="48" r="42" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - frac)}" stroke-linecap="round"/></svg></div>
           <div class="grow" style="flex:1">
             <div class="kv"><span class="muted">Budget</span><b>${money(s.limit)}</b></div>
             <div class="kv"><span class="muted">Spent</span><b>${money(s.spent)}</b></div>
@@ -1044,7 +1044,7 @@ views.meals = () => {
   return `${typeof mealsTabs === 'function' ? mealsTabs() : ''}
     <div class="month-nav">
       <button class="icon-btn" data-action="meals-week" data-n="-7" aria-label="Previous week">${ICON.left}</button>
-      <h2>${ws === weekStart(t) ? 'This week' : `Week of ${fmtDate(ws, { month: 'short', day: 'numeric' })}`}</h2>
+      <h2>${fmtDate(ws, { month: 'short', day: 'numeric' })} – ${fmtDate(addDays(ws, 6), parse(ws).getMonth() === parse(addDays(ws, 6)).getMonth() ? { day: 'numeric' } : { month: 'short', day: 'numeric' })}${ws === weekStart(t) ? ' <span class="pill accent" style="vertical-align:middle">This week</span>' : ''}</h2>
       <button class="icon-btn" data-action="meals-week" data-n="7" aria-label="Next week">${ICON.right}</button>
     </div>
     <div class="card flush">
@@ -1342,8 +1342,11 @@ let lastRouteKey = null;
 const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 function render() {
   const { name, param } = currentRoute();
-  const title = name === 'person' ? 'Gift Planner' : TITLES[name];
-  const html = (name === 'home' ? '' : `<h1 class="large-title">${esc(title)}</h1>`) + views[name](param);
+  // Detail screens carry their own header card, so they skip the large title and show the item's name when scrolled.
+  const detail = { person: () => person(param)?.name, project: () => state.projects.find((x) => x.id === param)?.name,
+    goal: () => state.goals.find((x) => x.id === param)?.name, recipe: () => state.recipes.find((x) => x.id === param)?.name }[name];
+  const title = (detail && detail()) || TITLES[name];
+  const html = (name === 'home' || detail ? '' : `<h1 class="large-title">${esc(title)}</h1>`) + views[name](param);
   const key = name + '/' + (param || '');
   const changed = lastRouteKey !== null && lastRouteKey !== key;
   lastRouteKey = key;

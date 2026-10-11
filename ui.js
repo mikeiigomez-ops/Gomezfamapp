@@ -18,10 +18,31 @@ function moveTabInk() {
 }
 window.addEventListener('resize', moveTabInk);
 
+/* ---------- Count-up for the Home hero numbers (first view per session) ---------- */
+let countedUp = false;
+function countUp() {
+  const els = document.querySelectorAll('.hero [data-count]');
+  if (!els.length || countedUp) return;
+  countedUp = true;
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches || navigator.webdriver) return;
+  const start = performance.now(), dur = 700;
+  const targets = [...els].map((el) => ({ el, to: Number(el.dataset.count), isMoney: 'money' in el.dataset }));
+  const step = (now) => {
+    const k = Math.min(1, (now - start) / dur), e = 1 - Math.pow(1 - k, 3);
+    for (const t of targets) {
+      const v = Math.round(t.to * e);
+      t.el.textContent = t.isMoney ? money(v, { maximumFractionDigits: 0 }) : String(v);
+    }
+    if (k < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
 // Called by app.js after every render.
 function afterRender() {
   moveTabInk();
   updateScrolled();
+  countUp();
 }
 
 /* ---------- Swipe rows: right = the row's check action, left = its delete action ---------- */

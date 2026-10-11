@@ -385,7 +385,8 @@ function whatsNewCard() {
 }
 
 function homeQuickAdd() {
-  return `${whatsNewCard()}<div class="quick-row">
+  return `${whatsNewCard()}<button class="magic-bar" data-action="magic-add"><span class="spark">✨</span><span class="grow">Add anything… <span class="muted">“$40 Costco”, “Dentist Fri 3pm”</span></span></button>
+  <div class="quick-row">
     <button class="chip" data-action="add-tx"><span class="qi">💸</span>Expense</button>
     <button class="chip" data-action="quick-grocery"><span class="qi">🛒</span>Grocery</button>
     <button class="chip" data-action="add-event" data-date="${today()}"><span class="qi">📅</span>Event</button>
@@ -625,5 +626,151 @@ Object.assign(actions, {
     for (const h of fromMeals) state.recipes.push({ id: uid(), emoji: '🍲', name: h.name, ingredients: splitList(h.ingredients).join('\n') });
     save(); render();
     toast(`Saved ${fromMeals.length} recipe${fromMeals.length > 1 ? 's' : ''} — tap one to add steps`);
+  },
+});
+
+/* =========================================================
+   ✨ Magic Add — type in plain English, we figure out what it is
+   ========================================================= */
+const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+const CATEGORY_HINTS = [
+  [/\b(costco|kroger|aldi|meijer|walmart|grocer|groceries|trader joe|whole foods|sam'?s|food)\b/, 'grocer'],
+  [/\b(gas|shell|bp|speedway|fuel|uber|lyft|parking|toll|car wash)\b/, 'gas'],
+  [/\b(restaurant|pizza|coffee|starbucks|chipotle|mcdonald|taco|dinner out|lunch|breakfast|takeout|doordash|ubereats|burger|sushi)\b/, 'dining'],
+  [/\b(target|amazon|home depot|lowe'?s|household|cleaning|ikea)\b/, 'household'],
+  [/\b(kid|school|daycare|soccer|toys?|diapers?)\b/, 'kids'],
+  [/\b(movie|netflix|concert|zoo|game|fun|bowling)\b/, 'fun'],
+  [/\b(doctor|pharmacy|cvs|walgreens|dentist|copay|health|medicine)\b/, 'health'],
+  [/\b(electric|water|internet|phone bill|utility|utilities|dte|consumers)\b/, 'utilit'],
+  [/\b(gift|present|birthday)\b/, 'gift'],
+];
+function guessCategory(text) {
+  const n = norm(text);
+  for (const [re, key] of CATEGORY_HINTS) {
+    if (re.test(n)) { const c = state.budget.categories.find((c) => norm(c.name).includes(key)); if (c) return c; }
+  }
+  return state.budget.categories.find((c) => norm(c.name) === 'other') || state.budget.categories[0];
+}
+
+function parseWhen(text) {
+  let t = ' ' + text + ' ', date = null, time = '';
+  const base = today();
+  const take = (re, fn) => { const m = t.match(re); if (m) { const r = fn(m); if (r !== false) t = t.replace(m[0], ' '); } };
+  take(/\s(?:on\s)?(today|tonight)\s/i, (m) => { date = base; if (/tonight/i.test(m[1])) time = time || '19:00'; });
+  take(/\s(?:on\s)?tomorrow\s/i, () => { date = addDays(base, 1); });
+  take(/\s(?:on\s|this\s|next\s)?(sun|mon|tue|tues|wed|thu|thur|thurs|fri|sat)(?:day|nesday|rsday|urday)?\s/i, (m) => {
+    const wd = WEEKDAYS.findIndex((d) => d.startsWith(m[1].toLowerCase().slice(0, 3)));
+    let d = (wd - parse(base).getDay() + 7) % 7; if (d === 0) d = 7;
+    if (/next/i.test(m[0]) && d < 7) d += 7;
+    date = addDays(base, d);
+  });
+  take(/\s(?:on\s)?(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\s/, (m) => {
+    let y = m[3] ? +m[3] : parse(base).getFullYear(); if (y < 100) y += 2000;
+    date = iso(new Date(y, +m[1] - 1, +m[2])); if (!m[3] && date < base) date = iso(new Date(y + 1, +m[1] - 1, +m[2]));
+  });
+  take(/\s(?:on\s)?(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s(\d{1,2})(?:st|nd|rd|th)?\s/i, (m) => {
+    const y = parse(base).getFullYear(); const mo = MONTHS.indexOf(m[1].toLowerCase().slice(0, 3));
+    date = iso(new Date(y, mo, +m[2])); if (date < base) date = iso(new Date(y + 1, mo, +m[2]));
+  });
+  take(/\s(?:at\s|@\s?)?(\d{1,2})(?::(\d{2}))?\s?(am|pm|a|p)\s/i, (m) => {
+    let h = +m[1] % 12; if (/p/i.test(m[3])) h += 12;
+    time = `${pad(h)}:${m[2] || '00'}`;
+  });
+  take(/\sat\s(\d{1,2}):(\d{2})\s/i, (m) => { time = `${pad(+m[1])}:${m[2]}`; });
+  if (time && !date) date = base;
+  return { date, time, rest: t.replace(/\s+/g, ' ').trim() };
+}
+
+function parseMagic(raw) {
+  const text = String(raw || '').trim();
+  if (!text) return null;
+  const low = norm(text);
+  // Chore
+  let m = text.match(/^chore[:\s]+(.+)$/i);
+  if (m) return { kind: 'chore', title: m[1].trim(), label: '🧹 New chore', detail: m[1].trim() };
+  // Money: "$45 costco", "costco 45.20", "paid 30 for pizza", "income 500 side job"
+  m = text.match(/\$\s?(\d+(?:[.,]\d{1,2})?)/) || text.match(/(?:^|\s)(\d+\.\d{2})(?:\s|$)/) || (/^(spent|paid|income|got paid|earned)\b/i.test(text) && text.match(/(?:^|\s)(\d+(?:\.\d{1,2})?)(?:\s|$)/));
+  if (m) {
+    const amount = parseFloat(m[1].replace(',', '.'));
+    const income = /\b(income|paycheck|got paid|earned|refund|deposit|sold)\b/i.test(text);
+    let note = text.replace(m[0], ' ').replace(/^\s*(spent|paid|income|got paid|earned)\b/i, ' ').replace(/\b(for|on|at)\s*$/i, '').replace(/^\s*(for|on|at)\b/i, '').replace(/\s+/g, ' ').trim();
+    const when = parseWhen(note);
+    note = when.rest.replace(/^(for|on|at)\s+/i, '');
+    const cat = income ? null : guessCategory(note || text);
+    const date = when.date && when.date <= today() ? when.date : (when.date === addDays(today(), -1) ? when.date : today());
+    const yest = /\byesterday\b/i.test(text);
+    return { kind: 'tx', type: income ? 'income' : 'expense', amount, note: cap(note.replace(/\byesterday\b/i, '').trim()), categoryId: cat?.id || '', date: yest ? addDays(today(), -1) : date,
+      label: income ? `💰 Income · ${money(amount)}` : `💸 Expense · ${money(amount)}`, detail: [cap(note.replace(/\byesterday\b/i, '').trim()), cat ? `${cat.emoji} ${cat.name}` : '', yest ? 'Yesterday' : ''].filter(Boolean).join(' · ') };
+  }
+  // Event: has a date or time
+  const when = parseWhen(text);
+  if (when.date && when.rest) {
+    return { kind: 'event', title: cap(when.rest.replace(/^(add|schedule|remind me( to)?)\s+/i, '')), date: when.date, time: when.time,
+      label: '📅 Calendar event', detail: `${fmtDate(when.date, { weekday: 'long', month: 'short', day: 'numeric' })}${when.time ? ' · ' + fmtTime(when.time) : ''}` };
+  }
+  // Shopping: "buy …", "need …", "get …", or a comma list
+  m = text.match(/^(buy|need|get|pick up|grab|add)\s+(.+)$/i);
+  const listText = m ? m[2] : (text.includes(',') ? text : null);
+  if (listText) {
+    const items = listText.split(/,|\band\b/).map((x) => x.trim()).filter(Boolean);
+    return { kind: 'shop', items, label: `🛒 Shopping list · ${items.length} item${items.length > 1 ? 's' : ''}`, detail: items.join(', ') };
+  }
+  // A single word or two that matches a staple → shopping
+  if (low.split(' ').length <= 3) return { kind: 'shop', items: [text], label: '🛒 Shopping list', detail: text };
+  return { kind: 'event', title: cap(text), date: today(), time: '', label: '📅 Calendar event (today)', detail: 'Add a day or time to schedule it, e.g. “Friday 3pm”' };
+}
+
+function magicPreview(r) {
+  if (!r) return `<div class="magic-hint">
+      <div><b>Try:</b></div>
+      <button type="button" class="chip" data-action="magic-example">$42 Costco</button>
+      <button type="button" class="chip" data-action="magic-example">Dentist Friday 3pm</button>
+      <button type="button" class="chip" data-action="magic-example">milk, eggs, bread</button>
+      <button type="button" class="chip" data-action="magic-example">chore: take out trash</button>
+      <button type="button" class="chip" data-action="magic-example">paid 18.50 for pizza yesterday</button>
+    </div>`;
+  return `<div class="magic-card"><div class="magic-label">${esc(r.label)}</div>${r.detail ? `<div class="magic-detail">${esc(r.detail)}</div>` : ''}<div class="small muted" style="margin-top:6px">Tap <b>Add</b> to save — you can edit it anytime.</div></div>`;
+}
+
+function openMagic() {
+  openSheet({
+    title: '✨ Magic Add',
+    saveLabel: 'Add',
+    values: {},
+    fields: [
+      { name: 'q', label: 'What do you want to add?', placeholder: 'Type anything…' },
+      { type: 'html', html: `<div id="magicPreview">${magicPreview(null)}</div>` },
+    ],
+    onInput(form, e) { if (e.target.name === 'q') $('#magicPreview').innerHTML = magicPreview(parseMagic(e.target.value)); },
+    onSave(v) {
+      const r = parseMagic(v.q);
+      if (!r) { toast('Type something to add'); return false; }
+      if (r.kind === 'tx') {
+        state.budget.transactions.push({ id: uid(), created: Date.now(), type: r.type, amount: r.amount, note: r.note, categoryId: r.categoryId, date: r.date, memberId: '' });
+        toast(`${r.type === 'income' ? '💰' : '💸'} ${money(r.amount)} logged${r.categoryId ? ' to ' + category(r.categoryId).name : ''}`);
+      } else if (r.kind === 'event') {
+        state.events.push({ id: uid(), title: r.title, date: r.date, time: r.time, repeat: 'none', memberId: '' });
+        toast(`📅 ${r.title} · ${fmtDate(r.date)}`);
+      } else if (r.kind === 'shop') {
+        const n = r.items.filter((x) => addToList(x, '', true)).length;
+        toast(n ? `🛒 Added ${n} to the list` : 'Already on the list');
+      } else if (r.kind === 'chore') {
+        state.chores.push({ id: uid(), title: cap(r.title), memberId: '', freq: 'once', points: 1, log: [] });
+        toast(`🧹 Chore added: ${cap(r.title)}`);
+      }
+    },
+  });
+  // Focus synchronously inside the tap so iOS opens the keyboard.
+  $('#sheetForm [name="q"]')?.focus();
+}
+
+Object.assign(actions, {
+  'magic-add': openMagic,
+  'magic-example': (el) => {
+    const input = $('#sheetForm [name="q"]');
+    input.value = el.textContent;
+    $('#magicPreview').innerHTML = magicPreview(parseMagic(input.value));
+    input.focus();
   },
 });
