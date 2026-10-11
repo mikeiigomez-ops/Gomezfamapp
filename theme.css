@@ -725,3 +725,83 @@ body.kid-mode .tabbar button .kt { font-size: 22px; line-height: 23px; }
 .slider { width: 100%; accent-color: var(--accent); min-height: 32px; }
 .debt-hero .chart { margin: 12px 0 4px; }
 .sub-hero .stat { font-size: 26px; }
+
+/* =====================================================================
+   Simple mode (younger kids)
+   ===================================================================== */
+body.little-mode { --radius: 26px; }
+body.little-mode .large-title { font-size: 34px; }
+.say { width: 40px; height: 40px; flex: 0 0 40px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 18px; background: var(--surface-2); vertical-align: middle; }
+.kid-hero.little .kid-hi { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 30px; }
+.kid-hero.little .say { background: rgba(255, 255, 255, .25); }
+.star-count { display: inline-flex; align-items: center; gap: 8px; margin-top: 14px; padding: 10px 22px; border-radius: 99px; background: rgba(255, 255, 255, .22); color: #fff; }
+.star-count span { font-size: 30px; }
+.star-count b { font: 900 38px/1 var(--font-display); }
+.star-count small { font-size: 15px; font-weight: 700; opacity: .9; }
+.little-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+.lt {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 18px 8px 16px; border-radius: 26px;
+  background: color-mix(in srgb, var(--t) 14%, var(--surface)); box-shadow: var(--shadow), inset 0 0 0 2px color-mix(in srgb, var(--t) 30%, transparent);
+  transition: transform .18s var(--ease);
+}
+.lt:active { transform: scale(.95); }
+.lt-e { font-size: 48px; line-height: 1.1; }
+.lt b { font: 800 19px/1.2 var(--font-display); }
+.lt small { font-size: 14px; color: var(--muted); font-weight: 650; }
+/* Jobs */
+.job { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.job-main { flex: 1; display: flex; align-items: center; gap: 14px; text-align: left; padding: 18px 16px; border-radius: 22px; background: var(--surface); box-shadow: var(--shadow); min-height: 76px; transition: transform .15s; }
+.job-main:active { transform: scale(.97); }
+.job-main .check { width: 40px; height: 40px; flex-basis: 40px; }
+.job-main .check svg { width: 22px; height: 22px; }
+.job-main b { flex: 1; font: 750 21px/1.2 var(--font-display); }
+.job-stars { font-size: 14px; }
+.job.done .job-main { opacity: .55; }
+.job.done b { text-decoration: line-through; }
+/* Treats */
+.star-bank { text-align: center; }
+.star-bank span { font-size: 34px; }
+.star-bank b { display: block; font: 900 52px/1 var(--font-display); color: #e0a800; }
+.star-bank small { color: var(--muted); font-weight: 650; }
+.little-wait { font-size: 15px; background: var(--warn-soft); }
+.treat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.treat { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding: 16px 10px; border-radius: 24px; background: var(--surface); box-shadow: var(--shadow); transition: transform .15s; }
+.treat:active { transform: scale(.95); }
+.treat .t-e { font-size: 44px; }
+.treat b { font: 750 16px/1.2 var(--font-display); }
+.treat .t-cost { font: 800 15px/1 var(--font-display); color: #b7791f; background: var(--warn-soft); padding: 6px 10px; border-radius: 10px; }
+.treat .t-go { margin-top: 2px; padding: 8px 12px; border-radius: 12px; background: var(--grad); color: #fff; font-weight: 750; font-size: 14px; }
+.treat .t-need { display: block; width: 80%; height: 8px; border-radius: 8px; background: var(--surface-2); overflow: hidden; }
+.treat .t-need i { display: block; height: 100%; background: #e0a800; border-radius: 8px; }
+.treat small { color: var(--muted); font-weight: 650; }
+.treat.can { box-shadow: var(--shadow), inset 0 0 0 2.5px #e0a800; }
+/* Focus routine */
+.focus { text-align: center; padding: 22px 18px; }
+.focus-head { display: flex; justify-content: space-between; align-items: center; font-weight: 700; color: var(--muted); }
+.focus-head .dots { display: flex; gap: 5px; }
+.focus-head .dots i { width: 10px; height: 10px; border-radius: 50%; background: var(--surface-2); }
+.focus-head .dots i.on { background: var(--good); }
+.focus-head .dots i.now { background: var(--accent); transform: scale(1.3); }
+.focus-emoji { font-size: 110px; line-height: 1.15; margin: 18px 0 6px; animation: check-pop .5s var(--spring); }
+.focus-text { font: 850 30px/1.2 var(--font-display); display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
+.focus-done { margin-top: 22px; padding: 22px; font-size: 24px; border-radius: 22px; }
+.focus.done .focus-text { margin-bottom: 6px; }
+/* One piggy */
+.one-piggy { text-align: center; padding: 22px; }
+.big-pig .jar { width: 120px; height: 156px; }
+.pig-total { font: 900 44px/1 var(--font-display); margin-top: 8px; color: #e85d8a; }
+.pig-goal { margin-top: 16px; text-align: left; }
+.pig-goal span { font-weight: 750; }
+.pig-goal small { color: var(--muted); }
+/* Stickers */
+.sticker-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 8px; }
+.sticker { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 18px 8px; border-radius: 26px; background: radial-gradient(circle at 30% 20%, #fff7cc, #ffe08a); box-shadow: 0 8px 18px -10px rgba(180, 120, 0, .6), inset 0 0 0 3px #fff; text-align: center; transform: rotate(-2deg); }
+.sticker:nth-child(2n) { transform: rotate(2deg); background: radial-gradient(circle at 30% 20%, #ffe3f1, #ffb4d4); }
+.sticker:nth-child(3n) { background: radial-gradient(circle at 30% 20%, #dff6ff, #9bdcff); }
+.sticker span { font-size: 52px; }
+.sticker b { font: 800 15px/1.2 var(--font-display); color: #3a2a10; }
+.sticker.locked { background: var(--surface-2); box-shadow: inset 0 0 0 2px var(--line); transform: none; }
+.sticker.locked b { color: var(--muted); font-weight: 650; font-size: 13px; }
+/* Emoji picker */
+.emoji-pick { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; }
+.emoji-pick button { font-size: 34px; padding: 10px 0; border-radius: 16px; background: var(--surface); box-shadow: var(--shadow); }

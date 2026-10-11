@@ -27,6 +27,7 @@ A family web app you can install on your iPhone home screen. It has no build ste
 - **Customize Home**: reorder and hide sections, per phone
 - **Kid Mode**: a kid-safe app (chores, routines, points, piggy bank, wishes, badges) that takes a parent PIN to exit
 - **Kid accounts**: a kid's login is built from a parent's email (e.g. `you+sofia@gmail.com`). The parent approves it from their inbox, and the kid's device joins by scanning a QR code
+- **Simple mode** (per kid, for about ages 4–8): ⭐ stars, one piggy bank or no money, one-step-at-a-time routines, read-aloud, big buttons, a sticker book, and one-tap treats
 - **Routines**: morning, bedtime and homework checklists with on-time stars
 - **Allowance & piggy bank**: Save / Spend / Give jars, an automatic weekly allowance, cashing in points, and a savings goal
 - **Wish lists**: kids add wishes that parents can move into the gift plan without the kid seeing
