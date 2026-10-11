@@ -108,6 +108,9 @@ function defaultState() {
     wordle: {},
     scores: [],
     trivia: [],
+    gems: { cfg: {}, log: [], requests: [] },
+    squish: { items: [], trades: [], pity: {}, free: {} },
+    friends: { circleId: '', rules: {}, presets: null, muted: {} },
     settings: { currency: 'USD', theme: 'auto', showHolidays: true, giftBudget: 0, welcomeDismissed: false },
   };
 }
@@ -166,6 +169,9 @@ function migrate(s) {
   s.kidAccounts ??= {};
   s.chat ??= []; s.kudos ??= []; s.checkins ??= {}; s.todos ??= []; s.challenges ??= [];
   s.games ??= []; s.wordle ??= {}; s.scores ??= []; s.trivia ??= [];
+  s.gems ??= {}; s.gems.cfg ??= {}; s.gems.log ??= []; s.gems.requests ??= [];
+  s.squish ??= {}; s.squish.items ??= []; s.squish.trades ??= []; s.squish.pity ??= {}; s.squish.free ??= {};
+  s.friends ??= {}; s.friends.circleId ??= ''; s.friends.rules ??= {}; s.friends.muted ??= {};
   for (const pr of s.projects) { pr.items ??= []; pr.steps ??= []; }
   s.settings = { ...d.settings, ...(s.settings || {}) };
   s.version = 1;

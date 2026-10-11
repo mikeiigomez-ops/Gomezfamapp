@@ -425,7 +425,7 @@ views.inbox = () => {
   const items = inboxItems();
   const act = items.filter((x) => !x.nudge), nudges = items.filter((x) => x.nudge);
   const wins = (state.activity || []).filter((a) => a.who && a.who !== me && isMember(a.who) && Date.now() - a.at < 86400000 && /did|finished|completed|solved|won|checked/.test(a.text)).slice(0, 4);
-  const row = (x) => x.rsvp ? rsvpCard(x.rsvp) : `<button class="row tap inbox-row${x.n ? ' new' : ''}" style="width:100%;text-align:left" data-action="go" data-to="${esc(x.to)}" ${x.ctab ? `data-ctab="${x.ctab}"` : ''}><div class="avatar">${esc(x.icon)}</div><div class="grow"><div class="title">${esc(x.title)}</div><div class="sub">${esc(x.sub || '')}</div></div>${x.n ? '<span class="dot-new"></span>' : ICON.chev}</button>`;
+  const row = (x) => x.rsvp ? rsvpCard(x.rsvp) : `<button class="row tap inbox-row${x.n ? ' new' : ''}" style="width:100%;text-align:left" data-action="go" data-to="${esc(x.to)}" ${x.ctab ? `data-ctab="${x.ctab}"` : ''} ${x.sqTab ? `data-sq-tab="${x.sqTab}"` : ''}><div class="avatar">${esc(x.icon)}</div><div class="grow"><div class="title">${esc(x.title)}</div><div class="sub">${esc(x.sub || '')}</div></div>${x.n ? '<span class="dot-new"></span>' : ICON.chev}</button>`;
   const rsvps = act.filter((x) => x.rsvp), rest = act.filter((x) => !x.rsvp);
   return `${rest.length ? `<div class="card flush">${rest.map(row).join('')}</div>` : ''}
     ${rsvps.map(row).join('')}

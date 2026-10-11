@@ -140,7 +140,7 @@ function scoreGuess(guess, word) {
   for (let i = 0; i < word.length; i++) if (res[i] !== 'g' && left[guess[i]]) { res[i] = 'y'; left[guess[i]]--; }
   return res;
 }
-const SQ = { g: '🟩', y: '🟨', x: '⬜' };
+const WORD_SQ = { g: '🟩', y: '🟨', x: '⬜' };
 function wordStreak(id) {
   let n = 0, d = today();
   if (!wordOf(id, d)?.won) d = addDays(d, -1);
@@ -439,7 +439,7 @@ Object.assign(actions, {
   'word-hint': () => { ui.wordHint = true; render(); },
   'word-share': async () => {
     const me = actor(), rec = wordOf(me), { w } = dailyWord(rec.len || wordLen(me));
-    const text = `Gomez Family Word · ${fmtDate(today(), { month: 'short', day: 'numeric' })} · ${rec.won ? rec.g.length : 'X'}/6\n${rec.g.map((g) => scoreGuess(g, w).map((r) => SQ[r]).join('')).join('\n')}`;
+    const text = `Gomez Family Word · ${fmtDate(today(), { month: 'short', day: 'numeric' })} · ${rec.won ? rec.g.length : 'X'}/6\n${rec.g.map((g) => scoreGuess(g, w).map((r) => WORD_SQ[r]).join('')).join('\n')}`;
     try { if (navigator.share) await navigator.share({ text }); else { await navigator.clipboard.writeText(text); toast('Copied — paste it in the chat!'); } }
     catch { /* cancelled */ }
   },

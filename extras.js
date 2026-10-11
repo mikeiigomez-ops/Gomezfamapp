@@ -367,19 +367,15 @@ function extraEventsOn(s) {
   return out;
 }
 
-const WHATS_NEW = 'v7';
+const WHATS_NEW = 'v8';
 function whatsNewCard() {
   if (state.settings.whatsNewSeen === WHATS_NEW) return '';
   const item = (attrs, emoji, title, text) => `<button class="row tap" style="width:100%;text-align:left;padding:10px 0;background:none" ${attrs}><div class="avatar">${emoji}</div><div class="grow"><div class="title">${title}</div><div class="sub" style="white-space:normal">${text}</div></div>${ICON.chev}</button>`;
   return `<div class="card install-tip">
-    <h3>💬 Together update</h3>
-    ${item('data-action="go" data-to="chat"', '💬', 'Family chat', 'Group chat with reactions & @mentions — kids too')}
-    ${item('data-action="go" data-to="games"', '🎮', 'Game Center', 'Connect Four, a daily Family Word, Memory Match & family trivia')}
-    ${item('data-action="go" data-to="kudos"', '🙌', 'High-fives', 'Cheer each other on — parents can add bonus ⭐ for kids')}
-    ${item('data-action="go" data-to="checkin"', '😊', 'Daily check-in', 'Share how you feel and one good thing about today')}
-    ${item('data-action="go" data-to="todos"', '✅', 'Shared to-dos', 'Tap “I’ll do it!” so everyone knows who has it')}
-    ${item('data-action="go" data-to="challenges"', '🏆', 'Family challenges', 'Team goals with a shared reward')}
-    ${item('data-action="go" data-to="inbox"', '🔔', 'Inbox & RSVPs', 'Your turn, new messages and “Who’s in?” for events')}
+    <h3>🧸 Squishies & Friends update</h3>
+    ${item('data-action="go" data-to="gems"', '💎', 'Gems', 'Kids earn Gems from chores, routines & high-fives — or trade allowance for them (with your OK)')}
+    ${item('data-action="go" data-to="squishies"', '🧸', 'Squishies', '54 collectible squishies: mystery boxes with fair odds, a daily free box, a shop, fusing & a collection book')}
+    ${item('data-action="go" data-to="friends"', '👯', 'Friends Circles', 'Invite friend families to trade squishies and chat — with parent controls for every kid')}
     <div class="small muted" style="margin:8px 0 10px">Tip: swipe a list row <b>right</b> to check it off, <b>left</b> to delete. Drag any sheet down to close it.</div>
     <button class="btn secondary block" data-action="whats-new-ok">Got it</button>
   </div>`;

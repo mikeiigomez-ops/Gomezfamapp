@@ -44,6 +44,9 @@ A family web app you can install on your iPhone home screen. It has no build ste
 - **Family challenges**: team goals (chores, to-dos, check-ins, or tap +1) with a shared reward
 - **Inbox 🔔**: new messages, mentions, your turn in a game, RSVPs, to-dos for you and reward requests
 - **Game Center**: Connect Four (on your own phones, pass-and-play, or vs. the robot), a daily **Family Word** puzzle with streaks (4-letter words with a hint for Simple-mode kids), **Memory Match** with family bests, and **"How well do you know us?"** trivia
+- **💎 Gems**: a play currency kids earn from chores, on-time routines, bonus ⭐, Family Word wins and check-ins, with a daily max. Kids can trade allowance for Gems at a rate you set, with your approval. Real-world points and rewards don't change
+- **🧸 Squishies**: 54 original collectible squishies in 3 sets and 5 rarities. Includes mystery boxes with the odds shown and a guaranteed Rare within 5 boxes, a daily free box, a rotating shop to buy any squishy outright, tap-to-squish, fusing 3 spares into a rarer one, a collection book with +100 💎 set bonuses, and family trades with a fair-trade meter
+- **👯 Friends Circles**: invite friend families by link. A circle shares only first names, emoji and squishy collections, never budgets or calendars. Kids trade squishies and chat. **Parent controls for each kid:** on/off, chat (off / preset messages & stickers / free text with a safety filter that blocks links, phone numbers, addresses, other-app usernames and unkind words), editable preset messages, trading (off / needs my OK / allowed), reactions, quiet hours, daily message and trade limits, collection visibility, plus muting or removing a family and a log of the kids' recent activity
 - **Settings**: family members, currency, dark mode, and backup/restore
 
 ## Install on iPhone
@@ -64,12 +67,22 @@ One-time setup:
 5. In the app, go to **Settings → Family sync → Set up**, paste the config, create an account, and confirm your email. Then tap **Start sharing**.
 6. Under **Who has access**, tap **+ Add person** and enter your partner's email, then tap **Send invite**.
 
+The `circles` rule is for **Friends Circles** (shared with friend families). If you set up sync before it existed, paste the rules again.
+
 ```
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /families/{familyId} {
       allow read, update, delete: if request.auth != null
+        && request.auth.token.email_verified
+        && request.auth.token.email in resource.data.emails;
+      allow create: if request.auth != null
+        && request.auth.token.email_verified
+        && request.auth.token.email in request.resource.data.emails;
+    }
+    match /circles/{circleId} {
+      allow read, update: if request.auth != null
         && request.auth.token.email_verified
         && request.auth.token.email in resource.data.emails;
       allow create: if request.auth != null
