@@ -367,15 +367,17 @@ function extraEventsOn(s) {
   return out;
 }
 
-const WHATS_NEW = 'v3';
+const WHATS_NEW = 'v4';
 function whatsNewCard() {
   if (state.settings.whatsNewSeen === WHATS_NEW) return '';
   const item = (attrs, emoji, title, text) => `<button class="row tap" style="width:100%;text-align:left;padding:10px 0;background:none" ${attrs}><div class="avatar">${emoji}</div><div class="grow"><div class="title">${title}</div><div class="sub" style="white-space:normal">${text}</div></div>${ICON.chev}</button>`;
   return `<div class="card install-tip">
-    <h3>✨ The app got a makeover</h3>
+    <h3>✨ New this week</h3>
+    ${item('data-action="wx-enable"', '🌤️', 'Local weather', 'Turn it on for today’s forecast up top and on the week strip')}
     ${item('data-action="magic-add"', '✨', 'Magic Add', 'Type “$40 Costco” or “Dentist Fri 3pm” — it figures out the rest')}
-    ${item('data-action="go" data-to="shop"', '🛍️', 'Store Mode', 'Big one-handed checklist, screen stays on, logs the receipt')}
-    ${item('data-action="go" data-to="settings"', '🎨', 'Pick your color', 'Six accent themes in Settings — each phone can choose its own')}
+    ${item('data-action="go" data-to="calendar"', '🗓️', 'Agenda + family filter', 'See what’s coming as a list, or just one person’s schedule')}
+    ${item('data-action="go" data-to="shop"', '🛍️', 'Store Mode', 'Big one-handed checklist that keeps the screen on')}
+    ${item('data-action="go" data-to="settings"', '🎨', 'Pick your color', 'Six accent themes — each phone chooses its own')}
     <div class="small muted" style="margin:8px 0 10px">Tip: swipe a list row <b>right</b> to check it off, <b>left</b> to delete. Drag any sheet down to close it.</div>
     <button class="btn secondary block" data-action="whats-new-ok">Got it</button>
   </div>`;
