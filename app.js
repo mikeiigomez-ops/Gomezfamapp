@@ -463,6 +463,10 @@ views.home = () => {
       </button>
     </div>
 
+    ${typeof weekStrip === 'function' ? weekStrip() : upcoming.length ? `
+      <div class="section-title">Next 7 days<button data-action="go" data-to="calendar">Calendar</button></div>
+      <div class="card flush">${upcoming.slice(0, 8).map((e) => eventRow(e, true)).join('')}</div>` : ''}
+
     ${billsDue.length || payday ? `
       <div class="section-title">Bills this week<button data-action="go" data-to="budget" data-btab="bills">Recurring</button></div>
       <div class="card flush">
@@ -487,9 +491,6 @@ views.home = () => {
         </button>`;
       }).join('')}</div>` : ''}
 
-    ${upcoming.length ? `
-      <div class="section-title">Next 7 days<button data-action="go" data-to="calendar">Calendar</button></div>
-      <div class="card flush">${upcoming.slice(0, 8).map((e) => eventRow(e, true)).join('')}</div>` : ''}
 
     ${typeof homeExtras === 'function' ? homeExtras() : ''}
 
@@ -515,6 +516,7 @@ function homeHero({ t, greet, todays, sumry, frac, listCount, lowCount, dinner, 
     </div>
     <div class="hero-greet">${greet}${state.members.length > 1 ? ',<br>Gomez family' : ''}</div>
     ${bits.length ? `<div class="hero-sub">${esc(bits.join(' · '))}</div>` : `<div class="hero-sub">${realEvents.length ? 'Here\'s your day' : 'A calm day ahead ✨'}</div>`}
+    ${typeof heroWeather === 'function' ? heroWeather() : ''}
     <div class="hero-stats">
       <button class="hstat" data-action="go" data-to="calendar"><b data-count="${realEvents.length}">${realEvents.length}</b><span>${realEvents.length === 1 ? 'event today' : 'events today'}</span></button>
       <button class="hstat" data-action="go" data-to="budget"><b data-count="${Math.round(sumry.left)}" data-money>${money(sumry.left, { maximumFractionDigits: 0 })}</b><span>left in ${parse(t).toLocaleDateString(undefined, { month: 'short' })}</span>${sumry.limit ? `<div class="hbar"><i style="width:${Math.min(100, frac * 100)}%"></i></div>` : ''}</button>
@@ -914,6 +916,7 @@ const shopRow = (i) => `<div class="row${i.done ? ' done' : ''}">
 
 /* ---------- Calendar ---------- */
 views.calendar = () => {
+  if (ui.calView === 'agenda' && typeof agendaView === 'function') return calendarTabs() + agendaView();
   const ym = ui.calMonth;
   const first = parse(ym + '-01');
   const start = addDays(iso(first), -((first.getDay() + 6) % 7)); // grid starts Monday
@@ -929,7 +932,7 @@ views.calendar = () => {
     </button>`);
   }
   const sel = eventsOn(ui.calSel);
-  return `
+  return `${typeof calendarTabs === 'function' ? calendarTabs() : ''}
     <div class="month-nav">
       <button class="icon-btn" data-action="cal-month" data-n="-1" aria-label="Previous month">${ICON.left}</button>
       <h2>${fmtMonth(ym)}</h2>
@@ -1258,6 +1261,7 @@ views.chores = () => {
       <h3>This week's points</h3>
       <div class="leader">${ranked.map((m) => `<div class="who">${avatar(m)}<div class="pts">${pts[m.id] || 0}${m.id === top ? ' 👑' : ''}</div><div class="small muted">${esc(m.name)}</div></div>`).join('')}</div>
     </div>` : ''}
+    ${typeof choreExtras === 'function' ? choreExtras() : ''}
     <div class="section-title">To do</div>
     <div class="card flush">${todo.map(choreRow).join('') || `<div class="empty"><span class="big">✨</span>${state.chores.length ? 'All done! Nice work, team.' : 'Add chores and assign them to family members. Each one earns points.'}</div>`}</div>
     ${done.length ? `<div class="section-title">Done</div><div class="card flush">${done.map(choreRow).join('')}</div>` : ''}
@@ -1282,6 +1286,7 @@ function choreRow(c) {
 
 /* ---------- Settings ---------- */
 views.settings = () => `
+  ${typeof settingsHeader === 'function' ? settingsHeader() : ''}
   <div class="section-title">Family members<button data-action="add-member">+ Add</button></div>
   <div class="card flush">
     ${state.members.map((m) => `<button class="row tap" style="width:100%;text-align:left" data-action="edit-member" data-id="${m.id}">

@@ -850,3 +850,177 @@ afterRender = function () {
   document.body.classList.toggle('store-mode', inStore);
   setWakeLock(inStore);
 };
+
+/* =========================================================
+   🌤️ Weather (Open-Meteo, free, no key). Opt-in; location stays on this phone.
+   ========================================================= */
+const WX_KEY = 'gomezfam:wx';
+const WX_TTL = 30 * 60 * 1000;
+function wxIcon(code, night) {
+  if (code === 0) return night ? '🌙' : '☀️';
+  if (code <= 2) return night ? '☁️' : '🌤️';
+  if (code === 3) return '☁️';
+  if (code === 45 || code === 48) return '🌫️';
+  if (code >= 51 && code <= 57) return '🌦️';
+  if (code >= 61 && code <= 67) return '🌧️';
+  if (code >= 71 && code <= 77) return '❄️';
+  if (code >= 80 && code <= 82) return '🌦️';
+  if (code >= 85 && code <= 86) return '🌨️';
+  if (code >= 95) return '⛈️';
+  return '🌡️';
+}
+function wxLabel(code) {
+  return code === 0 ? 'Clear' : code <= 2 ? 'Partly cloudy' : code === 3 ? 'Cloudy' : code <= 48 ? 'Foggy' : code <= 57 ? 'Drizzle' : code <= 67 ? 'Rain' : code <= 77 ? 'Snow' : code <= 82 ? 'Showers' : code <= 86 ? 'Snow showers' : 'Storms';
+}
+const wxCache = () => { try { return JSON.parse(localStorage.getItem(WX_KEY)); } catch { return null; } };
+let wxLoading = false;
+async function loadWeather(force) {
+  const loc = state.settings.weather;
+  if (!loc || wxLoading) return;
+  const c = wxCache();
+  if (!force && c && Date.now() - c.t < WX_TTL && c.lat === loc.lat && c.lon === loc.lon) return;
+  wxLoading = true;
+  try {
+    const unit = loc.unit === 'C' ? 'celsius' : 'fahrenheit';
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&current=temperature_2m,weather_code,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&temperature_unit=${unit}&timezone=auto&forecast_days=7`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('weather ' + res.status);
+    const data = await res.json();
+    localStorage.setItem(WX_KEY, JSON.stringify({ t: Date.now(), lat: loc.lat, lon: loc.lon, data }));
+    if (currentRoute().name === 'home') render();
+  } catch (e) { console.warn('weather', e); }
+  finally { wxLoading = false; }
+}
+function wxForDay(d) {
+  const c = wxCache();
+  if (!c || !state.settings.weather) return null;
+  const i = (c.data.daily?.time || []).indexOf(d);
+  if (i < 0) return null;
+  const dl = c.data.daily;
+  return { code: dl.weather_code[i], hi: Math.round(dl.temperature_2m_max[i]), lo: Math.round(dl.temperature_2m_min[i]), rain: dl.precipitation_probability_max?.[i] };
+}
+function heroWeather() {
+  if (!state.settings.weather) return navigator.geolocation ? `<button class="hero-wx-add" data-action="wx-enable">＋ Add local weather</button>` : '';
+  loadWeather();
+  const c = wxCache();
+  if (!c?.data?.current) return `<div class="hero-wx">Loading weather…</div>`;
+  const cur = c.data.current, d = wxForDay(today());
+  const u = state.settings.weather.unit === 'C' ? '°' : '°';
+  return `<button class="hero-wx" data-action="wx-settings">
+    <span class="wx-now">${wxIcon(cur.weather_code, cur.is_day === 0)} ${Math.round(cur.temperature_2m)}${u}</span>
+    <span>${wxLabel(cur.weather_code)}${d ? ` · H ${d.hi}${u} L ${d.lo}${u}` : ''}${d && d.rain >= 20 ? ` · ☔ ${d.rain}%` : ''}</span>
+  </button>`;
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') loadWeather(); });
+
+/* =========================================================
+   This week strip (Home)
+   ========================================================= */
+function weekStrip() {
+  const t = today();
+  const days = [...Array(7)].map((_, i) => addDays(t, i));
+  return `<div class="section-title">This week<button data-action="go" data-to="calendar">Calendar</button></div>
+  <div class="week-strip">${days.map((d) => {
+    const evs = eventsOn(d).filter((e) => e.kind !== 'holiday' && e.kind !== 'bill');
+    const bills = recurringBetween(d, d, 'bill').filter((x) => !isPaid(x.b, x.date));
+    const pay = recurringBetween(d, d, 'income').length;
+    const hol = eventsOn(d).find((e) => e.kind === 'holiday');
+    const dinner = state.meals[d]?.dinner;
+    const w = wxForDay(d);
+    return `<button class="wday${d === t ? ' today' : ''}" data-action="week-day" data-date="${d}">
+      <div class="wday-top"><span>${d === t ? 'Today' : fmtDate(d, { weekday: 'short' })}</span><b>${parse(d).getDate()}</b></div>
+      ${w ? `<div class="wday-wx">${wxIcon(w.code)} ${w.hi}°</div>` : ''}
+      <div class="wday-items">
+        ${evs.slice(0, 2).map((e) => `<div class="wev" style="--c:${e.color}">${esc(e.title.replace(/^[\p{Extended_Pictographic}️‍]+\s*/u, ''))}</div>`).join('')}
+        ${evs.length > 2 ? `<div class="small muted">+${evs.length - 2} more</div>` : ''}
+        ${!evs.length && hol ? `<div class="small muted">${esc(hol.title)}</div>` : ''}
+      </div>
+      <div class="wday-foot">${dinner ? `<span title="${esc(dinner)}">🍽️</span>` : ''}${bills.length ? `<span>💳${bills.length > 1 ? bills.length : ''}</span>` : ''}${pay ? '<span>💰</span>' : ''}</div>
+    </button>`;
+  }).join('')}</div>`;
+}
+
+/* =========================================================
+   Calendar: Month / Agenda
+   ========================================================= */
+function calendarTabs() {
+  const v = ui.calView || 'month';
+  return `<div class="segmented"><button class="${v === 'month' ? 'active' : ''}" data-action="cal-view" data-v="month">Month</button><button class="${v === 'agenda' ? 'active' : ''}" data-action="cal-view" data-v="agenda">Agenda</button></div>`;
+}
+function agendaView() {
+  const t = today();
+  const out = [];
+  for (let i = 0; i < 60; i++) {
+    const d = addDays(t, i);
+    const evs = eventsOn(d);
+    const w = wxForDay(d);
+    if (!evs.length && i > 0) continue;
+    out.push(`<div class="agenda-day${d === t ? ' today' : ''}">
+      <div class="agenda-date"><b>${parse(d).getDate()}</b><span>${d === t ? 'Today' : i === 1 ? 'Tmrw' : fmtDate(d, { weekday: 'short' })}</span>${w ? `<small>${wxIcon(w.code)} ${w.hi}°</small>` : ''}</div>
+      <div class="card flush" style="flex:1;min-width:0;margin:0">${evs.length ? evs.map((e) => eventRow(e)).join('') : '<div class="empty small" style="padding:16px">Nothing today</div>'}</div>
+    </div>`);
+    if (parse(d).getDate() === new Date(parse(d).getFullYear(), parse(d).getMonth() + 1, 0).getDate() && i < 59) out.push(`<div class="agenda-month">${fmtMonth(monthKey(addDays(d, 1)))}</div>`);
+  }
+  return `<div class="agenda">${out.join('')}</div><button class="fab" data-action="add-event" data-date="${t}" aria-label="Add event">${ICON.plus}</button>`;
+}
+
+/* =========================================================
+   Chores: streaks & last week's champion
+   ========================================================= */
+function choreStreak(memberId) {
+  const days = new Set();
+  for (const c of state.chores) for (const l of c.log || []) if (l.memberId === memberId) days.add(l.date);
+  let d = days.has(today()) ? today() : addDays(today(), -1), n = 0;
+  while (days.has(d)) { n++; d = addDays(d, -1); }
+  return n;
+}
+function choreExtras() {
+  if (!state.members.length || !state.chores.length) return '';
+  const lastWeek = weekStart(addDays(weekStart(today()), -1));
+  const pts = {};
+  for (const c of state.chores) for (const l of c.log || []) if (l.memberId && l.date >= lastWeek && l.date < weekStart(today())) pts[l.memberId] = (pts[l.memberId] || 0) + (Number(c.points) || 1);
+  const champ = Object.entries(pts).sort((a, b) => b[1] - a[1])[0];
+  const streaks = state.members.map((m) => ({ m, n: choreStreak(m.id) })).filter((x) => x.n >= 2).sort((a, b) => b.n - a.n);
+  if (!champ && !streaks.length) return '';
+  return `<div class="grid2">
+    ${champ ? `<div class="card champ"><div class="stat-label">🏆 Last week's champ</div><div style="display:flex;align-items:center;gap:8px;margin-top:6px">${avatar(member(champ[0]), true)}<b>${esc(member(champ[0]).name)}</b></div><div class="small muted">${champ[1]} points</div></div>` : ''}
+    ${streaks.length ? `<div class="card"><div class="stat-label">🔥 Streaks</div>${streaks.slice(0, 3).map((x) => `<div class="small" style="margin-top:6px">${esc(x.m.emoji)} <b>${esc(x.m.name)}</b> · ${x.n} days</div>`).join('')}</div>` : ''}
+  </div>`;
+}
+
+/* =========================================================
+   Settings header
+   ========================================================= */
+function settingsHeader() {
+  const synced = typeof Sync !== 'undefined' && (Sync.status === 'synced' || Sync.status === 'offline');
+  return `<div class="card settings-head">
+    <div class="avatars big">${state.members.slice(0, 6).map((m) => `<span style="--c:${m.color}">${esc(m.emoji)}</span>`).join('')}</div>
+    <div style="font:800 22px/1.2 var(--font-display);margin-top:10px">${state.members.length > 1 ? 'Gomez Family' : 'Your family'}</div>
+    <div class="small muted">${state.members.length} member${state.members.length === 1 ? '' : 's'} · ${synced ? '☁️ Synced across phones' : '📱 On this phone'}</div>
+  </div>`;
+}
+
+Object.assign(actions, {
+  'wx-enable': () => {
+    if (!navigator.geolocation) { toast('Location isn’t available on this device'); return; }
+    toast('Allow location to show local weather');
+    navigator.geolocation.getCurrentPosition((pos) => {
+      state.settings.weather = { lat: Math.round(pos.coords.latitude * 100) / 100, lon: Math.round(pos.coords.longitude * 100) / 100, unit: state.settings.currency === 'USD' ? 'F' : 'C' };
+      save(); loadWeather(true); render();
+    }, () => toast('Location was not allowed — you can enable it in iPhone Settings → Safari'), { timeout: 15000, maximumAge: 3600000 });
+  },
+  'wx-settings': () => openSheet({
+    title: 'Weather',
+    values: { unit: state.settings.weather?.unit || 'F' },
+    fields: [
+      { name: 'unit', label: 'Units', type: 'select', options: [{ value: 'F', label: '°F Fahrenheit' }, { value: 'C', label: '°C Celsius' }] },
+      { type: 'html', html: '<div class="btn-row"><button type="button" class="btn secondary" data-action="wx-relocate">📍 Update location</button></div><p class="small muted" style="margin:0 4px">Your location stays on this phone and is only used to look up the forecast.</p>' },
+    ],
+    onSave(v) { state.settings.weather.unit = v.unit; loadWeather(true); },
+    onDelete: () => { delete state.settings.weather; localStorage.removeItem(WX_KEY); save(); render(); },
+    deleteLabel: 'Turn off weather',
+  }),
+  'wx-relocate': () => { closeSheet(); actions['wx-enable'](); },
+  'week-day': (el) => { ui.calSel = el.dataset.date; ui.calMonth = monthKey(el.dataset.date); ui.calView = 'month'; go('calendar'); },
+  'cal-view': (el) => { ui.calView = el.dataset.v; render(); },
+});
