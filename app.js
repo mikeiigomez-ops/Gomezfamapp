@@ -1407,7 +1407,10 @@ function render() {
   const changed = lastRouteKey !== null && lastRouteKey !== key;
   lastRouteKey = key;
   const paint = () => {
+    // Scrolling rows/grids marked data-keep remember where they were across re-renders.
+    const kept = changed ? {} : Object.fromEntries([...viewEl.querySelectorAll('[data-keep]')].map((el) => [el.dataset.keep, [el.scrollLeft, el.scrollTop]]));
     viewEl.innerHTML = html;
+    for (const el of viewEl.querySelectorAll('[data-keep]')) { const k = kept[el.dataset.keep]; if (k) { el.scrollLeft = k[0]; el.scrollTop = k[1]; } }
     const tab = name === 'person' ? 'gifts' : name;
     $('#title').textContent = title;
     $('#backBtn').hidden = TABS.includes(name) || name === 'kid';

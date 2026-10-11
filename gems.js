@@ -6,7 +6,7 @@
 
 Object.assign(TITLES, { gems: 'Gems' });
 const GEM = '💎';
-const GEM_DEFAULTS = { perPoint: 2, routine: 3, word: 3, checkin: 1, kudos: 1, dailyCap: 40, welcome: 25, rate: 10, exchange: true, approve: true, maxExchange: 5 };
+const GEM_DEFAULTS = { perPoint: 2, routine: 3, word: 3, checkin: 1, kudos: 1, dailyCap: 40, streak: 1, welcome: 25, rate: 10, exchange: true, approve: true, maxExchange: 5 };
 const gemsCfg = () => ({ ...GEM_DEFAULTS, ...(state.gems.cfg || {}) });
 // Earning starts the first day Gems exist on this family's data (no surprise windfall for past chores).
 const gemsStart = () => (state.gems.start ||= today());
@@ -20,6 +20,16 @@ function gemDayEarnings(id) {
   for (const [d, xs] of Object.entries(state.wordle || {})) if (xs[id]?.won) add(d, cfg.word, 'Family Word solved');
   for (const [d, xs] of Object.entries(state.checkins || {})) if (xs[id]) add(d, cfg.checkin, 'Daily check-in');
   for (const x of Object.values(days)) x.capped = Math.min(x.n, cfg.dailyCap);
+  // Chore streak bonus, on top of the daily max: day 2 of a streak = +2, day 3 = +3 … up to +5.
+  if (cfg.streak) {
+    const choreDays = [...new Set(state.chores.flatMap((c) => (c.log || []).filter((l) => l.memberId === id).map((l) => l.date)))].filter((d) => d && d >= start).sort();
+    let run = 0, prev = '';
+    for (const d of choreDays) {
+      const y = parse(d); y.setDate(y.getDate() - 1);
+      run = prev === iso(y) ? run + 1 : 1; prev = d;
+      if (run >= 2) { const b = Math.min(5, run) * cfg.streak, x = days[d]; x.capped += b; x.items.push([`🔥 ${run}-day chore streak`, b]); }
+    }
+  }
   return days;
 }
 const gemsEarned = (id) => sum(Object.values(gemDayEarnings(id)), (x) => x.capped);
@@ -89,7 +99,7 @@ function gemsWallet(id, mine) {
       <div class="gem-orb">${GEM}</div>
       <div class="gem-bal">${gemBalance(id).toLocaleString()}</div>
       <div class="gem-sub">${mine ? 'My Gems' : `${esc(m.name)}’s Gems`}</div>
-      <div class="gem-today"><span>Today</span><div class="bar"><i style="width:${Math.min(100, (td.capped / cfg.dailyCap) * 100)}%"></i></div><span>${td.capped}/${cfg.dailyCap}</span></div>
+      <div class="gem-today"><span>Today</span><div class="bar"><i style="width:${Math.min(100, (td.capped / cfg.dailyCap) * 100)}%"></i></div><span>${Math.min(td.capped, cfg.dailyCap)}/${cfg.dailyCap}</span></div>
       <div class="gem-actions">
         <button data-action="go" data-to="squishies"><span>🧸</span>Squishies</button>
         ${canExchange(id) && mine ? `<button data-action="gem-exchange" data-id="${id}"><span>🐷</span>Trade $</button>` : ''}
@@ -133,13 +143,14 @@ function gemRulesSheet() {
       { row: [{ name: 'perPoint', label: '💎 per chore point', type: 'number' }, { name: 'dailyCap', label: 'Daily max', type: 'number' }] },
       { row: [{ name: 'routine', label: 'On-time routine', type: 'number' }, { name: 'kudos', label: 'Per bonus ⭐', type: 'number' }] },
       { row: [{ name: 'word', label: 'Family Word win', type: 'number' }, { name: 'checkin', label: 'Check-in', type: 'number' }] },
+      { name: 'streak', label: '🔥 Chore streak bonus (× day, max 5)', type: 'number', hint: '1 = day 2 of a streak earns +2, day 5+ earns +5. Not counted toward the daily max. 0 turns it off.' },
       { name: 'exchange', label: '🐷 Kids can trade allowance for Gems', type: 'checkbox' },
       { row: [{ name: 'rate', label: '💎 per $1', type: 'number' }, { name: 'maxExchange', label: 'Max $ per trade', type: 'number' }] },
       { name: 'approve', label: 'A grown-up must OK each trade', type: 'checkbox', hint: 'Requests show in your 🔔 inbox' },
     ],
     onSave(v) {
       const n = (k) => Math.max(0, Number(v[k]) || 0);
-      state.gems.cfg = { perPoint: n('perPoint'), dailyCap: n('dailyCap') || 1, routine: n('routine'), kudos: n('kudos'), word: n('word'), checkin: n('checkin'), welcome: c.welcome, exchange: v.exchange, rate: n('rate') || 1, maxExchange: n('maxExchange') || 1, approve: v.approve };
+      state.gems.cfg = { perPoint: n('perPoint'), dailyCap: n('dailyCap') || 1, routine: n('routine'), kudos: n('kudos'), word: n('word'), checkin: n('checkin'), streak: n('streak'), welcome: c.welcome, exchange: v.exchange, rate: n('rate') || 1, maxExchange: n('maxExchange') || 1, approve: v.approve };
       toast(`${GEM} Gem rules saved`);
     },
   });

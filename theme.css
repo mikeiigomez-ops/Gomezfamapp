@@ -1653,3 +1653,44 @@ body.house-editing main { padding-bottom: 0; }
 .hsel-bar.try { gap: 6px; }
 .hsel-bar.try .try-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hsel-bar.try .try-yes, .hsel-bar.try .try-no { flex: none; }
+
+/* =========================================================
+   v13 — bigger tap targets, folded book, read-aloud spots
+   ========================================================= */
+.h-cats button { min-height: 42px; padding: 8px 13px; font-size: 13.5px; }
+.sq-filters button { min-height: 40px; padding: 9px 15px; }
+.sq-sub button { min-height: 40px; }
+.rs-btn { width: 44px; height: 44px; font-size: 21px; }
+.hsel-bar button.undo, .hsel-bar button.done { min-width: 44px; min-height: 44px; }
+.dh-avatar .av-bubble { left: auto; right: 0; transform: translate(0, -4px); }
+.pity-dots i:not(.on):not(.last) { background: color-mix(in oklab, var(--text) 12%, transparent); box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--text) 22%, transparent); }
+.sqb-gems small { font-weight: 700; opacity: .7; font-size: 11px; }
+.h-say { display: flex; justify-content: center; margin: -4px 0 6px; }
+.hsel-bar .say { flex: none; }
+
+.book-head { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 54px; margin: 8px 0 0; padding: 10px 14px; border-radius: 18px; background: var(--surface); box-shadow: var(--shadow); text-align: left; color: var(--text); }
+.book-head.open { border-bottom-left-radius: 8px; border-bottom-right-radius: 8px; }
+.book-head .bh-e { font-size: 24px; flex: none; }
+.book-head .bh-name { flex: 1; min-width: 0; font-weight: 850; font-size: 15px; display: flex; flex-direction: column; gap: 5px; }
+.book-head .bh-bar { display: block; height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+.book-head .bh-bar b { display: block; height: 100%; border-radius: 3px; background: var(--grad); }
+.book-head .bh-n { flex: none; font-size: 12.5px; font-weight: 750; color: var(--muted); }
+.book-head .bh-chev { flex: none; font-size: 20px; color: var(--muted); transition: transform .2s; }
+.book-head.open .bh-chev { transform: rotate(90deg); }
+.bh-tip { margin: 6px 4px 0; }
+.book-head + .sq-grid.book, .bh-tip + .sq-grid.book { margin-top: 8px; }
+
+/* Same dark styles when the phone itself is in dark mode (theme = Auto) */
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .fuse-cta { background: linear-gradient(135deg, #3b2a5a, #1e3a5a); }
+  html:not([data-theme="light"]) .sq-banner { background: linear-gradient(135deg, #4a2340, #2e2a5a); color: #fff; }
+  html:not([data-theme="light"]) .sqb-gems { color: #d8b4fe; }
+  html:not([data-theme="light"]) .invite-card { background: linear-gradient(160deg, #4a2340, var(--surface)); }
+  html:not([data-theme="light"]) .friends-banner { background: linear-gradient(135deg, #1e3a5a, #4a2340); }
+  html:not([data-theme="light"]) .sq-tile.r-U { background: radial-gradient(circle at 50% 35%, #5a4500, var(--surface) 72%); }
+  html:not([data-theme="light"]) .ult-card.got { background: linear-gradient(135deg, #4a3a00, var(--surface) 70%); }
+  html:not([data-theme="light"]) .house-banner { background: linear-gradient(135deg, #4a3520, #1e3a5a); color: #fff; }
+  html:not([data-theme="light"]) .how-card { background: linear-gradient(135deg, #4a3a00, var(--surface)); }
+  html:not([data-theme="light"]) .av-stage { background: radial-gradient(ellipse at 50% 85%, color-mix(in srgb, var(--c) 35%, transparent), transparent 60%), linear-gradient(#2a1d3a, #16223a); }
+  html:not([data-theme="light"]) .dust-card { background: linear-gradient(135deg, #2e2a5a, #4a2340); color: #fff; }
+}

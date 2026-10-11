@@ -213,7 +213,7 @@ views.room = (roomId) => {
   const bar = tr || trySurf
     ? `<div class="hsel-bar try"><span class="try-label">Try it: <b>${esc(tryName)}</b></span><button class="try-no" data-action="h-try-cancel" aria-label="No thanks">✕</button><button class="try-yes" data-action="h-try-keep">Keep it · ${GEM} ${tryPrice}</button></div>`
     : `<div class="hsel-bar${sel ? '' : ' empty'}">${sel ? `<b>${esc(selName)}</b><button data-action="h-flip" aria-label="Flip">↔️</button><button data-action="h-size" data-d="-1" aria-label="Smaller">➖</button><button data-action="h-size" data-d="1" aria-label="Bigger">➕</button><button data-action="h-front" aria-label="Bring forward">⬆️</button><button data-action="h-store" aria-label="Put away">📦</button>` : `<span class="small muted">Tap an item below to try it</span>`}<button class="undo" data-action="h-undo" ${undoN ? '' : 'disabled'} aria-label="Undo">↩️</button><button class="done" data-action="h-edit" data-id="">Done</button></div>`;
-  return `${edit ? '' : `<div class="room-tabs">${h.rooms.map((x) => `<button class="${x.id === r.id ? 'on' : ''}" data-action="go" data-to="room/${x.id}"><span>${ROOM_TYPES[x.type]?.[0] || '🏠'}</span>${esc(x.name)}</button>`).join('')}${owner && h.rooms.length < MAX_ROOMS ? '<button class="add" data-action="h-add-room">＋</button>' : ''}</div>`}
+  return `${edit ? '' : `<div class="room-tabs" data-keep="rtabs">${h.rooms.map((x) => `<button class="${x.id === r.id ? 'on' : ''}" data-action="go" data-to="room/${x.id}"><span>${ROOM_TYPES[x.type]?.[0] || '🏠'}</span>${esc(x.name)}</button>`).join('')}${owner && h.rooms.length < MAX_ROOMS ? '<button class="add" data-action="h-add-room">＋</button>' : ''}</div>`}
     <div class="room-stage${edit ? ' editing' : ''}">
       ${roomHTML(r, opts)}
       <button class="rs-btn rs-home" data-action="go" data-to="house/${mid}" aria-label="Whole house">🏡</button>
@@ -227,7 +227,7 @@ views.room = (roomId) => {
 };
 function shopTray(mid, h, r) {
   const cat = ui.hCat || 'furniture';
-  const chips = `<div class="h-cats">${H_CATS.map(([k, e, l]) => `<button class="${cat === k ? 'on' : ''}" data-action="h-cat" data-c="${k}"><span>${e}</span>${l}</button>`).join('')}</div>`;
+  const chips = `<div class="h-cats" data-keep="hcats">${H_CATS.map(([k, e, l]) => `<button class="${cat === k ? 'on' : ''}" data-action="h-cat" data-c="${k}"><span>${e}</span>${l}</button>`).join('')}</div>`;
   let grid;
   if (cat === 'walls' || cat === 'floors') {
     const src = cat === 'walls' ? WALLS : FLOORS, have = cat === 'walls' ? h.walls : h.floors, cur = cat === 'walls' ? r.wall : r.floor;
@@ -241,7 +241,7 @@ function shopTray(mid, h, r) {
       return `<button class="h-card${locked ? ' locked' : ''}" data-action="h-pick" data-f="${f.id}"><span class="h-ic">${f.svg ? FURN_SVG[f.svg]() : f.e}</span><span>${esc(f.name)}</span><small>${locked ? '🔒 Earn it' : inv ? `×${inv} to place` : f.price ? `${GEM} ${f.price}` : 'Free'}</small></button>`;
     }).join('');
   }
-  return `<div class="h-tray">${chips}<div class="h-grid">${grid}</div></div>`;
+  return `<div class="h-tray">${chips}<div class="h-grid" data-keep="hgrid-${cat}">${grid}</div></div>`;
 }
 // Gomez Town + House of the Week
 function houseOfWeek() {
@@ -620,7 +620,7 @@ afterRender = function () {
   document.body.classList.toggle('house-editing', r.name === 'room' && !!ui.hEdit);
   if (ui.hNew) setTimeout(() => { ui.hNew = null; }, 700);
   if (r.name !== 'fhouse') ui.fRoom = null;
-  document.body.classList.toggle('route-room', ['room', 'fhouse', 'house'].includes(r.name));
+  document.body.classList.toggle('route-room', ['room', 'fhouse', 'house', 'squishies'].includes(r.name));
 };
 // More grid + kid home entry points
 const _moreGridH = moreGrid;

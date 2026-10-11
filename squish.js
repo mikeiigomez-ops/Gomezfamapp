@@ -456,7 +456,7 @@ views.kid = () => {
   const n = new Set(myItems(id).map((i) => i.sid)).size, fav = myItems(id).find((i) => i.fav) || myItems(id).at(-1);
   const free = state.squish.free[id] !== today();
   const card = `<button class="card sq-banner" data-action="go" data-to="squishies"><div class="sqb-art">${fav ? squishySVG(fav.sid) : '<span style="font-size:48px">🎁</span>'}</div>
-    <div class="grow"><b>My Squishies</b><div class="small">${n}/${SQUISHIES.length} collected</div><div class="sqb-gems">${GEM} ${gemBalance(id)}</div></div>${free ? '<span class="sqb-free">🎁 Free box!</span>' : ''}</button>`;
+    <div class="grow"><b>My Squishies</b><div class="small">${n}/${SQUISHIES.length} collected</div><div class="sqb-gems">${GEM} ${gemBalance(id)} <small>game gems</small></div></div>${free ? '<span class="sqb-free">🎁 Free box!</span>' : ''}</button>`;
   const at = html.search(/<div class="section-title">(Family fun|Family)<\/div>/);
   return at < 0 ? html + card : html.slice(0, at) + card + html.slice(at);
 };
@@ -497,7 +497,9 @@ Object.assign(actions, {
       onSave() {
         if (!spendGems(me, price, `Bought ${s.name}`, 'squish')) return false;
         const { item, isNew } = giveSquishy(me, s.id, 'shop');
-        setTimeout(() => boxReveal({ emoji: '🛍️' }, item, isNew), 60);
+        const dust = isNew || s.r === 'U' ? 0 : DUST[s.r] || 1;
+        if (dust) { state.squish.dust ||= {}; state.squish.dust[me] = (state.squish.dust[me] || 0) + dust; save(); }
+        setTimeout(() => boxReveal({ emoji: '🛍️' }, item, isNew, { dust }), 60);
       },
     });
   },

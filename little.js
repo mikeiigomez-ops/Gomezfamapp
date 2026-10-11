@@ -45,7 +45,7 @@ function simpleHome(id) {
       <button class="lt" data-action="go" data-to="routines" style="--t:#f59e0b"><span class="lt-e">${esc(now?.emoji || '🌅')}</span><b>My routine</b><small>${now ? (routineComplete(now) ? 'Done! ⭐' : `${steps} of ${now.steps.length}`) : 'None yet'}</small></button>
       <button class="lt" data-action="go" data-to="treats" style="--t:#ec4899"><span class="lt-e">🎁</span><b>Treats</b><small>⭐ ${stars}</small></button>
       <button class="lt" data-action="go" data-to="wishes" style="--t:#8b5cf6"><span class="lt-e">💖</span><b>My wishes</b><small>${state.wishes.filter((w) => w.memberId === id).length}</small></button>
-      ${money !== 'none' ? `<button class="lt" data-action="go" data-to="piggy" style="--t:#e85d8a"><span class="lt-e">🐷</span><b>My piggy</b><small>${money === 'one' ? money_(piggyTotal(id)) : 'Jars'}</small></button>` : ''}
+      ${money !== 'none' ? `<button class="lt" data-action="go" data-to="piggy" style="--t:#e85d8a"><span class="lt-e">🐷</span><b>My piggy</b><small>${money === 'one' ? (piggyTotal(id) || piggyOf(id).allowance ? money_(piggyTotal(id)) : 'Coming soon') : 'Jars'}</small></button>` : ''}
       <button class="lt" data-action="go" data-to="badges" style="--t:#10b981"><span class="lt-e">🌟</span><b>Stickers</b><small>${badgesFor(id).filter((b) => b.got).length}</small></button>
     </div>
     ${poll && typeof pollCard === 'function' ? `<div class="section-title">Vote!</div>${pollCard(poll)}` : ''}
