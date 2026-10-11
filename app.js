@@ -46,7 +46,7 @@ const ICON = {
    ========================================================= */
 const STORE_KEY = 'gomezfam:v1';
 const COLORS = ['#c8573d', '#2f8a5b', '#3b6fd8', '#9b51e0', '#e0a800', '#d6457e', '#1aa3a3', '#6b7280'];
-const AISLES = ['Produce', 'Dairy & Eggs', 'Meat & Seafood', 'Bakery', 'Pantry', 'Frozen', 'Snacks & Drinks', 'Household', 'Personal Care', 'Baby & Kids', 'Pets', 'Other'];
+const AISLES = ['Produce', 'Dairy & Eggs', 'Meat & Seafood', 'Bakery', 'Pantry', 'Frozen', 'Snacks & Drinks', 'Household', 'Personal Care', 'Baby & Kids', 'Pets', 'Hardware', 'Other'];
 const OCCASIONS = ['Birthday', 'Christmas', 'Anniversary', "Valentine's Day", "Mother's Day", "Father's Day", 'Graduation', 'Wedding', 'Baby Shower', 'Just Because', 'Other'];
 const GIFT_STATUS = ['idea', 'bought', 'wrapped', 'given'];
 const GIFT_STATUS_CLS = { idea: '', bought: 'warn', wrapped: 'accent', given: 'good' };
@@ -84,6 +84,7 @@ function defaultState() {
     gifts: [],
     meals: {},
     chores: [],
+    projects: [],
     settings: { currency: 'USD', theme: 'auto', showHolidays: true, giftBudget: 0, welcomeDismissed: false },
   };
 }
@@ -125,6 +126,8 @@ function migrate(s) {
   s.gifts ??= [];
   s.meals ??= {};
   s.chores ??= [];
+  s.projects ??= [];
+  for (const pr of s.projects) { pr.items ??= []; pr.steps ??= []; }
   s.settings = { ...d.settings, ...(s.settings || {}) };
   s.version = 1;
   return s;
@@ -237,6 +240,9 @@ function eventsOn(s) {
       out.push({ kind: 'bill', id: b.id, title: inc ? `💰 ${b.name} · +${money(b.amount)}` : `💳 ${b.name} · ${money(b.amount)}`, time: '', color: inc ? '#2f8a5b' : '#e0a800', who: EVERYONE });
     }
   }
+  for (const pr of state.projects) {
+    if (pr.dueDate === s && pr.status !== 'done') out.push({ kind: 'project', id: pr.id, title: `${pr.emoji || '🔨'} ${pr.name} due`, time: '', color: '#3b6fd8', who: EVERYONE });
+  }
   if (state.settings.showHolidays) {
     const h = holidays(parse(s).getFullYear())[s];
     if (h) out.push({ kind: 'holiday', id: '', title: h, time: '', color: '#6b7280', who: EVERYONE });
@@ -345,6 +351,7 @@ const AISLE_HINTS = {
   'Baby & Kids': /\b(?:diaper|wipe|formula|baby)/,
   'Pets': /\b(?:dog|cat|pet|litter)/,
   'Pantry': /\b(?:rice|bean|pasta|flour|sugar|oil|sauce|cereal|coffee|tea|spice|salt|can|soup|peanut)/,
+  'Hardware': /\b(?:screw|nail|paint|primer|lumber|board|drywall|caulk|sandpaper|brush|roller|bolt|hinge|tile|grout|mulch|soil|plywood|stain|glue)/,
 };
 function guessAisle(name) {
   const n = norm(name);
@@ -373,7 +380,7 @@ function weekPoints(from = weekStart(today())) {
    Views
    ========================================================= */
 const TABS = ['home', 'budget', 'shop', 'calendar', 'gifts'];
-const TITLES = { home: 'Home', budget: 'Budget', shop: 'Shopping', calendar: 'Calendar', gifts: 'Gifts', person: 'Gifts', meals: 'Meal Plan', chores: 'Chores', settings: 'Settings' };
+const TITLES = { home: 'Home', budget: 'Budget', shop: 'Shopping', calendar: 'Calendar', gifts: 'Gifts', person: 'Gifts', meals: 'Meal Plan', chores: 'Chores', projects: 'House Projects', project: 'Project', settings: 'Settings' };
 
 const views = {};
 
@@ -489,15 +496,17 @@ views.home = () => {
     <div class="grid2">
       <button class="card tile" data-action="go" data-to="meals"><div class="emoji">🍽️</div><b>Meal plan</b><div class="small muted">Plan the week's dinners</div></button>
       <button class="card tile" data-action="go" data-to="chores"><div class="emoji">🧹</div><b>Chores</b><div class="small muted">${choresDue.length ? `${choresDue.length} to do` : 'All caught up'}</div></button>
+      ${projectsTile()}
     </div>
   `;
 };
 
 function eventRow(e, showDate) {
-  const clickable = e.kind === 'event' || e.kind === 'birthday' || e.kind === 'bill';
+  const clickable = e.kind === 'event' || e.kind === 'birthday' || e.kind === 'bill' || e.kind === 'project';
   const action = e.kind === 'event' ? `data-action="edit-event" data-id="${e.id}"`
     : e.kind === 'birthday' ? `data-action="go" data-to="person/${e.id}"`
-    : e.kind === 'bill' ? `data-action="edit-bill" data-id="${e.id}"` : '';
+    : e.kind === 'bill' ? `data-action="edit-bill" data-id="${e.id}"`
+    : e.kind === 'project' ? `data-action="go" data-to="project/${e.id}"` : '';
   const timeLabel = e.time ? fmtTime(e.time) : (e.kind === 'holiday' ? 'Holiday' : 'All day');
   return `<${clickable ? 'button' : 'div'} class="row${clickable ? ' tap' : ''}" style="width:100%;text-align:left" ${action}>
     <div class="time-col">${showDate ? fmtDate(e.date, { weekday: 'short', day: 'numeric' }) : timeLabel}</div>
@@ -932,6 +941,182 @@ function mealHistory() {
 }
 
 /* ---------- Chores ---------- */
+/* ---------- House projects ---------- */
+const PROJECT_STATUS = ['idea', 'planned', 'active', 'done'];
+const PROJECT_STATUS_LABEL = { idea: '💡 Idea', planned: '📋 Planned', active: '🔨 In progress', done: '✅ Done' };
+const PROJECT_STATUS_CLS = { idea: '', planned: 'warn', active: 'accent', done: 'good' };
+const PRIORITY_LABEL = { high: '🔴 High', med: '🟡 Medium', low: '⚪ Low' };
+const PROJECT_EMOJI = ['🔨', '🎨', '🛁', '🍳', '🛋️', '🛏️', '🌱', '🧰', '🚪', '💡', '🪴', '🏡'];
+const PROJECT_TEMPLATES = {
+  paint: { name: 'Paint a room', emoji: '🎨', room: '',
+    steps: [['Pick colors & get samples', 1], ['Move furniture & cover floors', 1], ['Patch holes & sand', 1.5], ['Tape trim & edges', 1], ['Prime', 2], ['Paint first coat', 3], ['Paint second coat', 3], ['Remove tape & clean up', 1]],
+    items: [['Paint (gallon)', 2, 45], ['Primer (gallon)', 1, 30], ['Roller covers', 3, 6], ['Brushes', 2, 10], ["Painter's tape", 2, 7], ['Drop cloth', 2, 12], ['Spackle', 1, 8], ['Sandpaper', 1, 6]] },
+  garden: { name: 'Raised garden bed', emoji: '🌱', room: 'Backyard',
+    steps: [['Pick a spot & measure', 0.5], ['Buy materials', 1.5], ['Cut boards', 1], ['Assemble frame', 2], ['Level & place frame', 1], ['Fill with soil', 1.5], ['Plant', 1]],
+    items: [['Cedar boards 2x8x8', 4, 28], ['Deck screws (box)', 1, 12], ['Landscape fabric', 1, 15], ['Garden soil (bag)', 10, 8], ['Compost (bag)', 4, 9], ['Plants / seeds', 1, 40]] },
+  bath: { name: 'Bathroom refresh', emoji: '🛁', room: 'Bathroom',
+    steps: [['Measure & plan', 1], ['Remove old fixtures', 2], ['Re-caulk tub & sink', 1.5], ['Paint', 4], ['Install mirror & lights', 2], ['Install towel bars & hardware', 1.5], ['Deep clean', 1]],
+    items: [['Silicone caulk', 2, 9], ['Paint (gallon)', 1, 45], ['Mirror', 1, 120], ['Light fixture', 1, 90], ['Towel bar set', 1, 40], ['Shower curtain & rod', 1, 35]] },
+  garage: { name: 'Garage clean-out', emoji: '🧰', room: 'Garage',
+    steps: [['Sort: keep / donate / trash', 4], ['Haul donations', 1], ['Sweep & clean floor', 1.5], ['Install shelving', 3], ['Hang tools & label bins', 2]],
+    items: [['Storage bins', 8, 12], ['Shelving unit', 2, 80], ['Wall hooks', 1, 25], ['Trash bags (box)', 1, 15], ['Labels', 1, 8]] },
+};
+
+const itemTotal = (i) => (Number(i.cost) || 0) * (Number(i.qty) || 1);
+function projectStats(pr) {
+  const est = sum(pr.items, itemTotal);
+  const spent = sum(pr.items.filter((i) => i.bought), itemTotal);
+  const hours = sum(pr.steps, (t) => t.hours);
+  const hoursDone = sum(pr.steps.filter((t) => t.done), (t) => t.hours);
+  const stepsDone = pr.steps.filter((t) => t.done).length;
+  const pct = pr.status === 'done' ? 1 : pr.steps.length ? stepsDone / pr.steps.length : pr.items.length ? pr.items.filter((i) => i.bought).length / pr.items.length : 0;
+  return { est, spent, hours, hoursDone, stepsDone, pct, toBuy: pr.items.filter((i) => !i.bought).length };
+}
+const fmtHours = (h) => (h ? `${Math.round(h * 10) / 10} hr${h === 1 ? '' : 's'}` : '—');
+
+function projectsTile() {
+  const open = state.projects.filter((p) => p.status !== 'done');
+  const active = open.filter((p) => p.status === 'active');
+  const next = active[0] || open[0];
+  return `<button class="card tile" style="grid-column:1 / -1;display:flex;gap:12px;align-items:center" data-action="go" data-to="projects">
+    <div class="emoji">🏡</div>
+    <div style="flex:1;min-width:0"><b>House projects</b>
+      <div class="small muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${open.length ? `${active.length} in progress · ${open.length - active.length} planned${next ? ` · ${esc(next.name)}` : ''}` : 'Plan repairs, upgrades & DIY'}</div></div>
+    ${ICON.chev}</button>`;
+}
+
+views.projects = () => {
+  const filter = ui.projFilter || 'open';
+  const t = today();
+  const prio = { high: 0, med: 1, low: 2 };
+  const list = state.projects
+    .filter((p) => (filter === 'done') === (p.status === 'done'))
+    .sort((a, b) => filter === 'done'
+      ? (b.doneDate || '').localeCompare(a.doneDate || '')
+      : PROJECT_STATUS.indexOf(b.status) - PROJECT_STATUS.indexOf(a.status) || (prio[a.priority] ?? 1) - (prio[b.priority] ?? 1) || (a.dueDate || '9999').localeCompare(b.dueDate || '9999'));
+  const open = state.projects.filter((p) => p.status !== 'done');
+  const totals = open.reduce((acc, p) => { const st = projectStats(p); acc.est += st.est; acc.spent += st.spent; acc.hours += st.hours - st.hoursDone; return acc; }, { est: 0, spent: 0, hours: 0 });
+  return `
+    ${open.length ? `<div class="grid2">
+      <div class="card"><div class="stat-label">Open projects cost</div><div class="stat">${money(totals.est, { maximumFractionDigits: 0 })}</div><div class="small muted">${money(totals.spent, { maximumFractionDigits: 0 })} spent so far</div></div>
+      <div class="card"><div class="stat-label">Work left</div><div class="stat">${Math.round(totals.hours)} <span class="small muted" style="font-weight:500">hrs</span></div><div class="small muted">across ${open.length} project${open.length > 1 ? 's' : ''}</div></div>
+    </div>` : ''}
+    <div class="segmented">
+      <button class="${filter === 'open' ? 'active' : ''}" data-action="proj-filter" data-f="open">Open (${open.length})</button>
+      <button class="${filter === 'done' ? 'active' : ''}" data-action="proj-filter" data-f="done">Done (${state.projects.length - open.length})</button>
+    </div>
+    ${list.map((p) => {
+      const st = projectStats(p);
+      const due = p.dueDate && p.status !== 'done' ? daysBetween(t, p.dueDate) : null;
+      return `<button class="card tile" data-action="go" data-to="project/${p.id}">
+        <div style="display:flex;gap:12px;align-items:center">
+          <div class="avatar" style="width:44px;height:44px;flex-basis:44px;font-size:22px">${esc(p.emoji || '🔨')}</div>
+          <div style="flex:1;min-width:0">
+            <div class="title" style="font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.name)}</div>
+            <div class="small muted">${[p.room, p.priority === 'high' && p.status !== 'done' ? '🔴 High priority' : '', due != null ? `<span style="${due < 0 ? 'color:var(--bad);font-weight:600' : ''}">${due < 0 ? 'Overdue' : 'Due ' + relDays(due).toLowerCase()}</span>` : '', p.status === 'done' && p.doneDate ? `Finished ${fmtDate(p.doneDate, { month: 'short', day: 'numeric', year: 'numeric' })}` : ''].filter(Boolean).join(' · ')}</div>
+          </div>
+          <span class="pill ${PROJECT_STATUS_CLS[p.status]}">${PROJECT_STATUS_LABEL[p.status]}</span>
+        </div>
+        <div class="bar" style="margin-top:12px"><i style="width:${st.pct * 100}%"></i></div>
+        <div class="small muted" style="display:flex;justify-content:space-between;margin-top:6px">
+          <span>${p.steps.length ? `${st.stepsDone}/${p.steps.length} steps` : 'No steps yet'}${st.hours ? ` · ${fmtHours(st.hours - st.hoursDone)} left` : ''}</span>
+          <span>${st.est ? `${money(st.spent, { maximumFractionDigits: 0 })} / ${money(st.est, { maximumFractionDigits: 0 })}` : ''}</span>
+        </div>
+      </button>`;
+    }).join('') || `<div class="card empty"><span class="big">${filter === 'done' ? '🏆' : '🏡'}</span>${filter === 'done' ? 'Finished projects will show up here.' : 'Plan repairs, upgrades and DIY projects.<br>Track steps, materials, costs and time.'}</div>`}
+    <button class="fab" data-action="add-project" aria-label="Add project">${ICON.plus}</button>
+  `;
+};
+
+views.project = (id) => {
+  const p = state.projects.find((x) => x.id === id);
+  if (!p) return `<div class="card empty">This project was deleted.</div>`;
+  const st = projectStats(p);
+  const tab = ui.projTab || 'steps';
+  const t = today();
+  const due = p.dueDate ? daysBetween(t, p.dueDate) : null;
+  const who = p.memberId ? member(p.memberId) : null;
+  const budget = Number(p.budget) || 0;
+  const costBase = budget || st.est;
+
+  let body;
+  if (tab === 'steps') {
+    body = `
+      <form class="quick-add" data-submit="project-step" data-id="${p.id}">
+        <input type="text" name="step" placeholder="Add a step… (e.g. Buy paint 1.5h)" enterkeyhint="done" autocomplete="off">
+        <button class="btn" type="submit" aria-label="Add step">${ICON.plus}</button>
+      </form>
+      <div class="card flush">${p.steps.map((s, i) => `<div class="row${s.done ? ' done' : ''}">
+        <button class="check${s.done ? ' on' : ''}" data-action="toggle-step" data-p="${p.id}" data-id="${s.id}" aria-label="Done">${ICON.check}</button>
+        <button class="grow" style="text-align:left" data-action="edit-step" data-p="${p.id}" data-id="${s.id}">
+          <div class="title">${i + 1}. ${esc(s.title)}</div>
+          ${s.hours || s.memberId || s.notes ? `<div class="sub">${[s.hours ? `⏱ ${fmtHours(s.hours)}` : '', s.memberId ? `${esc(member(s.memberId).emoji)} ${esc(member(s.memberId).name)}` : '', s.notes ? esc(s.notes) : ''].filter(Boolean).join(' · ')}</div>` : ''}
+        </button>
+      </div>`).join('') || '<div class="empty small">Break the job into steps. Add time estimates to see how long it\'ll take.</div>'}</div>`;
+  } else {
+    const toBuy = p.items.filter((i) => !i.bought);
+    body = `
+      <form class="quick-add" data-submit="project-item" data-id="${p.id}">
+        <input type="text" name="newMaterial" placeholder="Add material… (e.g. 2 x paint $45)" enterkeyhint="done" autocomplete="off">
+        <button class="btn" type="submit" aria-label="Add material">${ICON.plus}</button>
+      </form>
+      <div class="card flush">${p.items.map((i) => `<div class="row${i.bought ? ' done' : ''}">
+        <button class="check${i.bought ? ' on' : ''}" data-action="toggle-material" data-p="${p.id}" data-id="${i.id}" aria-label="Bought">${ICON.check}</button>
+        <button class="grow" style="text-align:left" data-action="edit-material" data-p="${p.id}" data-id="${i.id}">
+          <div class="title">${esc(i.name)}</div>
+          <div class="sub">${[(Number(i.qty) || 1) > 1 ? `${i.qty} × ${money(i.cost || 0)}` : '', i.store, i.have ? 'Already have' : ''].filter(Boolean).map(esc).join(' · ') || (i.cost ? '' : 'Tap to add a price')}</div>
+        </button>
+        <span class="amount">${i.cost ? money(itemTotal(i)) : ''}</span>
+        ${i.link ? `<a class="mini-btn" href="${esc(safeUrl(i.link))}" target="_blank" rel="noopener">Link</a>` : ''}
+      </div>`).join('') || '<div class="empty small">List everything you need to buy. Prices add up to the project cost.</div>'}
+      ${p.items.length ? `<div class="row" style="border-top:1px solid var(--line)"><div class="grow small muted">${toBuy.length} to buy · ${money(sum(toBuy, itemTotal))}</div><b>${money(st.est)}</b></div>` : ''}
+      </div>
+      ${toBuy.length ? `<button class="btn secondary block" data-action="materials-to-list" data-id="${p.id}">🛒 Add ${toBuy.length} item${toBuy.length > 1 ? 's' : ''} to shopping list</button>` : ''}
+      <p class="small muted" style="margin:10px 4px">Check items off as you buy them.${p.categoryId ? ` Purchases are logged to your ${esc(category(p.categoryId).name)} budget.` : ' Turn on budget tracking in Edit to log purchases automatically.'}</p>`;
+  }
+
+  return `
+    <div class="card">
+      <div style="display:flex;gap:14px;align-items:center">
+        <div class="avatar" style="width:56px;height:56px;flex-basis:56px;font-size:30px">${esc(p.emoji || '🔨')}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:21px;font-weight:750;line-height:1.2">${esc(p.name)}</div>
+          <div class="small muted">${[p.room, who ? `${esc(who.emoji)} ${esc(who.name)}` : '', p.priority ? PRIORITY_LABEL[p.priority] : ''].filter(Boolean).join(' · ')}</div>
+        </div>
+        <button class="mini-btn" data-action="edit-project" data-id="${p.id}">Edit</button>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center">
+        <button class="pill ${PROJECT_STATUS_CLS[p.status]}" data-action="cycle-project" data-id="${p.id}">${PROJECT_STATUS_LABEL[p.status]}</button>
+        ${p.startDate ? `<span class="pill">Start ${fmtDate(p.startDate, { month: 'short', day: 'numeric' })}</span>` : ''}
+        ${p.dueDate ? `<span class="pill ${due < 0 && p.status !== 'done' ? 'bad' : ''}">Due ${fmtDate(p.dueDate, { month: 'short', day: 'numeric' })}${p.status !== 'done' ? ` · ${relDays(due).toLowerCase()}` : ''}</span>` : ''}
+      </div>
+      ${p.notes ? `<p class="small" style="margin:12px 0 0;white-space:pre-wrap">${esc(p.notes)}</p>` : ''}
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <div class="stat-label">💵 Cost</div>
+        <div class="stat">${money(st.est, { maximumFractionDigits: 0 })}</div>
+        <div class="small muted">${money(st.spent, { maximumFractionDigits: 0 })} spent${budget ? ` · budget ${money(budget, { maximumFractionDigits: 0 })}` : ''}</div>
+        ${costBase ? `<div class="bar"><i class="${budget ? levelCls(st.est / budget) : ''}" style="width:${Math.min(100, (st.spent / costBase) * 100)}%"></i></div>` : ''}
+        ${budget && st.est > budget ? `<div class="small" style="color:var(--bad);margin-top:4px">${money(st.est - budget)} over budget</div>` : ''}
+      </div>
+      <div class="card">
+        <div class="stat-label">⏱ Time</div>
+        <div class="stat">${st.hours ? Math.round((st.hours - st.hoursDone) * 10) / 10 : '—'}<span class="small muted" style="font-weight:500">${st.hours ? ' hrs left' : ''}</span></div>
+        <div class="small muted">${st.stepsDone}/${p.steps.length} steps · ${Math.round(st.pct * 100)}% done</div>
+        <div class="bar"><i style="width:${st.pct * 100}%"></i></div>
+      </div>
+    </div>
+
+    <div class="segmented">
+      <button class="${tab === 'steps' ? 'active' : ''}" data-action="proj-tab" data-tab="steps">Steps (${p.steps.length})</button>
+      <button class="${tab === 'items' ? 'active' : ''}" data-action="proj-tab" data-tab="items">Materials (${p.items.length})</button>
+    </div>
+    ${body}
+  `;
+};
+
 views.chores = () => {
   const pts = weekPoints();
   const todo = state.chores.filter((c) => !choreDone(c));
@@ -1477,6 +1662,119 @@ function mealForm(date) {
   });
 }
 
+function projectForm(p) {
+  const isNew = !p;
+  openSheet({
+    title: isNew ? 'New project' : 'Edit project',
+    values: p || { status: 'planned', priority: 'med', emoji: '🔨', template: '' },
+    fields: [
+      ...(isNew ? [{ name: 'template', label: 'Start from', type: 'select', options: [{ value: '', label: '✏️ Blank project' }, ...Object.entries(PROJECT_TEMPLATES).map(([k, tp]) => ({ value: k, label: `${tp.emoji} ${tp.name} (template)` }))] }] : []),
+      { row: [
+        { name: 'emoji', label: 'Emoji', placeholder: '🔨' },
+        { name: 'name', label: 'Project', placeholder: isNew ? 'e.g. Fix fence gate' : '' },
+      ] },
+      { type: 'html', html: `<div class="chips" style="margin-top:-6px">${PROJECT_EMOJI.map((e) => `<button type="button" class="chip" data-action="pick-emoji" data-emoji="${e}">${e}</button>`).join('')}</div>` },
+      { row: [
+        { name: 'room', label: 'Room / area', placeholder: 'e.g. Kitchen' },
+        { name: 'memberId', label: 'Lead', type: 'select', options: [{ value: '', label: '— Anyone —' }, ...memberOptions(false)] },
+      ] },
+      { row: [
+        { name: 'status', label: 'Status', type: 'select', options: PROJECT_STATUS.map((k) => ({ value: k, label: PROJECT_STATUS_LABEL[k] })) },
+        { name: 'priority', label: 'Priority', type: 'select', options: Object.entries(PRIORITY_LABEL).map(([value, label]) => ({ value, label })) },
+      ] },
+      { row: [
+        { name: 'startDate', label: 'Start', type: 'date' },
+        { name: 'dueDate', label: 'Finish by', type: 'date' },
+      ] },
+      { name: 'budget', label: 'Budget (optional)', type: 'money', placeholder: 'How much you want to spend' },
+      { name: 'categoryId', label: 'Log purchases to budget category', type: 'select', options: [{ value: '', label: "— Don't log —" }, ...state.budget.categories.map((c) => ({ value: c.id, label: `${c.emoji} ${c.name}` }))] },
+      { name: 'notes', label: 'Notes', type: 'textarea', placeholder: 'Measurements, paint colors, contractor info, ideas…' },
+    ],
+    onSave(v) {
+      const { template, ...rest } = v;
+      if (isNew) {
+        const tp = PROJECT_TEMPLATES[template];
+        if (!rest.name && !tp) { toast('Give the project a name'); return false; }
+        const np = { id: uid(), created: today(), items: [], steps: [], ...rest };
+        if (tp) {
+          np.name ||= tp.name;
+          if (!rest.emoji || rest.emoji === '🔨') np.emoji = tp.emoji;
+          np.room ||= tp.room;
+          np.steps = tp.steps.map(([title, hours]) => ({ id: uid(), title, hours, done: false }));
+          np.items = tp.items.map(([name, qty, cost]) => ({ id: uid(), name, qty, cost, bought: false }));
+        }
+        if (np.status === 'done') np.doneDate = today();
+        state.projects.push(np);
+        setTimeout(() => go('project/' + np.id));
+      } else {
+        if (!rest.name) { toast('Give the project a name'); return false; }
+        if (rest.status === 'done' && p.status !== 'done') rest.doneDate = today();
+        Object.assign(p, rest);
+      }
+    },
+    onDelete: isNew ? null : () => {
+      withUndo(`${p.name} deleted`, () => { state.projects = state.projects.filter((x) => x.id !== p.id); });
+      go('projects');
+    },
+  });
+}
+
+function stepForm(p, s) {
+  openSheet({
+    title: 'Edit step',
+    values: s,
+    fields: [
+      { name: 'title', label: 'Step', required: true },
+      { row: [
+        { name: 'hours', label: 'Time (hours)', type: 'money', placeholder: 'e.g. 1.5' },
+        { name: 'memberId', label: 'Who', type: 'select', options: [{ value: '', label: '— Anyone —' }, ...memberOptions(false)] },
+      ] },
+      { name: 'notes', label: 'Notes', type: 'textarea' },
+    ],
+    onSave(v) { Object.assign(s, v); },
+    onDelete: () => withUndo('Step deleted', () => { p.steps = p.steps.filter((x) => x.id !== s.id); }),
+  });
+}
+
+function materialForm(p, i) {
+  openSheet({
+    title: 'Edit material',
+    values: i,
+    fields: [
+      { name: 'name', label: 'Item', required: true },
+      { row: [
+        { name: 'qty', label: 'Quantity', type: 'money', placeholder: '1' },
+        { name: 'cost', label: 'Price each', type: 'money', placeholder: '0.00' },
+      ] },
+      { row: [
+        { name: 'store', label: 'Store', placeholder: 'e.g. Home Depot' },
+        { name: 'link', label: 'Link', type: 'url', placeholder: 'https://…' },
+      ] },
+      { name: 'have', label: 'Already have it (no need to buy)', type: 'checkbox' },
+    ],
+    onSave(v) {
+      v.qty = v.qty || 1;
+      Object.assign(i, v);
+      if (v.have && !i.bought) { i.bought = true; i.cost = i.cost || 0; }
+    },
+    onDelete: () => withUndo(`${i.name} removed`, () => {
+      if (i.txId) state.budget.transactions = state.budget.transactions.filter((t) => t.id !== i.txId);
+      p.items = p.items.filter((x) => x.id !== i.id);
+    }),
+  });
+}
+
+function toggleMaterial(p, i) {
+  i.bought = !i.bought;
+  if (i.txId) { state.budget.transactions = state.budget.transactions.filter((t) => t.id !== i.txId); delete i.txId; }
+  if (i.bought && p.categoryId && itemTotal(i) && !i.have) {
+    i.txId = uid();
+    state.budget.transactions.push({ id: i.txId, created: Date.now(), type: 'expense', amount: itemTotal(i), note: `${i.name} (${p.name})`, categoryId: p.categoryId, date: today(), memberId: '' });
+    toast(`Logged ${money(itemTotal(i))} to ${category(p.categoryId).name}`);
+  }
+  save(); render();
+}
+
 function choreForm(c) {
   const isNew = !c;
   openSheet({
@@ -1665,6 +1963,35 @@ const actions = {
     save();
   },
 
+  // Projects
+  'add-project': () => projectForm(null),
+  'edit-project': (el) => projectForm(findIn(state.projects, el.dataset.id)),
+  'proj-filter': (el) => { ui.projFilter = el.dataset.f; render(); },
+  'proj-tab': (el) => { ui.projTab = el.dataset.tab; render(); },
+  'cycle-project': (el) => {
+    const p = findIn(state.projects, el.dataset.id);
+    p.status = PROJECT_STATUS[(PROJECT_STATUS.indexOf(p.status) + 1) % PROJECT_STATUS.length];
+    if (p.status === 'done') { p.doneDate = today(); toast(`🎉 ${p.name} is done!`); } else delete p.doneDate;
+    save(); render();
+  },
+  'toggle-step': (el) => {
+    const p = findIn(state.projects, el.dataset.p);
+    const s = findIn(p.steps, el.dataset.id);
+    s.done = !s.done;
+    if (s.done && p.status !== 'done' && p.status !== 'active') p.status = 'active';
+    if (s.done && p.steps.every((x) => x.done) && p.status !== 'done') toast('All steps done! Tap the status to mark the project ✅ Done');
+    save(); render();
+  },
+  'edit-step': (el) => { const p = findIn(state.projects, el.dataset.p); stepForm(p, findIn(p.steps, el.dataset.id)); },
+  'toggle-material': (el) => { const p = findIn(state.projects, el.dataset.p); toggleMaterial(p, findIn(p.items, el.dataset.id)); },
+  'edit-material': (el) => { const p = findIn(state.projects, el.dataset.p); materialForm(p, findIn(p.items, el.dataset.id)); },
+  'materials-to-list': (el) => {
+    const p = findIn(state.projects, el.dataset.id);
+    const n = p.items.filter((i) => !i.bought).filter((i) => addToList(i.name, [(Number(i.qty) || 1) > 1 ? `x${i.qty}` : '', p.name].filter(Boolean).join(' · '), true)).length;
+    toast(n ? `Added ${n} item${n > 1 ? 's' : ''} to the shopping list 🛒` : 'Already on the list');
+    save();
+  },
+
   // Chores
   'add-chore': () => choreForm(null),
   'edit-chore': (el) => choreForm(findIn(state.chores, el.dataset.id)),
@@ -1713,6 +2040,30 @@ document.addEventListener('submit', (e) => {
   const form = e.target.closest('[data-submit]');
   if (!form) return;
   e.preventDefault();
+  if (form.dataset.submit === 'project-step') {
+    const p = findIn(state.projects, form.dataset.id);
+    let title = form.elements.step.value.trim();
+    if (!title) return;
+    let hours = null;
+    const m = title.match(/^(.*?)\s+(\d+(?:\.\d+)?)\s*(?:h|hr|hrs|hours?)$/i); // "Prime walls 2h"
+    if (m) { title = m[1]; hours = +m[2]; }
+    p.steps.push({ id: uid(), title, hours, done: false });
+    save(); render(); $('[data-submit="project-step"] input')?.focus();
+    return;
+  }
+  if (form.dataset.submit === 'project-item') {
+    const p = findIn(state.projects, form.dataset.id);
+    let name = form.elements.newMaterial.value.trim();
+    if (!name) return;
+    let qty = 1, cost = null;
+    const price = name.match(/^(.*?)\s*\$\s*(\d+(?:\.\d+)?)\s*(?:ea|each)?$/i); // "... $45"
+    if (price) { name = price[1]; cost = +price[2]; }
+    const q = name.match(/^(\d+(?:\.\d+)?)\s*[x×]\s+(.+)$/i) || name.match(/^(\d+(?:\.\d+)?)\s+(.+)$/); // "2 x paint" / "2 paint"
+    if (q) { qty = +q[1]; name = q[2]; }
+    p.items.push({ id: uid(), name, qty, cost, bought: false });
+    save(); render(); $('[data-submit="project-item"] input')?.focus();
+    return;
+  }
   if (form.dataset.submit === 'shop-add') {
     const raw = form.elements.newItem.value.trim();
     if (!raw) return;

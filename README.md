@@ -10,6 +10,7 @@ A family web app you can install on your iPhone home screen. It has no build ste
 - **Gifts**: people with birthdays, sizes and wish lists; gift ideas tracked idea → bought → wrapped → given; yearly gift budget and Christmas countdown
 - **Meal plan**: weekly dinners, meal autocomplete with remembered ingredients, and one tap to send ingredients to the shopping list
 - **Chores**: assign chores, check them off, and see weekly points with a 👑 leaderboard
+- **House projects**: steps with time estimates, materials with costs, a budget and due dates, starter templates, sending materials to the shopping list, and optional logging of purchases to the budget
 - **Settings**: family members, currency, dark mode, and backup/restore
 
 ## Install on iPhone
