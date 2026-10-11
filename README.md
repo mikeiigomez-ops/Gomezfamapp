@@ -36,6 +36,14 @@ A family web app you can install on your iPhone home screen. It has no build ste
 - **Packing lists**: per-person lists from trip templates
 - **Debt payoff planner**: snowball vs avalanche, debt-free date, interest saved
 - **Subscription audit**: monthly and yearly totals, streaming overlap, automatic price-change detection, keep/cancel review
+- **Family chat**: a group chat with reactions, @mentions and big emoji. Kids can chat too
+- **High-fives**: send kudos to anyone. Parents can attach bonus ⭐ for kids, and the person who gets one sees a celebration pop-up
+- **Daily check-in**: a mood plus "one good thing today", a family mood board and a week view
+- **Shared to-dos**: anyone can add one, and "🙋 I'll do it!" shows who's on it
+- **Event RSVPs**: "Who's in?" with Going / Maybe / Can't for each person
+- **Family challenges**: team goals (chores, to-dos, check-ins, or tap +1) with a shared reward
+- **Inbox 🔔**: new messages, mentions, your turn in a game, RSVPs, to-dos for you and reward requests
+- **Game Center**: Connect Four (on your own phones, pass-and-play, or vs. the robot), a daily **Family Word** puzzle with streaks (4-letter words with a hint for Simple-mode kids), **Memory Match** with family bests, and **"How well do you know us?"** trivia
 - **Settings**: family members, currency, dark mode, and backup/restore
 
 ## Install on iPhone

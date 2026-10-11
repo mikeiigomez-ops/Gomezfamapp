@@ -99,6 +99,15 @@ function defaultState() {
     trips: [],
     debts: [],
     kidAccounts: {},
+    chat: [],
+    kudos: [],
+    checkins: {},
+    todos: [],
+    challenges: [],
+    games: [],
+    wordle: {},
+    scores: [],
+    trivia: [],
     settings: { currency: 'USD', theme: 'auto', showHolidays: true, giftBudget: 0, welcomeDismissed: false },
   };
 }
@@ -155,6 +164,8 @@ function migrate(s) {
   s.trips ??= [];
   s.debts ??= [];
   s.kidAccounts ??= {};
+  s.chat ??= []; s.kudos ??= []; s.checkins ??= {}; s.todos ??= []; s.challenges ??= [];
+  s.games ??= []; s.wordle ??= {}; s.scores ??= []; s.trivia ??= [];
   for (const pr of s.projects) { pr.items ??= []; pr.steps ??= []; }
   s.settings = { ...d.settings, ...(s.settings || {}) };
   s.version = 1;
@@ -568,7 +579,7 @@ function eventRow(e, showDate) {
     <div class="time-col">${showDate ? fmtDate(e.date, { weekday: 'short', day: 'numeric' }) : timeLabel}</div>
     <div class="dot" style="background:${e.color}"></div>
     <div class="grow"><div class="title">${esc(e.title)}</div>
-      <div class="sub">${[showDate ? timeLabel : '', e.who && e.who.id ? `${esc(e.who.emoji)} ${esc(e.who.name)}` : '', e.location ? `📍 ${esc(e.location)}` : ''].filter(Boolean).join(' · ')}</div>
+      <div class="sub">${[showDate ? timeLabel : '', e.who && e.who.id ? `${esc(e.who.emoji)} ${esc(e.who.name)}` : '', e.location ? `📍 ${esc(e.location)}` : ''].filter(Boolean).join(' · ')}</div>${typeof rsvpLine === 'function' ? rsvpLine(e) : ''}
     </div>
   </${clickable ? 'button' : 'div'}>`;
 }
@@ -1785,6 +1796,7 @@ function eventForm(ev, date) {
         { value: 'biweekly', label: 'Every 2 weeks' }, { value: 'monthly', label: 'Every month' }, { value: 'yearly', label: 'Every year' }] },
       { name: 'until', label: 'Repeat until (optional)', type: 'date' },
       { name: 'countdown', label: 'Show countdown on Home', type: 'checkbox', hint: 'Great for trips, parties & big days' },
+      { name: 'askRsvp', label: '🙋 Ask who’s in (RSVP)', type: 'checkbox', hint: 'Everyone answers Going / Maybe / Can’t from their phone' },
       { name: 'notes', label: 'Notes', type: 'textarea' },
     ],
     onSave(v) {
