@@ -386,10 +386,10 @@ function whatsNewCard() {
 
 function homeQuickAdd() {
   return `${whatsNewCard()}<div class="quick-row">
-    <button class="chip" data-action="add-tx">💸 Expense</button>
-    <button class="chip" data-action="quick-grocery">🛒 Grocery</button>
-    <button class="chip" data-action="add-event" data-date="${today()}">📅 Event</button>
-    <button class="chip" data-action="add-chore">🧹 Chore</button>
+    <button class="chip" data-action="add-tx"><span class="qi">💸</span>Expense</button>
+    <button class="chip" data-action="quick-grocery"><span class="qi">🛒</span>Grocery</button>
+    <button class="chip" data-action="add-event" data-date="${today()}"><span class="qi">📅</span>Event</button>
+    <button class="chip" data-action="add-chore"><span class="qi">🧹</span>Chore</button>
   </div>`;
 }
 

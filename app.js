@@ -398,7 +398,7 @@ const views = {};
 views.home = () => {
   const t = today();
   const hr = new Date().getHours();
-  const greet = hr < 12 ? 'Good morning ☀️' : hr < 17 ? 'Good afternoon 🌤️' : 'Good evening 🌙';
+  const greet = hr < 5 ? 'Good night' : hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening';
   const todays = eventsOn(t);
   const sumry = budgetSummary(monthKey(t));
   const listCount = state.shop.list.filter((i) => !i.done).length;
@@ -434,7 +434,7 @@ views.home = () => {
   const frac = sumry.limit ? sumry.spent / sumry.limit : 0;
 
   return `
-    <p class="hello">${greet} · ${fmtDate(t, { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+    ${homeHero({ t, greet, todays, sumry, frac, listCount, lowCount, dinner, choresDue, billsDue, payday })}
     ${typeof homeQuickAdd === 'function' ? homeQuickAdd() : ''}
 
     ${!state.settings.welcomeDismissed && state.members.length < 2 ? `
@@ -453,18 +453,6 @@ views.home = () => {
       return `<div class="card"><div class="days">${n === 0 ? '🎉' : n}</div><div class="small muted">${n === 0 ? 'Today!' : n === 1 ? 'day until' : 'days until'}</div><div class="small" style="font-weight:650;margin-top:2px">${esc(c.title)}</div></div>`;
     }).join('')}</div>` : ''}
 
-    <div class="grid2">
-      <button class="card tile" data-action="go" data-to="budget">
-        <div class="stat-label">Left this month</div>
-        <div class="stat" style="color:${sumry.left < 0 ? 'var(--bad)' : 'inherit'}">${money(sumry.left, { maximumFractionDigits: 0 })}</div>
-        <div class="bar"><i class="${levelCls(frac)}" style="width:${Math.min(100, frac * 100)}%"></i></div>
-      </button>
-      <button class="card tile" data-action="go" data-to="shop">
-        <div class="stat-label">Shopping list</div>
-        <div class="stat">${listCount} <span class="small muted" style="font-weight:500">items</span></div>
-        <div class="small ${lowCount ? '' : 'muted'}" style="${lowCount ? 'color:var(--warn);font-weight:600' : ''}">${lowCount ? `${lowCount} staple${lowCount > 1 ? 's' : ''} running low` : 'Staples stocked ✓'}</div>
-      </button>
-    </div>
 
     <div class="section-title">Today<button data-action="add-event" data-date="${t}">+ Event</button></div>
     <div class="card flush">
@@ -509,6 +497,36 @@ views.home = () => {
     ${typeof moreGrid === 'function' ? moreGrid() : ''}
   `;
 };
+
+function homeHero({ t, greet, todays, sumry, frac, listCount, lowCount, dinner, choresDue, billsDue, payday }) {
+  const bits = [];
+  const realEvents = todays.filter((e) => e.kind !== 'holiday');
+  const holiday = todays.find((e) => e.kind === 'holiday');
+  if (holiday) bits.push(holiday.title);
+  const dueToday = billsDue.filter((x) => x.date <= t).length;
+  if (dueToday) bits.push(`${dueToday} bill${dueToday > 1 ? 's' : ''} due`);
+  if (choresDue.length) bits.push(`${choresDue.length} chore${choresDue.length > 1 ? 's' : ''} left`);
+  if (payday && daysBetween(t, payday.date) <= 3) bits.push(`💰 payday ${dueLabel(payday.date)}`);
+  const fam = state.members.slice(0, 5);
+  return `<section class="hero">
+    <div class="hero-top">
+      <div class="hero-date">${fmtDate(t, { weekday: 'long', month: 'long', day: 'numeric' })}</div>
+      <button class="avatars" data-action="go" data-to="settings" aria-label="Family">${fam.map((m) => `<span style="--c:${m.color}">${esc(m.emoji)}</span>`).join('')}</button>
+    </div>
+    <div class="hero-greet">${greet}${state.members.length > 1 ? ',<br>Gomez family' : ''}</div>
+    ${bits.length ? `<div class="hero-sub">${esc(bits.join(' · '))}</div>` : `<div class="hero-sub">${realEvents.length ? 'Here\'s your day' : 'A calm day ahead ✨'}</div>`}
+    <div class="hero-stats">
+      <button class="hstat" data-action="go" data-to="calendar"><b>${realEvents.length}</b><span>${realEvents.length === 1 ? 'event today' : 'events today'}</span></button>
+      <button class="hstat" data-action="go" data-to="budget"><b>${money(sumry.left, { maximumFractionDigits: 0 })}</b><span>left in ${parse(t).toLocaleDateString(undefined, { month: 'short' })}</span>${sumry.limit ? `<div class="hbar"><i style="width:${Math.min(100, frac * 100)}%"></i></div>` : ''}</button>
+      <button class="hstat" data-action="go" data-to="shop"><b>${listCount}</b><span>${lowCount ? `to buy · ${lowCount} low` : 'to buy'}</span></button>
+    </div>
+    <button class="hero-dinner" data-action="edit-meal" data-date="${t}">
+      <span style="font-size:22px">🍽️</span>
+      <span class="grow"><small>Tonight's dinner</small>${dinner ? esc(dinner) : 'Tap to plan dinner'}</span>
+      ${ICON.chev}
+    </button>
+  </section>`;
+}
 
 function eventRow(e, showDate) {
   const clickable = ['event', 'birthday', 'bill', 'project', 'upkeep', 'goal'].includes(e.kind);
@@ -594,11 +612,11 @@ views.budget = () => {
   }
 
   return `
-    <div class="month-nav">
-      <button class="icon-btn" data-action="budget-month" data-n="-1" aria-label="Previous month" ${tab === 'bills' ? 'style="visibility:hidden"' : ''}>${ICON.left}</button>
-      <h2>${tab === 'bills' ? 'Recurring' : fmtMonth(ym)}</h2>
-      <button class="icon-btn" data-action="budget-month" data-n="1" aria-label="Next month" ${tab === 'bills' ? 'style="visibility:hidden"' : ''}>${ICON.right}</button>
-    </div>
+    ${tab === 'bills' ? '' : `    <div class="month-nav">
+      <button class="icon-btn" data-action="budget-month" data-n="-1" aria-label="Previous month" >${ICON.left}</button>
+      <h2>${fmtMonth(ym)}</h2>
+      <button class="icon-btn" data-action="budget-month" data-n="1" aria-label="Next month" >${ICON.right}</button>
+    </div>`}
     <div class="segmented">
       ${[['overview', 'Overview'], ['activity', 'Activity'], ['trends', 'Trends'], ['bills', 'Recurring']].map(([k, l]) => `<button class="${tab === k ? 'active' : ''}" data-action="budget-tab" data-tab="${k}">${l}</button>`).join('')}
     </div>
@@ -835,7 +853,7 @@ views.shop = () => {
 
     body = `
       <form class="quick-add" data-submit="shop-add">
-        <input type="text" name="newItem" placeholder="Add an item… (e.g. 2 lb chicken)" enterkeyhint="done" autocomplete="off" list="stapleNames">
+        <input type="text" name="newItem" placeholder="Add an item…" enterkeyhint="done" autocomplete="off" list="stapleNames">
         <button class="btn" type="submit" aria-label="Add">${ICON.plus}</button>
       </form>
       <datalist id="stapleNames">${state.shop.staples.map((s) => `<option value="${esc(s.name)}">`).join('')}</datalist>
@@ -1278,6 +1296,8 @@ views.settings = () => `
       <select id="setCurrency" data-change="setting" data-key="currency">
         ${['USD', 'MXN', 'CAD', 'EUR', 'GBP'].map((c) => `<option ${state.settings.currency === c ? 'selected' : ''}>${c}</option>`).join('')}
       </select></div>
+    <div class="field"><label>Accent color</label>
+      <div class="accent-picker">${Object.entries(ACCENTS).map(([k, [a, b]]) => `<button class="${(state.settings.accent || 'terracotta') === k ? 'on' : ''}" style="--sw1:${a};--sw2:${b}" data-action="set-accent" data-accent="${k}" aria-label="${k}"></button>`).join('')}</div></div>
     <div class="field"><label for="setTheme">Appearance</label>
       <select id="setTheme" data-change="setting" data-key="theme">
         ${[['auto', 'Match iPhone'], ['light', 'Light'], ['dark', 'Dark']].map(([v, l]) => `<option value="${v}" ${state.settings.theme === v ? 'selected' : ''}>${l}</option>`).join('')}
@@ -1318,21 +1338,44 @@ function currentRoute() {
   const [name, param] = (location.hash.slice(1) || 'home').split('/');
   return views[name] ? { name, param } : { name: 'home' };
 }
+let lastRouteKey = null;
+const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 function render() {
   const { name, param } = currentRoute();
-  viewEl.innerHTML = views[name](param);
-  const tab = name === 'person' ? 'gifts' : name;
-  $('#title').textContent = name === 'person' ? 'Gift Planner' : TITLES[name];
-  $('#backBtn').hidden = TABS.includes(name);
-  document.querySelectorAll('.tabbar [data-tab]').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+  const title = name === 'person' ? 'Gift Planner' : TITLES[name];
+  const html = (name === 'home' ? '' : `<h1 class="large-title">${esc(title)}</h1>`) + views[name](param);
+  const key = name + '/' + (param || '');
+  const changed = lastRouteKey !== null && lastRouteKey !== key;
+  lastRouteKey = key;
+  const paint = () => {
+    viewEl.innerHTML = html;
+    const tab = name === 'person' ? 'gifts' : name;
+    $('#title').textContent = title;
+    $('#backBtn').hidden = TABS.includes(name);
+    document.querySelectorAll('.tabbar [data-tab]').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+    if (ui.pop) {
+      const sel = `[data-action="${ui.pop.a}"]${ui.pop.id ? `[data-id="${ui.pop.id}"]` : ''}${ui.pop.date ? `[data-date="${ui.pop.date}"]` : ''}`;
+      viewEl.querySelector(sel)?.classList.add('pop');
+      ui.pop = null;
+    }
+    if (typeof afterRender === 'function') afterRender();
+  };
+  // Smooth cross-fade between screens (skipped in automated browsers so tests see the DOM immediately).
+  if (changed && document.startViewTransition && !navigator.webdriver && !reduceMotion()) document.startViewTransition(paint);
+  else paint();
 }
 function go(to) {
   if (location.hash.slice(1) === to) { render(); return; }
   location.hash = to;
 }
-window.addEventListener('hashchange', () => { render(); window.scrollTo(0, 0); });
+window.addEventListener('hashchange', () => { if (!$('#sheet').hidden) closeSheet(); render(); window.scrollTo(0, 0); });
 
+const ACCENTS = {
+  terracotta: ['#c9583a', '#e8954f'], ocean: ['#2563d6', '#19a3c9'], forest: ['#1f7a63', '#6aa84f'],
+  plum: ['#7a45cf', '#c4549f'], rose: ['#cf3f6b', '#ee8a5c'], midnight: ['#33408f', '#6a54d8'],
+};
 function applyTheme() {
+  document.documentElement.dataset.accent = ACCENTS[state.settings.accent] ? state.settings.accent : 'terracotta';
   const th = state.settings.theme;
   if (th === 'auto') document.documentElement.removeAttribute('data-theme');
   else document.documentElement.dataset.theme = th;
@@ -2007,6 +2050,7 @@ const actions = {
   'sheet-save': submitSheet,
   'sheet-delete': () => { const cfg = sheetCfg; closeSheet(); cfg.onDelete(); },
   'pick-emoji': (el) => { $('#sheetForm').elements.emoji.value = el.dataset.emoji; },
+  'set-accent': (el) => { state.settings.accent = el.dataset.accent; save(); applyTheme(); render(); },
   'dismiss-welcome': () => { state.settings.welcomeDismissed = true; save(); render(); },
 
   // Budget
@@ -2186,6 +2230,7 @@ document.addEventListener('click', (e) => {
   const fn = actions[el.dataset.action];
   if (!fn) return;
   e.preventDefault();
+  if (/^(toggle-|upkeep-done)/.test(el.dataset.action)) ui.pop = { a: el.dataset.action, id: el.dataset.id, date: el.dataset.date };
   fn(el, e);
 });
 
