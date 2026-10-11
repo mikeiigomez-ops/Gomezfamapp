@@ -151,6 +151,7 @@ const BOXES = {
   basic: { name: 'Mystery Box', emoji: '📦', cost: 25, odds: { C: 60, R: 27, E: 9.5, L: 3, M: 0.5 }, pity: 5, pityTier: 'R' },
   deluxe: { name: 'Deluxe Box', emoji: '💝', cost: 75, odds: { C: 0, R: 60, E: 28, L: 10, M: 2 }, pity: 8, pityTier: 'L' },
   dust: { name: 'Star Dust Box', emoji: '💫', cost: 0, odds: { C: 0, R: 70, E: 22, L: 7, M: 1 }, pity: 0, hidden: true, shiny: 0.03 },
+  squish: { name: 'Mystery Box', emoji: '🤏', cost: 0, odds: { C: 60, R: 27, E: 9.5, L: 3, M: 0.5 }, pity: 0, hidden: true },
 };
 const pityOf = (who, box) => state.squish.pity[`${who}:${box}`] || 0;
 function rollTier(box, who) {
@@ -182,6 +183,9 @@ function openBox(box) {
   if (box === 'free') {
     if (state.squish.free[who] === today()) { toast('Come back tomorrow for another free box! 🌙'); return; }
     state.squish.free[who] = today();
+  } else if (box === 'squish') {
+    if (!(state.squish.sqBank?.[who] > 0)) { toast('Squish 100 times to earn a Mystery Box 🤏'); return; }
+    state.squish.sqBank[who] -= 1;
   } else if (box === 'dust') {
     if ((state.squish.dust?.[who] || 0) < DUST_GOAL) { toast(`Collect ${DUST_GOAL} 💫 Star Dust first`); return; }
     state.squish.dust[who] -= DUST_GOAL;
@@ -512,6 +516,7 @@ Object.assign(actions, {
     if (!mine.length) return;
     mine[0].sq = (mine[0].sq || 0) + 1;
     const n = $('.sq-n'); if (n) n.textContent = sum(mine, (i) => i.sq || 0);
+    if (typeof squishReward === 'function') squishReward(me, 1);
     clearTimeout(squishSaveT); squishSaveT = setTimeout(save, 800);
   },
   'sq-fav': (el) => { const me = actor(); const mine = myItems(me).filter((i) => i.sid === el.dataset.sid); const on = !mine.some((i) => i.fav); for (const i of mine) delete i.fav; if (on) mine[0].fav = true; save(); render(); },

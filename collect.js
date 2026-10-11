@@ -323,8 +323,10 @@ function ndRelease() {
   sqSound('squish');
   const me = actor(), mine = me ? myItems(me).filter((i) => i.sid === sid) : [];
   if (!mine.length) return;
-  mine[0].sq = (mine[0].sq || 0) + (Date.now() - t > 1500 ? 2 : 1);
+  const add = Date.now() - t > 1500 ? 2 : 1;
+  mine[0].sq = (mine[0].sq || 0) + add;
   const n = $('.sq-n'); if (n) n.textContent = sum(mine, (i) => i.sq || 0);
+  if (typeof squishReward === 'function') squishReward(me, add);
   clearTimeout(squishSaveT); squishSaveT = setTimeout(save, 800);
 }
 for (const ev of ['pointerup', 'pointercancel']) document.addEventListener(ev, ndRelease);

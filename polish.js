@@ -32,8 +32,9 @@ views.squishies = () => {
       <button class="earn-btn" data-action="go" data-to="chores">＋ Earn more ${GEM}</button>
     </div>
     ${free ? `<button class="free-hero" data-action="sq-open" data-box="free"><span class="fh-gift">🎁</span><span class="fh-txt"><b>Open today’s free box!</b><small>A new surprise every day</small></span><span class="fh-go">Open</span></button>`
+      : sqBankOf(me) ? `<button class="free-hero" data-action="sq-open" data-box="squish"><span class="fh-gift">🤏</span><span class="fh-txt"><b>You earned a Mystery Box!</b><small>From squishing ${sqCfg().every} times</small></span><span class="fh-go">Open</span></button>`
       : dustReady ? `<button class="free-hero dust" data-action="sq-open" data-box="dust"><span class="fh-gift">💫</span><span class="fh-txt"><b>Your Star Dust Box is ready!</b><small>Rare or better inside</small></span><span class="fh-go">Open</span></button>` : ''}
-    <div class="sq-tabs3">${SQ_TABS.map(([k, e, l]) => `<button class="${tab === k ? 'active' : ''}" data-action="sq-tab" data-tab="${k}"><span>${e}</span>${little ? SQ_TABS_SIMPLE[k] : l}${k === 'mine' && trades ? `<i class="tab-badge">${trades}</i>` : ''}${k === 'get' && (free || dustReady) ? '<i class="tab-badge">!</i>' : ''}</button>`).join('')}</div>
+    <div class="sq-tabs3">${SQ_TABS.map(([k, e, l]) => `<button class="${tab === k ? 'active' : ''}" data-action="sq-tab" data-tab="${k}"><span>${e}</span>${little ? SQ_TABS_SIMPLE[k] : l}${k === 'mine' && trades ? `<i class="tab-badge">${trades}</i>` : ''}${k === 'get' && (free || dustReady || sqBankOf(me)) ? '<i class="tab-badge">!</i>' : ''}</button>`).join('')}</div>
     ${tab === 'get' ? sqGetMore(me) : tab === 'unlocks' ? sqUnlocks(me) : sqCollection(me, uniq, trades)}`;
 };
 
@@ -184,4 +185,57 @@ views.room = (roomId) => {
   if (!id) return html;
   const text = ui.hEdit ? 'Pick something at the bottom to try it. Drag things to move them. Tap Done when you finish.' : 'Tap Decorate to add things. Tap the floor to walk.';
   return html.includes('class="hsel-bar') ? html.replace(/(<div class="hsel-bar[^"]*">)/, `$1${say(id, text)}`) : html.replace('<p class="room-hint">', `<p class="room-hint">${say(id, text)} `);
+};
+
+/* ---------- Squish rewards: every 100 squishes (parents can change it) = a free Mystery Box ---------- */
+const sqCfg = () => { const c = gemsCfg(); return { every: Math.max(0, Number(c.sqEvery) || 0), daily: Math.max(0, Number(c.sqDaily) || 0) }; };
+const sqBankOf = (who) => state.squish.sqBank?.[who] || 0;
+const sqCountOf = (who) => state.squish.squished?.[who] || 0;
+function squishCard(me) {
+  const { every, daily } = sqCfg();
+  if (!every || !me) return '';
+  const bank = sqBankOf(me), cnt = sqCountOf(me) % every;
+  return `<div class="dust-card sqr-card"><span class="dc-ic">🤏</span><div class="dc-main"><b>Squish rewards</b><div class="dc-bar"><i class="sqr-fill" style="width:${(cnt / every) * 100}%"></i></div>
+    <small>${simpleMe() ? `Squish ${every} times → a free box!` : `Every ${every} squishes = a free Mystery Box${daily ? ` (up to ${daily} a day)` : ''}`}</small></div>
+    ${bank ? `<button class="b2-buy free" data-action="sq-open" data-box="squish">Open${bank > 1 ? ` (${bank})` : '!'}</button>` : `<span class="dc-n sqr-n">${cnt}/${every}</span>`}</div>`;
+}
+function squishReward(who, n) {
+  if (!who) return;
+  const { every, daily } = sqCfg();
+  state.squish.squished ||= {}; state.squish.sqBank ||= {}; state.squish.sqDay ||= {};
+  const before = state.squish.squished[who] || 0, after = before + n;
+  state.squish.squished[who] = after;
+  if (every && Math.floor(after / every) > Math.floor(before / every)) {
+    const day = state.squish.sqDay[who]?.d === today() ? state.squish.sqDay[who] : { d: today(), n: 0 };
+    if (daily && day.n >= daily) {
+      toast(`🤏 ${after.toLocaleString()} squishes! You got today's ${daily} free boxes — more tomorrow`);
+    } else {
+      day.n += 1;
+      state.squish.sqDay[who] = day;
+      state.squish.sqBank[who] = (state.squish.sqBank[who] || 0) + 1;
+      sqSound('win');
+      if (navigator.vibrate) navigator.vibrate([20, 40, 20]);
+      toast(`🎉 ${every} squishes! You earned a free Mystery Box`);
+      save(); render();
+      return;
+    }
+  }
+  if (every) {
+    const cnt = after % every;
+    for (const el of document.querySelectorAll('.sqr-fill')) el.style.width = (cnt / every) * 100 + '%';
+    for (const el of document.querySelectorAll('.sqr-n')) el.textContent = `${cnt}/${every}`;
+  }
+}
+const _sqGetMoreR = sqGetMore;
+sqGetMore = function (me) {
+  const html = _sqGetMoreR(me), card = squishCard(me);
+  const i = html.indexOf('<div class="box-list">');
+  return i < 0 ? card + html : html.slice(0, i) + card + html.slice(i);
+};
+// On a squishy's own page (where you squish), show the progress right under it.
+const _squishyViewR = views.squishy;
+views.squishy = (sid) => {
+  const html = _squishyViewR(sid), card = squishCard(actor());
+  const i = html.indexOf('<div class="btn-row">');
+  return i < 0 || !card ? html : html.slice(0, i) + card + html.slice(i);
 };

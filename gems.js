@@ -6,7 +6,7 @@
 
 Object.assign(TITLES, { gems: 'Gems' });
 const GEM = '💎';
-const GEM_DEFAULTS = { perPoint: 2, routine: 3, word: 3, checkin: 1, kudos: 1, dailyCap: 40, streak: 1, welcome: 25, rate: 10, exchange: true, approve: true, maxExchange: 5 };
+const GEM_DEFAULTS = { perPoint: 2, routine: 3, word: 3, checkin: 1, kudos: 1, dailyCap: 40, streak: 1, sqEvery: 100, sqDaily: 3, welcome: 25, rate: 10, exchange: true, approve: true, maxExchange: 5 };
 const gemsCfg = () => ({ ...GEM_DEFAULTS, ...(state.gems.cfg || {}) });
 // Earning starts the first day Gems exist on this family's data (no surprise windfall for past chores).
 const gemsStart = () => (state.gems.start ||= today());
@@ -144,13 +144,14 @@ function gemRulesSheet() {
       { row: [{ name: 'routine', label: 'On-time routine', type: 'number' }, { name: 'kudos', label: 'Per bonus ⭐', type: 'number' }] },
       { row: [{ name: 'word', label: 'Family Word win', type: 'number' }, { name: 'checkin', label: 'Check-in', type: 'number' }] },
       { name: 'streak', label: '🔥 Chore streak bonus (× day, max 5)', type: 'number', hint: '1 = day 2 of a streak earns +2, day 5+ earns +5. Not counted toward the daily max. 0 turns it off.' },
+      { row: [{ name: 'sqEvery', label: '🤏 Squishes per free box', type: 'number' }, { name: 'sqDaily', label: 'Max boxes a day', type: 'number' }] },
       { name: 'exchange', label: '🐷 Kids can trade allowance for Gems', type: 'checkbox' },
       { row: [{ name: 'rate', label: '💎 per $1', type: 'number' }, { name: 'maxExchange', label: 'Max $ per trade', type: 'number' }] },
       { name: 'approve', label: 'A grown-up must OK each trade', type: 'checkbox', hint: 'Requests show in your 🔔 inbox' },
     ],
     onSave(v) {
       const n = (k) => Math.max(0, Number(v[k]) || 0);
-      state.gems.cfg = { perPoint: n('perPoint'), dailyCap: n('dailyCap') || 1, routine: n('routine'), kudos: n('kudos'), word: n('word'), checkin: n('checkin'), streak: n('streak'), welcome: c.welcome, exchange: v.exchange, rate: n('rate') || 1, maxExchange: n('maxExchange') || 1, approve: v.approve };
+      state.gems.cfg = { perPoint: n('perPoint'), dailyCap: n('dailyCap') || 1, routine: n('routine'), kudos: n('kudos'), word: n('word'), checkin: n('checkin'), streak: n('streak'), sqEvery: n('sqEvery'), sqDaily: n('sqDaily'), welcome: c.welcome, exchange: v.exchange, rate: n('rate') || 1, maxExchange: n('maxExchange') || 1, approve: v.approve };
       toast(`${GEM} Gem rules saved`);
     },
   });

@@ -394,7 +394,7 @@ views.kid = () => {
   const turns = typeof myTurnGames === 'function' ? myTurnGames().length : 0;
   const poll = state.board.find((b) => b.type === 'poll' && !b.closed && !b.votes?.[id]);
   const n = new Set(myItems(id).map((i) => i.sid)).size;
-  const free = state.squish.free[id] !== today();
+  const free = state.squish.free[id] !== today() || sqBankOf(id) > 0;
   const h = houseOf(id);
   const fr = typeof kidRule === 'function' && kidRule(id).on && typeof circle === 'function' && circle();
   const frNew = fr ? circle().chat.filter((x) => x.at > (seen().fchat || 0) && x.from !== pkey(id)).length + friendTradeInbox(id).length : 0;
@@ -441,7 +441,7 @@ function simpleLauncher(id) {
   const now = rs.find((r) => r.part === partOfDay()) || rs[0];
   const steps = now ? now.steps.filter((s) => routineDone(now)[s.id]).length : 0;
   const mm = moneyMode(id);
-  const free = state.squish.free[id] !== today();
+  const free = state.squish.free[id] !== today() || sqBankOf(id) > 0;
   const turns = typeof myTurnGames === 'function' ? myTurnGames().length : 0;
   const unread = state.chat.filter((x) => x.at > (seen().chat || 0) && x.who !== id).length;
   const syncWait = typeof Sync !== 'undefined' && Sync.cfg?.kid && Sync.status !== 'synced' && Sync.status !== 'offline';
@@ -479,7 +479,7 @@ views.play = () => {
   const triv = me ? triviaWaiting(me).length : 0;
   const h = me ? houseOf(me) : null;
   const n = me ? new Set(myItems(me).map((i) => i.sid)).size : 0;
-  const free = me && state.squish.free[me] !== today();
+  const free = me && (state.squish.free[me] !== today() || sqBankOf(me) > 0);
   const kid = kidModeId();
   const friendsOk = typeof views.friends === 'function' && (!kid || (typeof kidRule === 'function' && kidRule(kid).on));
   const tiles = [
