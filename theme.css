@@ -1215,3 +1215,64 @@ body.chat-mode .fab { display: none; }
 [data-theme="dark"] .friends-banner { background: linear-gradient(135deg, #1e3a5a, #4a2340); }
 .fchat-row { margin-bottom: 4px; }
 .invite-card h3 { text-transform: none; letter-spacing: 0; font: 800 20px/1.25 var(--font-display); color: var(--text); }
+
+/* =========================================================
+   v9 · Big collection: Niddos, shinies, Ultimates, seasons
+   ========================================================= */
+.rar-U { background: linear-gradient(90deg, #ffb800, #ff6b9d, #c084fc, #4dabf7, #ffb800); background-size: 300% 100%; animation: ultshift 4s linear infinite; text-shadow: 0 1px 2px rgba(0, 0, 0, .25); }
+@keyframes ultshift { to { background-position: 300% 0; } }
+.r-U { --rc: #ffb800; }
+.sq-tile.r-U { border: 2px solid #ffd23f; background: radial-gradient(circle at 50% 35%, #fff6cc, var(--surface) 72%); box-shadow: 0 0 18px -4px #ffb800, var(--shadow); }
+[data-theme="dark"] .sq-tile.r-U { background: radial-gradient(circle at 50% 35%, #5a4500, var(--surface) 72%); }
+.sq-svg .aura { transform-box: fill-box; transform-origin: center; animation: aurapulse 2.6s ease-in-out infinite; }
+@keyframes aurapulse { 50% { transform: scale(.86); opacity: .7; } }
+.box-reveal.r-U { --rc: #ffb800; }
+.box-reveal.r-U .br-card { background: linear-gradient(170deg, #fff3bf, var(--surface) 60%); }
+/* Shiny */
+.sq-svg.is-shiny { filter: drop-shadow(0 0 4px #ffe066) drop-shadow(0 0 9px #ff9de2) saturate(1.2) !important; }
+.sq-tile.shiny { overflow: hidden; }
+.sq-tile.shiny::after { content: ''; position: absolute; inset: -40%; background: linear-gradient(115deg, transparent 40%, rgba(255, 255, 255, .65) 50%, transparent 60%); animation: sheen 2.8s ease-in-out infinite; pointer-events: none; }
+@keyframes sheen { 0% { transform: translateX(-60%); } 60%, 100% { transform: translateX(60%); } }
+.shiny-badge { position: absolute; bottom: 30px; right: 8px; font-style: normal; font-size: 16px; animation: twinkle 1.6s ease-in-out infinite; }
+.br-shiny { font: 900 18px/1 var(--font-display); background: linear-gradient(90deg, #ffb800, #ff6b9d, #c084fc); -webkit-background-clip: text; background-clip: text; color: transparent; margin-bottom: 4px; }
+.box-reveal.is-shiny .br-card { box-shadow: 0 0 0 3px #ffe066, 0 0 40px 6px #ff9de2, 0 30px 60px -20px #000; }
+.ti.shiny, .pick.shiny { box-shadow: inset 0 0 0 2px #ffd23f; }
+/* Filters */
+.sq-filters { display: flex; gap: 6px; overflow-x: auto; margin: 0 -16px 12px; padding: 0 16px; scrollbar-width: none; }
+.sq-filters button { flex: none; padding: 7px 13px; border-radius: 16px; background: var(--surface); box-shadow: var(--shadow); font-weight: 750; font-size: 13px; color: var(--text); }
+.sq-filters button.on { background: var(--grad); color: #fff; }
+.sq-tabs { grid-template-columns: repeat(6, 1fr); gap: 5px; }
+.sq-tabs button { font-size: 11px; }
+.sq-tabs button span { font-size: 20px; }
+/* Niddos */
+.nd-big { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.nd-big .sq-svg { transform-origin: 50% 96%; transition: transform .9s cubic-bezier(.2, .8, .3, 1), filter .9s; }
+.nd-big.squeezing .sq-svg { transform: scale(1.4, .58); }
+.nd-big.squeezing .sq-svg.mood { filter: hue-rotate(170deg) saturate(1.3) !important; }
+.nd-big.bounce .sq-svg { animation: ndbounce .7s cubic-bezier(.3, 1.6, .5, 1); }
+@keyframes ndbounce { 0% { transform: scale(1.4, .58); } 35% { transform: scale(.86, 1.16); } 60% { transform: scale(1.06, .95); } 80% { transform: scale(.98, 1.02); } 100% { transform: scale(1); } }
+.nd-big.squeezing .f-open { display: none; } .nd-big.squeezing .f-joy { display: inline; }
+/* Seasons */
+.season-banner { display: flex; align-items: center; gap: 12px; padding: 12px 14px; margin-bottom: 12px; border-radius: 20px; color: #fff; }
+.season-banner span { font-size: 34px; animation: wiggle 2.4s ease-in-out infinite; }
+.season-banner b { display: block; font: 800 17px/1.2 var(--font-display); }
+.season-banner small { opacity: .9; }
+.s-spooky { background: linear-gradient(135deg, #3b2a6b, #ff6b00); }
+.s-winter { background: linear-gradient(135deg, #1c7ed6, #99e9f2); }
+.box-spooky { background: linear-gradient(135deg, color-mix(in srgb, #ff6b00 12%, var(--surface)), var(--surface)); }
+.box-winter { background: linear-gradient(135deg, color-mix(in srgb, #4dabf7 14%, var(--surface)), var(--surface)); }
+.box-niddo { background: linear-gradient(135deg, color-mix(in srgb, #63e6be 14%, var(--surface)), var(--surface)); }
+/* Unlocks */
+.ult-hero { text-align: center; padding: 18px; color: #3a2b00; background: linear-gradient(135deg, #fff3bf, #ffd8a8, #fcc2d7); }
+.ult-hero b { font: 900 24px/1.2 var(--font-display); display: block; }
+.ult-crown { font-size: 40px; animation: wiggle 2.4s ease-in-out infinite; }
+.ult-list { display: grid; gap: 10px; }
+.ult-card { width: 100%; display: flex; align-items: center; gap: 12px; text-align: left; padding: 12px; color: var(--text); }
+.ult-card.got { background: linear-gradient(135deg, #fff9db, var(--surface) 70%); box-shadow: 0 0 0 2px #ffd23f, var(--shadow); }
+[data-theme="dark"] .ult-card.got { background: linear-gradient(135deg, #4a3a00, var(--surface) 70%); }
+.ult-art { position: relative; width: 74px; flex: none; }
+.sq-svg.locked { filter: grayscale(1) brightness(.75) opacity(.45); }
+.ult-lock { position: absolute; right: -2px; bottom: 2px; font-size: 20px; }
+.ult-bar { height: 8px; margin: 6px 0 3px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
+.ult-bar i { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #ffb800, #ff6b9d); }
+.ult-done { margin-top: 4px; font-weight: 800; color: #e8a400; }

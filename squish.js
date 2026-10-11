@@ -15,8 +15,11 @@ const RARITY = {
   E: { name: 'Epic', color: '#a855f7', value: 8, price: 100 },
   L: { name: 'Legendary', color: '#f59e0b', value: 20, price: 250 },
   M: { name: 'Mythic', color: '#ec4899', value: 50, price: 600 },
+  U: { name: 'Ultimate', color: '#ffb800', value: 100, price: 0 },
 };
 const TIERS = ['C', 'R', 'E', 'L', 'M'];
+const ALL_TIERS = [...TIERS, 'U'];
+const EXTRA_ART = {}, ACCESSORIES = {}; // filled by collect.js
 const SETS = { critters: ['🐾', 'Cozy Critters'], treats: ['🍰', 'Sweet Treats'], dream: ['🌈', 'Dreamland'] };
 const SPECIES = {
   cat: 'critters', bunny: 'critters', bear: 'critters', frog: 'critters', penguin: 'critters', fox: 'critters',
@@ -43,7 +46,7 @@ const SQUISHIES = [
   ['uni1', 'unicorn', 'Sparkles', '#ffffff', '#ffb3d9', 'C'], ['uni2', 'unicorn', 'Moon Sparkles', '#dfe6ff', '#9db1ff', 'R'], ['uni3', 'unicorn', 'Rainbow Sparkles', '#ffffff', '#ffb3d9', 'M', 'rainbow'],
   ['drag1', 'dragon', 'Draggy', '#7bd389', '#ffe08a', 'C'], ['drag2', 'dragon', 'Ruby Draggy', '#ff7b8a', '#ffd0a8', 'R'], ['drag3', 'dragon', 'Galaxy Draggy', '#2b2560', '#ff9de2', 'M', 'galaxy'],
   ['whale1', 'whale', 'Bubbles', '#7fb8f5', '#e6f3ff', 'C'], ['whale2', 'whale', 'Pink Bubbles', '#ffadd2', '#fff0f7', 'R'], ['whale3', 'whale', 'Ocean Bubbles', '#2bb3c0', '#bff7f0', 'E', 'holo'],
-].map(([id, sp, name, c1, c2, r, fx]) => ({ id, sp, name, c1, c2, r, fx: fx || '', set: SPECIES[sp] }));
+].map(([id, sp, name, c1, c2, r, fx]) => ({ id, sp, name, c1, c2, r, fx: fx || '', set: SPECIES[sp], kind: 'squishy' }));
 const SQ = Object.fromEntries(SQUISHIES.map((s) => [s.id, s]));
 
 /* =========================================================
@@ -58,6 +61,7 @@ function mixHex(a, b, t) {
 function squishySVG(sid, opts = {}) {
   const s = SQ[sid];
   if (!s) return '';
+  if (s.kind === 'niddo' && typeof niddoSVG === 'function') return niddoSVG(s, opts);
   const g = 'sq' + (++svgSeq);
   const ink = '#3a2b3d', blush = '#ff8fab';
   const light = mixHex(s.c1, '#ffffff', 0.55), dark = mixHex(s.c1, '#000000', 0.12);
@@ -68,10 +72,12 @@ function squishySVG(sid, opts = {}) {
     holo: `<linearGradient id="${g}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${light}"/><stop offset=".35" stop-color="#ffe3f6"/><stop offset=".65" stop-color="#d9f3ff"/><stop offset="1" stop-color="${s.c1}"/></linearGradient>`,
     fire: `<linearGradient id="${g}" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#ff3d2e"/><stop offset=".6" stop-color="${s.c1}"/><stop offset="1" stop-color="#ffc94d"/></linearGradient>`,
     glow: `<radialGradient id="${g}" cx=".5" cy=".4" r=".8"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="${s.c1}"/></radialGradient>`,
+    diamond: `<linearGradient id="${g}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".3" stop-color="#c9f6ff"/><stop offset=".55" stop-color="${s.c1}"/><stop offset=".75" stop-color="#e8d9ff"/><stop offset="1" stop-color="#8fd8ff"/></linearGradient>`,
   };
-  const defs = `<defs>${fills[s.fx] || `<radialGradient id="${g}" cx=".35" cy=".3" r=".85"><stop offset="0" stop-color="${light}"/><stop offset=".7" stop-color="${s.c1}"/><stop offset="1" stop-color="${dark}"/></radialGradient>`}</defs>`;
+  const aura = s.r === 'U' ? `<radialGradient id="${g}a"><stop offset=".45" stop-color="#fff6b0" stop-opacity=".95"/><stop offset=".75" stop-color="${s.c2}" stop-opacity=".45"/><stop offset="1" stop-color="${s.c2}" stop-opacity="0"/></radialGradient>` : '';
+  const defs = `<defs>${aura}${fills[s.fx] || `<radialGradient id="${g}" cx=".35" cy=".3" r=".85"><stop offset="0" stop-color="${light}"/><stop offset=".7" stop-color="${s.c1}"/><stop offset="1" stop-color="${dark}"/></radialGradient>`}</defs>`;
   const F = `url(#${g})`, A = s.c2;
-  let back = '', body = '', front = '', fy = 62; // face y
+  let back = '', body = '', front = '', fy = 62, art = {}; // face y
   const ear = (pts, fill) => `<path d="${pts}" fill="${fill}" stroke="${fill}" stroke-width="5" stroke-linejoin="round"/>`;
   const round = (rx = 36, ry = 32, cy = 60) => `<ellipse cx="50" cy="${cy}" rx="${rx}" ry="${ry}" fill="${F}"/>`;
   switch (s.sp) {
@@ -92,23 +98,26 @@ function squishySVG(sid, opts = {}) {
     case 'axolotl': back = [-1, 1].map((d) => [0, 1, 2].map((k) => `<ellipse cx="${50 + d * 40}" cy="${44 + k * 9}" rx="9" ry="3.6" fill="${A}" transform="rotate(${d * (k - 1) * 22} ${50 + d * 40} ${44 + k * 9})"/>`).join('')).join(''); body = round(34, 30, 60); break;
     case 'unicorn': back = `<path d="M44 32 L50 4 L56 32Z" fill="#ffd84d"/><path d="M46 24 L54 22 M47 16 L53 15" stroke="#e8a900" stroke-width="1.6"/>` + ear('M24 40 L28 22 L38 32Z', F) + ear('M76 40 L72 22 L62 32Z', F); body = round(); front = `<g fill="${A}"><circle cx="70" cy="34" r="7"/><circle cx="80" cy="44" r="6"/><circle cx="84" cy="56" r="5"/></g>`; break;
     case 'dragon': back = `<path d="M20 54 Q2 34 6 22 Q16 34 28 40Z" fill="${A}"/><path d="M80 54 Q98 34 94 22 Q84 34 72 40Z" fill="${A}"/>` + ear('M34 34 L32 18 L42 30Z', A) + ear('M66 34 L68 18 L58 30Z', A); body = round(); front = `<ellipse cx="50" cy="76" rx="14" ry="9" fill="${A}" opacity=".7"/>`; break;
+    default: if (EXTRA_ART[s.sp]) { art = EXTRA_ART[s.sp]({ F, A, s, light, dark, round, ear, blush, ink }); ({ back = '', body = '', front = '', fy = 62 } = art); } break;
     case 'whale': back = `<path d="M84 60 Q98 46 96 38 Q90 50 82 50 Q88 40 82 34 Q80 50 74 56Z" fill="${F}"/><path d="M44 22 Q42 12 36 10 M50 22 L50 8 M56 22 Q58 12 64 10" stroke="#8ec5ff" stroke-width="3" stroke-linecap="round" fill="none"/>`; body = `<ellipse cx="46" cy="60" rx="40" ry="32" fill="${F}"/>`; front = `<path d="M10 66 Q46 92 84 66 Q78 90 46 92 Q14 90 10 66Z" fill="${A}"/>`; fy = 58; break;
   }
   const fx = fy || 36; // frog: eyes sit in the bumps
-  const eyesY = s.sp === 'frog' ? 36 : fy - 2;
-  const ex = s.sp === 'frog' ? 18 : 11;
+  const eyesY = art.eyesY ?? (s.sp === 'frog' ? 36 : fy - 2);
+  const ex = art.ex ?? (s.sp === 'frog' ? 18 : 11);
   const eyeL = 50 - ex, eyeR = 50 + ex;
-  const mouthY = s.sp === 'frog' ? 64 : fy + 6;
-  const eyeInk = s.fx === 'galaxy' ? '#ffffff' : ink;
+  const mouthY = art.mouthY ?? (s.sp === 'frog' ? 64 : fy + 6);
+  const eyeInk = art.eyeInk || (s.fx === 'galaxy' ? '#ffffff' : ink);
   const face = `<g class="f-open"><ellipse cx="${eyeL}" cy="${eyesY}" rx="3.6" ry="4.4" fill="${eyeInk}"/><ellipse cx="${eyeR}" cy="${eyesY}" rx="3.6" ry="4.4" fill="${eyeInk}"/>${s.fx === 'galaxy' ? '' : `<circle cx="${eyeL + 1.2}" cy="${eyesY - 1.6}" r="1.3" fill="#fff"/><circle cx="${eyeR + 1.2}" cy="${eyesY - 1.6}" r="1.3" fill="#fff"/>`}</g>
     <g class="f-joy"><path d="M${eyeL - 4} ${eyesY + 1} Q${eyeL} ${eyesY - 5} ${eyeL + 4} ${eyesY + 1}" stroke="${eyeInk}" stroke-width="2.4" fill="none" stroke-linecap="round"/><path d="M${eyeR - 4} ${eyesY + 1} Q${eyeR} ${eyesY - 5} ${eyeR + 4} ${eyesY + 1}" stroke="${eyeInk}" stroke-width="2.4" fill="none" stroke-linecap="round"/></g>
     <ellipse cx="${eyeL - 7}" cy="${mouthY - 1}" rx="5" ry="3" fill="${blush}" opacity=".55"/><ellipse cx="${eyeR + 7}" cy="${mouthY - 1}" rx="5" ry="3" fill="${blush}" opacity=".55"/>
-    <path d="M${50 - 4.5} ${mouthY} Q${50 - 2.2} ${mouthY + 3.4} 50 ${mouthY} Q${50 + 2.2} ${mouthY + 3.4} ${50 + 4.5} ${mouthY}" stroke="${eyeInk}" stroke-width="1.8" fill="none" stroke-linecap="round"/>`;
+    ${art.noMouth ? '' : `<path d="M${50 - 4.5} ${mouthY} Q${50 - 2.2} ${mouthY + 3.4} 50 ${mouthY} Q${50 + 2.2} ${mouthY + 3.4} ${50 + 4.5} ${mouthY}" stroke="${eyeInk}" stroke-width="1.8" fill="none" stroke-linecap="round"/>`}`;
   const sparkles = s.fx === 'galaxy' ? [[30, 50], [66, 44], [40, 78], [72, 72], [56, 60], [24, 68]].map(([x, y], i) => `<circle cx="${x}" cy="${y}" r="${i % 2 ? 0.9 : 1.4}" fill="#fff" opacity=".85"/>`).join('')
-    : ['L', 'M'].includes(s.r) || s.fx === 'gold' ? `<path class="spk" d="M82 18 L84 24 L90 26 L84 28 L82 34 L80 28 L74 26 L80 24Z" fill="#fff6c2"/><path class="spk s2" d="M16 26 L17.5 30 L21.5 31.5 L17.5 33 L16 37 L14.5 33 L10.5 31.5 L14.5 30Z" fill="#fff6c2"/>` : '';
+    : ['L', 'M', 'U'].includes(s.r) || s.fx === 'gold' || opts.shiny ? `<path class="spk" d="M82 18 L84 24 L90 26 L84 28 L82 34 L80 28 L74 26 L80 24Z" fill="#fff6c2"/><path class="spk s2" d="M16 26 L17.5 30 L21.5 31.5 L17.5 33 L16 37 L14.5 33 L10.5 31.5 L14.5 30Z" fill="#fff6c2"/>` : '';
   const shine = `<ellipse cx="34" cy="${Math.max(34, fy - 16)}" rx="9" ry="5" fill="#fff" opacity=".35" transform="rotate(-25 34 ${Math.max(34, fy - 16)})"/>`;
   void fx;
-  return `<svg class="sq-svg${opts.cls ? ' ' + opts.cls : ''}" viewBox="0 0 100 100" role="img" aria-label="${esc(s.name)}">${defs}<ellipse cx="50" cy="95" rx="30" ry="3.5" fill="#000" opacity=".1"/>${back}${body}${shine}${front}${face}${sparkles}</svg>`;
+  const auraEl = aura ? `<circle class="aura" cx="50" cy="56" r="50" fill="url(#${g}a)"/>` : '';
+  const acc = s.acc && ACCESSORIES[s.acc] ? ACCESSORIES[s.acc](art.top ?? 28, s, g) : '';
+  return `<svg class="sq-svg${opts.cls ? ' ' + opts.cls : ''}${opts.shiny ? ' is-shiny' : ''}" viewBox="0 0 100 100" role="img" aria-label="${esc(s.name)}">${defs}${auraEl}<ellipse cx="50" cy="95" rx="30" ry="3.5" fill="#000" opacity=".1"/>${back}${body}${shine}${front}${art.over || ''}${face}${acc}${sparkles}</svg>`;
 }
 const rarityPill = (r) => `<span class="rar rar-${r}">${RARITY[r].name}</span>`;
 
@@ -123,16 +132,16 @@ function lockedIds() {
   if (typeof friendLockedIds === 'function') for (const id of friendLockedIds()) ids.add(id);
   return ids;
 }
-function giveSquishy(who, sid, from) {
+function giveSquishy(who, sid, from, extra = {}) {
   const isNew = !ownsSid(who, sid);
-  const item = { id: uid(), who, sid, at: Date.now(), from };
+  const item = { id: uid(), who, sid, at: Date.now(), from, ...extra };
   state.squish.items.push(item);
   if (isNew) checkSetBonus(who, SQ[sid].set);
   return { item, isNew };
 }
 function checkSetBonus(who, set) {
   const all = SQUISHIES.filter((s) => s.set === set);
-  if (all.every((s) => ownsSid(who, s.id))) {
+  if (all.length && !all.some((s) => s.r === 'U') && all.every((s) => ownsSid(who, s.id))) {
     if (gemLog(who, 100, `Completed ${SETS[set][1]}! 🏆`, 'bonus', 'set:' + set)) setTimeout(() => { confetti(); celebrate(`🏆 ${SETS[set][1]} complete!`, `+100 ${GEM} bonus for finishing the set`); }, 1600);
   }
 }
@@ -157,6 +166,13 @@ function pickWeighted(pairs) {
   for (const [k, w] of pairs) { if ((x -= w) < 0) return k; }
   return pairs.at(-1)[0];
 }
+// Which squishies a box (or the shop / fusing) can give. collect.js adds seasons, Niddos and Ultimates.
+function boxPool(box) { return SQUISHIES.filter((s) => s.kind === 'squishy' && !s.season && s.r !== 'U'); }
+function shopPool() { return boxPool('basic'); }
+function pickFromPool(pool, tier) {
+  for (let i = TIERS.indexOf(tier); i >= 0; i--) { const xs = pool.filter((s) => s.r === TIERS[i]); if (xs.length) return xs[Math.floor(Math.random() * xs.length)]; }
+  return pool[Math.floor(Math.random() * pool.length)];
+}
 function openBox(box) {
   const who = actor();
   if (!who) { toast('Pick who you are first 👆'); return; }
@@ -167,9 +183,10 @@ function openBox(box) {
   } else if (!spendGems(who, b.cost, `${b.name}`, 'squish')) return;
   const tier = rollTier(box, who);
   if (b.pity) { const k = `${who}:${box}`; state.squish.pity[k] = TIERS.indexOf(tier) >= TIERS.indexOf(b.pityTier) ? 0 : pityOf(who, box) + 1; }
-  const pool = SQUISHIES.filter((s) => s.r === tier);
-  const s = pool[Math.floor(Math.random() * pool.length)];
-  const { item, isNew } = giveSquishy(who, s.id, box);
+  const s = pickFromPool(boxPool(box), tier);
+  const shiny = Math.random() < (b.shiny ?? 0.02);
+  const { item, isNew } = giveSquishy(who, s.id, box, shiny ? { shiny: true } : {});
+  if (shiny) logAct('✨', `found a SHINY ${s.name}!`, 'squishies');
   if (['L', 'M'].includes(tier)) logAct('🧸', `pulled a ${RARITY[tier].name} ${s.name}!`, 'squishies');
   save();
   boxReveal(b, item, isNew);
@@ -177,8 +194,9 @@ function openBox(box) {
 // Rotating shop: four squishies a day, so any squishy can be bought outright eventually.
 function shopToday() {
   const n = Math.max(0, daysBetween('2026-01-01', today()));
-  const pick = (tiers, k) => { const pool = SQUISHIES.filter((s) => tiers.includes(s.r)); return pool[(n * 7 + k * 13) % pool.length]; };
-  const out = [pick(['C'], 1), pick(['R'], 2), pick(['E'], 3), pick(['L', 'M'], 4)];
+  const all = shopPool();
+  const pick = (tiers, k) => { const pool = all.filter((s) => tiers.includes(s.r)); return pool.length ? pool[(n * 7 + k * 13) % pool.length] : null; };
+  const out = [pick(['C'], 1), pick(['C', 'R'], 5), pick(['R'], 2), pick(['E'], 3), pick(['E', 'L'], 6), pick(['L', 'M'], 4)].filter(Boolean);
   return [...new Map(out.map((s) => [s.id, s])).values()];
 }
 
@@ -193,9 +211,10 @@ function sqSound(kind) {
     const t = actx.currentTime, o = actx.createOscillator(), gn = actx.createGain();
     o.type = 'sine';
     if (kind === 'squish') { o.frequency.setValueAtTime(520, t); o.frequency.exponentialRampToValueAtTime(140, t + 0.18); }
+    else if (kind === 'goo') { o.type = 'triangle'; o.frequency.setValueAtTime(180, t); o.frequency.linearRampToValueAtTime(120, t + 0.3); }
     else if (kind === 'pop') { o.frequency.setValueAtTime(300, t); o.frequency.exponentialRampToValueAtTime(900, t + 0.12); }
     else { o.type = 'triangle'; o.frequency.setValueAtTime(660, t); o.frequency.setValueAtTime(880, t + 0.1); o.frequency.setValueAtTime(1320, t + 0.2); }
-    gn.gain.setValueAtTime(0.0001, t); gn.gain.exponentialRampToValueAtTime(0.25, t + 0.02); gn.gain.exponentialRampToValueAtTime(0.0001, t + (kind === 'win' ? 0.45 : 0.22));
+    gn.gain.setValueAtTime(0.0001, t); gn.gain.exponentialRampToValueAtTime(0.25, t + 0.02); gn.gain.exponentialRampToValueAtTime(0.0001, t + (kind === 'win' ? 0.45 : kind === 'goo' ? 0.35 : 0.22));
     o.connect(gn).connect(actx.destination); o.start(t); o.stop(t + 0.5);
   } catch { /* no audio */ }
 }
@@ -213,18 +232,20 @@ function boxReveal(b, item, isNew) {
   const open = () => {
     const count = myItems(item.who).filter((i) => i.sid === s.id).length;
     el.classList.add('opened', 'r-' + s.r);
+    if (item.shiny) el.classList.add('is-shiny');
     el.innerHTML = `<div class="br-rays"></div><div class="br-card">
       ${isNew ? '<span class="br-new">NEW!</span>' : ''}
-      <div class="br-sq">${squishySVG(s.id)}</div>
+      ${item.shiny ? '<div class="br-shiny">✨ SHINY! ✨</div>' : ''}
+      <div class="br-sq">${squishySVG(s.id, { shiny: item.shiny })}</div>
       ${rarityPill(s.r)}
       <div class="br-name">${esc(s.name)}</div>
-      <div class="small muted">${SETS[s.set][0]} ${SETS[s.set][1]}${isNew ? '' : ` · you have ${count}`}</div>
-      <div class="btn-row" style="justify-content:center"><button class="btn" data-close>Yay!</button><button class="btn secondary" data-again>Open another</button></div></div>`;
-    sqSound(['L', 'M'].includes(s.r) ? 'win' : 'pop');
-    if (['E', 'L', 'M'].includes(s.r)) setTimeout(confetti, 200);
+      <div class="small muted">${SETS[s.set] ? `${SETS[s.set][0]} ${SETS[s.set][1]}` : ''}${isNew ? '' : ` · you have ${count}`}</div>
+      <div class="btn-row" style="justify-content:center"><button class="btn" data-close>Yay!</button>${b.noAgain ? '' : '<button class="btn secondary" data-again>Open another</button>'}</div></div>`;
+    sqSound(['L', 'M', 'U'].includes(s.r) || item.shiny ? 'win' : 'pop');
+    if (['E', 'L', 'M', 'U'].includes(s.r) || item.shiny) setTimeout(confetti, 200);
     if (typeof isSimple === 'function' && isSimple(item.who) && readAloudOn(item.who)) speak(`You got ${s.name}! ${RARITY[s.r].name}!`);
     el.querySelector('[data-close]').onclick = () => { el.remove(); render(); };
-    el.querySelector('[data-again]').onclick = () => { el.remove(); render(); setTimeout(() => (ui.sqTab = 'boxes', go('squishies'))); };
+    if (el.querySelector('[data-again]')) el.querySelector('[data-again]').onclick = () => { el.remove(); render(); setTimeout(() => (ui.sqTab = 'boxes', go('squishies'))); };
   };
   let opening = false;
   el.querySelector('.br-stage').onclick = () => { if (opening) return; opening = true; el.querySelector('.br-box').classList.add('shake'); setTimeout(open, 650); };
@@ -233,18 +254,18 @@ function boxReveal(b, item, isNew) {
 /* =========================================================
    Views
    ========================================================= */
-function sqTile(sid, extra = '', attrs = '') {
+function sqTile(sid, extra = '', attrs = '', o = {}) {
   const s = SQ[sid];
-  return `<button class="sq-tile r-${s.r}" ${attrs || `data-action="go" data-to="squishy/${sid}"`}>${squishySVG(sid)}<span class="sq-name">${esc(s.name)}</span>${extra}</button>`;
+  return `<button class="sq-tile r-${s.r}${o.shiny ? ' shiny' : ''}" ${attrs || `data-action="go" data-to="squishy/${sid}"`}>${squishySVG(sid, { shiny: o.shiny })}<span class="sq-name">${esc(s.name)}</span>${o.shiny ? '<i class="shiny-badge">✨</i>' : ''}${extra}</button>`;
 }
 function collectionGroups(who) {
   const by = {};
   for (const i of myItems(who)) (by[i.sid] ||= []).push(i);
-  return Object.entries(by).sort(([a], [b]) => TIERS.indexOf(SQ[b].r) - TIERS.indexOf(SQ[a].r) || SQ[a].name.localeCompare(SQ[b].name));
+  return Object.entries(by).sort(([a], [b]) => ALL_TIERS.indexOf(SQ[b].r) - ALL_TIERS.indexOf(SQ[a].r) || SQ[a].name.localeCompare(SQ[b].name));
 }
 function spares(who) {
   const locked = lockedIds(), out = { C: [], R: [], E: [], L: [], M: [] };
-  for (const [sid, items] of collectionGroups(who)) { const free = items.filter((i) => !locked.has(i.id) && !i.fav); for (const i of free.slice(items.length - free.length === 0 ? 1 : 0)) out[SQ[sid].r].push(i); }
+  for (const [sid, items] of collectionGroups(who)) { if (SQ[sid].r === 'U') continue; const free = items.filter((i) => !locked.has(i.id) && !i.fav && !i.shiny); for (const i of free.slice(items.length - free.length === 0 ? 1 : 0)) out[SQ[sid].r].push(i); }
   return out;
 }
 views.squishies = () => {
@@ -252,10 +273,10 @@ views.squishies = () => {
   if (!me) return needMe() || '<div class="card empty">Pick who you are first.</div>';
   gemWelcome(me);
   const tab = ui.sqTab || 'mine';
-  const tabs = [['mine', '🧸', 'Mine'], ['boxes', '🎁', 'Boxes'], ['shop', '🛍️', 'Shop'], ['book', '📖', 'Book'], ['trades', '🔁', 'Trades']];
+  const tabs = [['mine', '🧸', 'Mine'], ['boxes', '🎁', 'Boxes'], ['shop', '🛍️', 'Shop'], ['book', '📖', 'Book'], ...(typeof sqUnlocks === 'function' ? [['unlocks', '👑', 'Unlocks']] : []), ['trades', '🔁', 'Trades']];
   const head = `<div class="sq-head"><button class="gem-pill" data-action="go" data-to="gems">${GEM} <b>${gemBalance(me)}</b></button><span class="small muted">${new Set(myItems(me).map((i) => i.sid)).size}/${SQUISHIES.length} collected</span></div>
     <div class="sq-tabs">${tabs.map(([k, e, l]) => `<button class="${tab === k ? 'active' : ''}" data-action="sq-tab" data-tab="${k}"><span>${e}</span>${l}${k === 'trades' && tradeInbox(me).length ? `<i class="tab-badge">${tradeInbox(me).length}</i>` : ''}${k === 'boxes' && state.squish.free[me] !== today() ? '<i class="tab-badge">1</i>' : ''}</button>`).join('')}</div>`;
-  return head + ({ mine: sqMine, boxes: sqBoxes, shop: sqShop, book: sqBook, trades: sqTrades }[tab] || sqMine)(me);
+  return head + ({ mine: sqMine, boxes: sqBoxes, shop: sqShop, book: sqBook, unlocks: typeof sqUnlocks === 'function' ? sqUnlocks : sqMine, trades: sqTrades }[tab] || sqMine)(me);
 };
 function sqMine(me) {
   const groups = collectionGroups(me);
@@ -263,8 +284,16 @@ function sqMine(me) {
   const sp = spares(me);
   const fusable = TIERS.slice(0, -1).filter((t) => sp[t].length >= 3);
   return `${fusable.length ? `<button class="card fuse-cta" data-action="sq-fuse"><span>🔮</span><div><b>Fuse your spares!</b><small>3 spare ${fusable.map((t) => RARITY[t].name).join(' / ')} → 1 rarer squishy</small></div></button>` : ''}
-    <div class="sq-grid">${groups.map(([sid, items]) => sqTile(sid, `${items.length > 1 ? `<i class="sq-count">×${items.length}</i>` : ''}${items.some((i) => i.fav) ? '<i class="sq-fav">⭐</i>' : ''}`)).join('')}</div>`;
+    ${(() => {
+      const f = ui.sqFilter || 'all';
+      const has = (fn) => groups.some(([sid, items]) => fn(SQ[sid], items));
+      const chips = [['all', 'All', true], ['squishy', '🧸 Squishies', true], ['niddo', '🫧 Niddos', has((x) => x.kind === 'niddo')], ['shiny', '✨ Shiny', has((x, items) => items.some((i) => i.shiny))], ['U', '👑 Ultimate', has((x) => x.r === 'U')]].filter(([, , ok]) => ok);
+      const show = groups.filter(([sid, items]) => f === 'all' || (f === 'shiny' ? items.some((i) => i.shiny) : f === 'U' ? SQ[sid].r === 'U' : SQ[sid].kind === f));
+      return `${chips.length > 2 ? `<div class="sq-filters">${chips.map(([k, l]) => `<button class="${f === k ? 'on' : ''}" data-action="sq-filter" data-f="${k}">${l}</button>`).join('')}</div>` : ''}
+        <div class="sq-grid">${show.map(([sid, items]) => sqTile(sid, `${items.length > 1 ? `<i class="sq-count">×${items.length}</i>` : ''}${items.some((i) => i.fav) ? '<i class="sq-fav">⭐</i>' : ''}`, '', { shiny: items.some((i) => i.shiny) })).join('') || '<div class="small muted">Nothing here yet</div>'}</div>`;
+    })()}`;
 }
+const tradeable = (i) => SQ[i.sid] && SQ[i.sid].r !== 'U';
 function sqBoxes(me) {
   const freeUsed = state.squish.free[me] === today();
   const odds = (b) => TIERS.filter((t) => b.odds[t]).map((t) => `<span class="rar rar-${t}">${RARITY[t].name} ${b.odds[t]}%</span>`).join('');
@@ -293,13 +322,15 @@ views.squishy = (sid) => {
   const me = actor();
   const mine = me ? myItems(me).filter((i) => i.sid === sid) : [];
   const squishes = sum(mine, (i) => i.sq || 0);
-  return `<div class="sq-stage r-${s.r}"><button class="sq-big" data-action="sq-squish" data-sid="${sid}" aria-label="Squish">${squishySVG(sid)}</button>
-      <div class="sq-title">${esc(s.name)}</div>${rarityPill(s.r)}
-      <div class="small muted" style="margin-top:6px">${SETS[s.set][0]} ${SETS[s.set][1]} · worth ${RARITY[s.r].value} ⭐</div>
-      ${mine.length ? `<div class="sq-squishes">Squished <b class="sq-n">${squishes}</b> times · tap to squish!</div>` : '<div class="sq-squishes">You don’t have this one yet</div>'}
+  const shinyN = mine.filter((i) => i.shiny).length, niddo = s.kind === 'niddo', ult = s.r === 'U';
+  const unlock = ult && typeof ultimateInfo === 'function' ? ultimateInfo(s) : null;
+  return `<div class="sq-stage r-${s.r}${shinyN ? ' shiny' : ''}"><button class="sq-big${niddo ? ' nd-big' : ''}" ${niddo ? `data-nd="${sid}"` : `data-action="sq-squish" data-sid="${sid}"`} aria-label="${niddo ? 'Squeeze' : 'Squish'}">${squishySVG(sid, { shiny: shinyN > 0 })}</button>
+      <div class="sq-title">${shinyN ? '✨ ' : ''}${esc(s.name)}</div>${rarityPill(s.r)}
+      <div class="small muted" style="margin-top:6px">${SETS[s.set] ? `${SETS[s.set][0]} ${SETS[s.set][1]}` : ''}${ult ? '' : ` · worth ${RARITY[s.r].value} ⭐`}${s.blurb ? `<br>${esc(s.blurb)}` : ''}</div>
+      ${mine.length ? `<div class="sq-squishes">${niddo ? 'Squeezed' : 'Squished'} <b class="sq-n">${squishes}</b> times · ${niddo ? 'press & hold to squeeze!' : 'tap to squish!'}</div>` : `<div class="sq-squishes">${unlock ? `🔒 ${esc(unlock.how)}` : 'You don’t have this one yet'}</div>`}
     </div>
-    ${mine.length ? `<div class="btn-row"><button class="btn secondary" data-action="sq-fav" data-sid="${sid}">${mine.some((i) => i.fav) ? '⭐ Favorite' : '☆ Make favorite'}</button><button class="btn secondary" data-action="sq-trade-new" data-sid="${sid}">🔁 Trade</button></div>
-      <p class="small muted" style="text-align:center">You have ${mine.length}${mine.length > 1 ? ` — ${mine.length - 1} spare` : ''}. Favorites show on your profile and won’t be fused.</p>` : `<button class="btn block" data-action="sq-tab-go" data-tab="shop">🛍️ Check the shop</button>`}`;
+    ${mine.length ? `<div class="btn-row"><button class="btn secondary" data-action="sq-fav" data-sid="${sid}">${mine.some((i) => i.fav) ? '⭐ Favorite' : '☆ Make favorite'}</button>${ult ? '' : `<button class="btn secondary" data-action="sq-trade-new" data-sid="${sid}">🔁 Trade</button>`}</div>
+      <p class="small muted" style="text-align:center">${ult ? '👑 Earned — Ultimates can’t be traded or fused.' : `You have ${mine.length}${shinyN ? ` (${shinyN} ✨ shiny)` : ''}${mine.length > 1 ? ` — ${mine.length - 1} spare` : ''}. Favorites and shinies won’t be fused.`}</p>` : ult ? `<button class="btn block" data-action="sq-tab-go" data-tab="unlocks">👑 See how to unlock</button>` : `<button class="btn block" data-action="sq-tab-go" data-tab="shop">🛍️ Check the shop</button>`}`;
 };
 
 /* =========================================================
@@ -321,8 +352,7 @@ function fuseSheet() {
       const used = sp[v.tier].slice(0, 3).map((i) => i.id);
       state.squish.items = state.squish.items.filter((i) => !used.includes(i.id));
       const next = TIERS[TIERS.indexOf(v.tier) + 1];
-      const pool = SQUISHIES.filter((s) => s.r === next);
-      const s = pool[Math.floor(Math.random() * pool.length)];
+      const s = pickFromPool(boxPool('basic'), next);
       const { item, isNew } = giveSquishy(me, s.id, 'fuse');
       logAct('🔮', `fused 3 squishies into ${s.name}`, 'squishies');
       setTimeout(() => boxReveal({ emoji: '🔮' }, item, isNew), 50);
@@ -334,9 +364,9 @@ function fuseSheet() {
    Trading inside the family
    ========================================================= */
 const tradeInbox = (me) => state.squish.trades.filter((t) => t.to === me && t.status === 'offered').concat(typeof friendTradeInbox === 'function' ? friendTradeInbox(me) : []);
-const worth = (ids) => sum(ids, (id) => { const i = state.squish.items.find((x) => x.id === id); return i ? RARITY[SQ[i.sid].r].value : 0; });
+const worth = (ids) => sum(ids, (id) => { const i = state.squish.items.find((x) => x.id === id); return i ? RARITY[SQ[i.sid].r].value * (i.shiny ? 2 : 1) : 0; });
 function tradePicker(name, items, picked) {
-  return `<div class="pick-grid">${items.map((i) => `<label class="pick r-${SQ[i.sid].r}"><input type="checkbox" name="${name}" value="${i.id}" ${picked.includes(i.id) ? 'checked' : ''}>${squishySVG(i.sid)}<span>${esc(SQ[i.sid].name)}</span></label>`).join('') || '<div class="small muted">No squishies</div>'}</div>`;
+  return `<div class="pick-grid">${items.filter(tradeable).map((i) => `<label class="pick r-${SQ[i.sid].r}${i.shiny ? ' shiny' : ''}"><input type="checkbox" name="${name}" value="${i.id}" ${picked.includes(i.id) ? 'checked' : ''}>${squishySVG(i.sid, { shiny: i.shiny })}<span>${i.shiny ? '✨ ' : ''}${esc(SQ[i.sid].name)}</span></label>`).join('') || '<div class="small muted">No squishies</div>'}</div>`;
 }
 function familyTradeSheet(preSid, preTo) {
   const me = actor();
@@ -438,11 +468,12 @@ inboxItems = function () {
   return items;
 };
 KID_ROUTES.push('squishies', 'squishy');
-for (const a of ['sq-tab', 'sq-tab-go', 'sq-open', 'sq-buy', 'sq-squish', 'sq-fav', 'sq-fuse', 'sq-trade-new', 'sq-trade-yes', 'sq-trade-no', 'sq-trade-cancel']) KID_ACTIONS.add(a);
+for (const a of ['sq-filter', 'sq-tab', 'sq-tab-go', 'sq-open', 'sq-buy', 'sq-squish', 'sq-fav', 'sq-fuse', 'sq-trade-new', 'sq-trade-yes', 'sq-trade-no', 'sq-trade-cancel']) KID_ACTIONS.add(a);
 
 let squishSaveT;
 Object.assign(actions, {
   'sq-tab': (el) => { ui.sqTab = el.dataset.tab; render(); },
+  'sq-filter': (el) => { ui.sqFilter = el.dataset.f; render(); },
   'sq-tab-go': (el) => { ui.sqTab = el.dataset.tab; go('squishies'); },
   'sq-open': (el) => openBox(el.dataset.box),
   'sq-buy': (el) => {

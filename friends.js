@@ -210,7 +210,7 @@ function myFamEmails() {
 function myShow(mid) {
   const items = state.squish.items.filter((i) => i.who === mid);
   const r = isKidId(mid) ? kidRule(mid) : { show: true };
-  return { n: new Set(items.map((i) => i.sid)).size, total: items.length, fav: items.filter((i) => i.fav).map((i) => i.sid).slice(0, 6), items: r.show ? items.map((i) => [i.id, i.sid]) : [] };
+  return { n: new Set(items.map((i) => i.sid)).size, total: items.length, fav: items.filter((i) => i.fav).map((i) => i.sid).slice(0, 6), items: r.show ? items.filter((i) => SQ[i.sid]?.r !== 'U').map((i) => (i.shiny ? [i.id, i.sid, 1] : [i.id, i.sid])) : [] };
 }
 function publishFamily() {
   const d = circle(), f = famId();
@@ -483,7 +483,7 @@ function friendTradeSheet(toKey) {
   const locked = lockedIds();
   const mine = myItems(me).filter((i) => !locked.has(i.id));
   const lockedThem = new Set(friendLockedIds());
-  const theirs = (d.shows[toKey]?.items || []).filter(([iid]) => !lockedThem.has(iid)).map(([id, sid]) => ({ id, sid }));
+  const theirs = (d.shows[toKey]?.items || []).filter(([iid]) => !lockedThem.has(iid)).map(([id, sid, sh]) => ({ id, sid, shiny: !!sh }));
   openSheet({
     title: `🔁 Trade with ${them.name}`,
     saveLabel: 'Send offer',
@@ -497,8 +497,8 @@ function friendTradeSheet(toKey) {
     },
     onSave() {
       const f = $('#sheetForm');
-      const give = [...f.querySelectorAll('[name="give"]:checked')].map((x) => [x.value, mine.find((i) => i.id === x.value).sid]);
-      const get = [...f.querySelectorAll('[name="get"]:checked')].map((x) => [x.value, theirs.find((i) => i.id === x.value).sid]);
+      const give = [...f.querySelectorAll('[name="give"]:checked')].map((x) => { const i = mine.find((y) => y.id === x.value); return i.shiny ? [i.id, i.sid, 1] : [i.id, i.sid]; });
+      const get = [...f.querySelectorAll('[name="get"]:checked')].map((x) => { const i = theirs.find((y) => y.id === x.value); return i.shiny ? [i.id, i.sid, 1] : [i.id, i.sid]; });
       if (!give.length && !get.length) { toast('Pick at least one squishy'); return false; }
       const myFam = famId(), needMine = isKidId(me) && kidRule(me).trade === 'approve';
       circleEdit((c) => c.trades.push({ id: uid(), at: Date.now(), from: pkey(me), to: toKey, give, get, status: 'offered', need: { [myFam]: needMine }, ok: { [myFam]: !needMine }, applied: {} }));
@@ -509,7 +509,7 @@ function friendTradeSheet(toKey) {
 }
 function friendTradeCard(t) {
   const me = pkey(), myFam = famId();
-  const row = (list) => `<div class="trade-items">${list.map(([, sid]) => SQ[sid] ? `<span class="ti r-${SQ[sid].r}">${squishySVG(sid)}</span>` : '').join('') || '<span class="small muted">nothing</span>'}</div>`;
+  const row = (list) => `<div class="trade-items">${list.map(([, sid, sh]) => SQ[sid] ? `<span class="ti r-${SQ[sid].r}${sh ? ' shiny' : ''}">${squishySVG(sid, { shiny: !!sh })}</span>` : '').join('') || '<span class="small muted">nothing</span>'}</div>`;
   const waitingFam = Object.keys(t.need || {}).filter((f) => t.need[f] && !t.ok?.[f]);
   const status = t.status === 'offered' ? (t.ok?.[famOf(t.from)] ? (t.to === me ? 'wants to trade with you' : `waiting for ${pName(t.to)}`) : 'waiting for a grown-up’s OK')
     : t.status === 'accepted' ? (waitingFam.length ? `accepted · waiting for ${waitingFam.map(famName).join(' & ')} grown-up OK` : 'finishing…')
@@ -546,7 +546,7 @@ function settleFriendTrades() {
     const outIds = new Set(out.map(([iid]) => iid));
     state.squish.items = state.squish.items.filter((i) => !outIds.has(i.id));
     const other = giver === t.from ? t.to : t.from;
-    for (const [, sid] of inn) if (SQ[sid]) { const isNew = !ownsSid(mid, sid); state.squish.items.push({ id: uid(), who: mid, sid, at: Date.now(), from: 'friend', fromName: pName(other) }); if (isNew) checkSetBonus(mid, SQ[sid].set); }
+    for (const [, sid, sh] of inn) if (SQ[sid]) { const isNew = !ownsSid(mid, sid); state.squish.items.push({ id: uid(), who: mid, sid, at: Date.now(), from: 'friend', fromName: pName(other), ...(sh ? { shiny: true } : {}) }); if (isNew) checkSetBonus(mid, SQ[sid].set); }
     applied[t.id] = true; (t.applied ||= {})[f] = true; edit = true; local = true;
     state.activity = [{ id: uid(), at: Date.now(), who: mid, icon: '🔁', text: `traded squishies with ${pName(other)} (${famName(famOf(other))})`, to: 'squishies' }, ...(state.activity || [])].slice(0, 200);
     if (mid === actor()) setTimeout(() => { confetti(); celebrate('🔁 Trade done!', inn.length ? `You got ${inn.map(([, sid]) => SQ[sid]?.name).filter(Boolean).join(', ')}!` : 'Your gift was delivered 💝'); }, 300);
@@ -626,7 +626,7 @@ views.friend = (param) => {
     <div class="btn-row">${!isMine(k) ? `<button class="btn secondary${likes.includes(me) ? ' liked' : ''}" data-action="fr-like" data-k="${esc(k)}">${likes.includes(me) ? '💖 Liked' : '🤍 Like'}</button>` : ''}${canTrade ? `<button class="btn" data-action="fr-trade" data-k="${esc(k)}">🔁 Trade</button>` : ''}</div>
     ${sh.fav?.length ? `<div class="section-title">⭐ Favorites</div><div class="sq-grid">${sh.fav.filter((s) => SQ[s]).map((s) => sqTile(s, '', 'data-action="noop"')).join('')}</div>` : ''}
     <div class="section-title">Collection</div>
-    ${Object.keys(by).length ? `<div class="sq-grid">${Object.entries(by).sort(([a], [b]) => TIERS.indexOf(SQ[b]?.r) - TIERS.indexOf(SQ[a]?.r)).filter(([s]) => SQ[s]).map(([s, n]) => sqTile(s, n > 1 ? `<i class="sq-count">×${n}</i>` : '', 'data-action="noop"')).join('')}</div>` : '<div class="card empty small">Their collection is private or empty.</div>'}`;
+    ${Object.keys(by).length ? `<div class="sq-grid">${Object.entries(by).sort(([a], [b]) => ALL_TIERS.indexOf(SQ[b]?.r) - ALL_TIERS.indexOf(SQ[a]?.r)).filter(([s]) => SQ[s]).map(([s, n]) => sqTile(s, n > 1 ? `<i class="sq-count">×${n}</i>` : '', 'data-action="noop"')).join('')}</div>` : '<div class="card empty small">Their collection is private or empty.</div>'}`;
 };
 views.fcontrols = () => {
   if (kidHere()) return '<div class="card empty">Ask a grown-up 🙂</div>';
