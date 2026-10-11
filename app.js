@@ -109,7 +109,7 @@ function defaultState() {
     scores: [],
     trivia: [],
     gems: { cfg: {}, log: [], requests: [] },
-    squish: { items: [], trades: [], pity: {}, free: {} },
+    squish: { items: [], trades: [], pity: {}, free: {}, dust: {} },
     friends: { circleId: '', rules: {}, presets: null, muted: {} },
     houses: {},
     avatars: {},
@@ -173,7 +173,7 @@ function migrate(s) {
   s.chat ??= []; s.kudos ??= []; s.checkins ??= {}; s.todos ??= []; s.challenges ??= [];
   s.games ??= []; s.wordle ??= {}; s.scores ??= []; s.trivia ??= [];
   s.gems ??= {}; s.gems.cfg ??= {}; s.gems.log ??= []; s.gems.requests ??= [];
-  s.squish ??= {}; s.squish.items ??= []; s.squish.trades ??= []; s.squish.pity ??= {}; s.squish.free ??= {};
+  s.squish ??= {}; s.squish.items ??= []; s.squish.trades ??= []; s.squish.pity ??= {}; s.squish.free ??= {}; s.squish.dust ??= {};
   s.houses ??= {}; s.houseVotes ??= {}; s.avatars ??= {};
   s.friends ??= {}; s.friends.circleId ??= ''; s.friends.rules ??= {}; s.friends.muted ??= {};
   for (const pr of s.projects) { pr.items ??= []; pr.steps ??= []; }
@@ -1729,7 +1729,7 @@ function autopayCatchUp() {
       if (b.paid?.[d] === undefined) { markBillPaid(b, d, true); n++; }
     }
   }
-  if (n) { save(); setTimeout(() => toast(`🤖 Logged ${n} automatic payment${n > 1 ? 's' : ''}`), 600); }
+  if (n) { save(); setTimeout(() => { if (!(typeof inKidMode === 'function' && inKidMode())) toast(`🤖 Logged ${n} automatic payment${n > 1 ? 's' : ''}`); }, 600); }
   return n;
 }
 

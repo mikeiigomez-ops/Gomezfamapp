@@ -119,6 +119,7 @@ function squishySVG(sid, opts = {}) {
   const acc = s.acc && ACCESSORIES[s.acc] ? ACCESSORIES[s.acc](art.top ?? 28, s, g) : '';
   return `<svg class="sq-svg${opts.cls ? ' ' + opts.cls : ''}${opts.shiny ? ' is-shiny' : ''}" viewBox="0 0 100 100" role="img" aria-label="${esc(s.name)}">${defs}${auraEl}<ellipse cx="50" cy="95" rx="30" ry="3.5" fill="#000" opacity=".1"/>${back}${body}${shine}${front}${art.over || ''}${face}${acc}${sparkles}</svg>`;
 }
+const rarityDots = (r) => `<span class="rdots" title="Trade value">${'◆'.repeat(Math.max(1, ALL_TIERS.indexOf(r) + 1))}</span>`;
 const rarityPill = (r) => `<span class="rar rar-${r}">${RARITY[r].name}</span>`;
 
 /* =========================================================
@@ -149,6 +150,7 @@ const BOXES = {
   free: { name: 'Daily Free Box', emoji: '🎁', cost: 0, odds: { C: 70, R: 24, E: 5, L: 0.9, M: 0.1 }, pity: 0 },
   basic: { name: 'Mystery Box', emoji: '📦', cost: 25, odds: { C: 60, R: 27, E: 9.5, L: 3, M: 0.5 }, pity: 5, pityTier: 'R' },
   deluxe: { name: 'Deluxe Box', emoji: '💝', cost: 75, odds: { C: 0, R: 60, E: 28, L: 10, M: 2 }, pity: 8, pityTier: 'L' },
+  dust: { name: 'Star Dust Box', emoji: '💫', cost: 0, odds: { C: 0, R: 70, E: 22, L: 7, M: 1 }, pity: 0, hidden: true, shiny: 0.03 },
 };
 const pityOf = (who, box) => state.squish.pity[`${who}:${box}`] || 0;
 function rollTier(box, who) {
@@ -180,17 +182,24 @@ function openBox(box) {
   if (box === 'free') {
     if (state.squish.free[who] === today()) { toast('Come back tomorrow for another free box! 🌙'); return; }
     state.squish.free[who] = today();
+  } else if (box === 'dust') {
+    if ((state.squish.dust?.[who] || 0) < DUST_GOAL) { toast(`Collect ${DUST_GOAL} 💫 Star Dust first`); return; }
+    state.squish.dust[who] -= DUST_GOAL;
   } else if (!spendGems(who, b.cost, `${b.name}`, 'squish')) return;
   const tier = rollTier(box, who);
   if (b.pity) { const k = `${who}:${box}`; state.squish.pity[k] = TIERS.indexOf(tier) >= TIERS.indexOf(b.pityTier) ? 0 : pityOf(who, box) + 1; }
   const s = pickFromPool(boxPool(box), tier);
   const shiny = Math.random() < (b.shiny ?? 0.02);
   const { item, isNew } = giveSquishy(who, s.id, box, shiny ? { shiny: true } : {});
+  // Duplicates aren't wasted: they turn into Star Dust toward a free box.
+  const dust = isNew ? 0 : DUST[s.r] || 1;
+  if (dust) { state.squish.dust ||= {}; state.squish.dust[who] = (state.squish.dust[who] || 0) + dust; }
   if (shiny) logAct('✨', `found a SHINY ${s.name}!`, 'squishies');
   if (['L', 'M'].includes(tier)) logAct('🧸', `pulled a ${RARITY[tier].name} ${s.name}!`, 'squishies');
   save();
-  boxReveal(b, item, isNew);
+  boxReveal(b, item, isNew, { dust });
 }
+const DUST = { C: 1, R: 2, E: 4, L: 8, M: 15 }, DUST_GOAL = 10;
 // Rotating shop: four squishies a day, so any squishy can be bought outright eventually.
 function shopToday() {
   const n = Math.max(0, daysBetween('2026-01-01', today()));
@@ -222,7 +231,7 @@ function sqSound(kind) {
 /* =========================================================
    Box reveal overlay
    ========================================================= */
-function boxReveal(b, item, isNew) {
+function boxReveal(b, item, isNew, extra = {}) {
   const s = SQ[item.sid];
   const el = document.createElement('div');
   el.className = 'box-reveal';
@@ -240,12 +249,13 @@ function boxReveal(b, item, isNew) {
       ${rarityPill(s.r)}
       <div class="br-name">${esc(s.name)}</div>
       <div class="small muted">${SETS[s.set] ? `${SETS[s.set][0]} ${SETS[s.set][1]}` : ''}${isNew ? '' : ` · you have ${count}`}</div>
+      ${extra.dust ? `<div class="br-dust">💫 +${extra.dust} Star Dust <span>${Math.min(DUST_GOAL, state.squish.dust?.[item.who] || 0)}/${DUST_GOAL}</span>${(state.squish.dust?.[item.who] || 0) >= DUST_GOAL ? '<b>A free Dust Box is ready! 🎉</b>' : ''}</div>` : ''}
       <div class="btn-row" style="justify-content:center"><button class="btn" data-close>Yay!</button>${b.noAgain ? '' : '<button class="btn secondary" data-again>Open another</button>'}</div></div>`;
     sqSound(['L', 'M', 'U'].includes(s.r) || item.shiny ? 'win' : 'pop');
     if (['E', 'L', 'M', 'U'].includes(s.r) || item.shiny) setTimeout(confetti, 200);
     if (typeof isSimple === 'function' && isSimple(item.who) && readAloudOn(item.who)) speak(`You got ${s.name}! ${RARITY[s.r].name}!`);
     el.querySelector('[data-close]').onclick = () => { el.remove(); render(); };
-    if (el.querySelector('[data-again]')) el.querySelector('[data-again]').onclick = () => { el.remove(); render(); setTimeout(() => (ui.sqTab = 'boxes', go('squishies'))); };
+    if (el.querySelector('[data-again]')) el.querySelector('[data-again]').onclick = () => { el.remove(); ui.sqTab = 'get'; render(); setTimeout(() => go('squishies')); };
   };
   let opening = false;
   el.querySelector('.br-stage').onclick = () => { if (opening) return; opening = true; el.querySelector('.br-box').classList.add('shake'); setTimeout(open, 650); };
@@ -326,7 +336,7 @@ views.squishy = (sid) => {
   const unlock = ult && typeof ultimateInfo === 'function' ? ultimateInfo(s) : null;
   return `<div class="sq-stage r-${s.r}${shinyN ? ' shiny' : ''}"><button class="sq-big${niddo ? ' nd-big' : ''}" ${niddo ? `data-nd="${sid}"` : `data-action="sq-squish" data-sid="${sid}"`} aria-label="${niddo ? 'Squeeze' : 'Squish'}">${squishySVG(sid, { shiny: shinyN > 0 })}</button>
       <div class="sq-title">${shinyN ? '✨ ' : ''}${esc(s.name)}</div>${rarityPill(s.r)}
-      <div class="small muted" style="margin-top:6px">${SETS[s.set] ? `${SETS[s.set][0]} ${SETS[s.set][1]}` : ''}${ult ? '' : ` · worth ${RARITY[s.r].value} ⭐`}${s.blurb ? `<br>${esc(s.blurb)}` : ''}</div>
+      <div class="small muted" style="margin-top:6px">${SETS[s.set] ? `${SETS[s.set][0]} ${SETS[s.set][1]}` : ''}${ult ? '' : ` · ${rarityDots(s.r)}`}${s.blurb ? `<br>${esc(s.blurb)}` : ''}</div>
       ${mine.length ? `<div class="sq-squishes">${niddo ? 'Squeezed' : 'Squished'} <b class="sq-n">${squishes}</b> times · ${niddo ? 'press & hold to squeeze!' : 'tap to squish!'}</div>` : `<div class="sq-squishes">${unlock ? `🔒 ${esc(unlock.how)}` : 'You don’t have this one yet'}</div>`}
     </div>
     ${mine.length ? `<div class="btn-row"><button class="btn secondary" data-action="sq-fav" data-sid="${sid}">${mine.some((i) => i.fav) ? '⭐ Favorite' : '☆ Make favorite'}</button>${ult ? '' : `<button class="btn secondary" data-action="sq-trade-new" data-sid="${sid}">🔁 Trade</button>`}</div>

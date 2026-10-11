@@ -24,7 +24,8 @@ function gemDayEarnings(id) {
 }
 const gemsEarned = (id) => sum(Object.values(gemDayEarnings(id)), (x) => x.capped);
 const gemsLogged = (id) => sum(state.gems.log.filter((l) => l.who === id), (l) => Number(l.n) || 0);
-const gemBalance = (id) => (id ? Math.max(0, gemsEarned(id) + gemsLogged(id)) : 0);
+// The welcome bonus is granted the first time anyone looks at a balance, so every screen shows the same number.
+const gemBalance = (id) => { if (!id) return 0; if (isMember(id) && gemsCfg().welcome && !state.gems.log.some((l) => l.key === 'welcome' && l.who === id)) { gemLog(id, gemsCfg().welcome, 'Welcome bonus 🎉', 'bonus', 'welcome'); save(); } return Math.max(0, gemsEarned(id) + gemsLogged(id)); };
 const gemsToday = (id) => gemDayEarnings(id)[today()] || { n: 0, capped: 0, items: [] };
 function gemLog(who, n, note, kind = 'misc', key = '') {
   if (key && state.gems.log.some((l) => l.key === key && l.who === who)) return false;

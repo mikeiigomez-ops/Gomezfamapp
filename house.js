@@ -128,7 +128,7 @@ function itemHTML(it, room, opts = {}) {
   return `<div class="hi${cls}${opts.sel === it.id ? ' sel' : ''}${opts.newId === it.id ? ' dropin' : ''}" data-hi="${it.id}" style="left:${it.x}%;top:${it.y}%;--z:${z};--s:${it.s || 1};--fx:${it.flip ? -1 : 1};z-index:${zi}${wander}"><span class="hii">${content}</span></div>`;
 }
 function roomHTML(r, opts = {}) {
-  const wall = WALLS[r.wall] || WALLS.cream, floor = FLOORS[r.floor] || FLOORS.wood;
+  const wall = WALLS[opts.wall || r.wall] || WALLS.cream, floor = FLOORS[opts.floor || r.floor] || FLOORS.wood;
   const night = opts.night ?? r.night;
   const avs = (opts.avatars || []).map((v) => `<div class="hav${v.me ? ' me' : ''}" data-av="${v.key}" style="left:${v.x}%;top:${v.y}%;z-index:${2000 + Math.round(v.y * 5)}"><div class="hav-in">${avatarSVG(v.a)}</div>${opts.mini ? '' : `<span class="hav-name">${esc(v.name)}</span>`}</div>`).join('');
   return `<div class="room${night ? ' night' : ''}${opts.edit ? ' editing' : ''}${opts.mini ? ' mini' : ''}" ${opts.attrs || ''} data-room="${r.id}">
@@ -138,7 +138,7 @@ function roomHTML(r, opts = {}) {
     <div class="rm-ceil"></div>
     <div class="rm-floor"><div class="rm-floor-in" style="background:${floor[2]}"></div></div>
     <div class="rm-trim"></div><div class="rm-light"></div>
-    ${r.items.map((it) => itemHTML(it, r, opts)).join('')}${avs}
+    ${r.items.map((it) => itemHTML(it, r, opts)).join('')}${opts.ghost ? itemHTML({ ...opts.ghost, id: 'try' }, r, { ...opts, sel: 'try' }).replace('class="hi', 'class="hi ghost') : ''}${avs}
     ${night ? '<div class="room-dark"></div>' : ''}<div class="rm-vignette"></div>
   </div>`;
 }
@@ -187,9 +187,9 @@ views.house = (pid) => {
       <div class="hs-sky"><span class="hs-cloud"></span><span class="hs-cloud c2"></span>${night ? '<span class="hs-moon">🌙</span>' : '<span class="hs-sun"></span>'}</div>
       ${dollhouse(h, mid, !own, { avatar: avatarOf(mid), avatarAction: own ? 'go' : 'av-wave', avatarTo: own ? 'avatar' : '', bubble: own && !state.avatars?.[mid] ? 'Tap me to dress up!' : '', })}
     </div>
-    <div class="house-stats"><span><b>${h.rooms.length}</b>room${h.rooms.length > 1 ? 's' : ''}</span><span><b>${things}</b>things</span><span><b>${likes.length}</b>❤️ likes</span>${houseOfWeek().winner === mid ? '<span class="how-badge">👑<b>Top house</b></span>' : ''}</div>
     ${own ? `<div class="house-actions"><button data-action="go" data-to="avatar"><span>🧍</span>My avatar</button><button data-action="h-style"><span>🎨</span>House style</button><button data-action="go" data-to="town"><span>🏘️</span>Town</button><button data-action="go" data-to="gems"><span>${GEM}</span>${gemBalance(mid)}</button></div>`
       : `<div class="btn-row"><button class="btn secondary${likes.includes(me) ? ' liked' : ''}" data-action="h-like" data-id="${mid}">${likes.includes(me) ? '💖 Liked' : '🤍 Like'}</button><button class="btn secondary" data-action="h-note" data-id="${mid}">📝 Note</button><button class="btn${myVote === mid ? ' secondary' : ''}" data-action="h-vote" data-id="${mid}">${myVote === mid ? '👑 Voted!' : '👑 Vote'}</button></div>`}
+    <div class="house-stats2"><span>🚪 ${h.rooms.length} room${h.rooms.length > 1 ? 's' : ''}</span><span>🪑 ${things} things</span><span>❤️ ${likes.length}</span>${houseOfWeek().winner === mid ? '<span class="how-badge">👑 Top house</span>' : ''}</div>
     ${likes.length ? `<div class="liked-by small muted">Liked by ${likes.map((id) => `${esc(member(id).emoji)} ${esc(member(id).name)}`).join(', ')}</div>` : ''}
     ${notes.length ? `<div class="section-title">Notes on the door</div><div class="notes">${notes.map((n) => `<div class="note" style="--nc:${['#fff3b0', '#ffd6e0', '#d6ecff', '#d9f5dd'][hashStr(n.id) % 4]}"><div class="note-text">${esc(n.text)}</div><div class="note-foot"><span>${esc(whoName(n.from))} · ${timeAgo(n.at)}</span>${own || n.from === me ? `<button class="note-x" data-action="h-note-del" data-h="${mid}" data-id="${n.id}" aria-label="Remove">✕</button>` : ''}</div></div>`).join('')}</div>` : ''}`;
 };
@@ -205,17 +205,25 @@ views.room = (roomId) => {
   const avatars = edit ? [] : [{ key: owner ? 'me' : 'own', me: owner, a: avatarOf(mid), x: r.av?.x ?? 72, y: r.av?.y ?? 95, name: member(mid).name }];
   if (!owner && me) { const v = ui.hVis?.[r.id] || { x: 24, y: 97 }; avatars.push({ key: 'me', me: true, a: avatarOf(me), x: v.x, y: v.y, name: member(me).name }); }
   const undoN = (ui.hUndo?.[r.id] || []).length;
-  return `<div class="room-tabs">${h.rooms.map((x) => `<button class="${x.id === r.id ? 'on' : ''}" data-action="go" data-to="room/${x.id}"><span>${ROOM_TYPES[x.type]?.[0] || '🏠'}</span>${esc(x.name)}</button>`).join('')}${owner && h.rooms.length < MAX_ROOMS ? '<button class="add" data-action="h-add-room">＋</button>' : ''}</div>
-    <div class="room-head"><button class="mini-btn" data-action="go" data-to="house/${mid}">🏡 ${esc(h.name)}</button>
-      <button class="night-btn" data-action="h-night" data-id="${r.id}" aria-label="Day / night">${night ? '☀️' : '🌙'}</button></div>
-    <div class="room-wrap${edit ? ' editing' : ''}">${roomHTML(r, { edit, sel: ui.hSel, night, avatars, newId: ui.hNew })}
-      ${edit && !seen().hTip ? `<div class="h-tip">✨ Drag things to move them. Tap one to flip, resize or put it away! <button data-action="h-tip-ok">Got it</button></div>` : ''}</div>
-    ${!owner ? `<p class="small muted" style="text-align:center">Visiting ${esc(member(mid).name)}’s ${esc(r.name.toLowerCase())} · tap the floor to walk around!</p>`
-    : edit ? `<div class="hsel-bar${sel ? '' : ' empty'}">${sel ? `<b>${esc(selName)}</b><button data-action="h-flip" aria-label="Flip">↔️</button><button data-action="h-size" data-d="-1" aria-label="Smaller">➖</button><button data-action="h-size" data-d="1" aria-label="Bigger">➕</button><button data-action="h-front" aria-label="Bring forward">⬆️</button><button data-action="h-store" aria-label="Put away">📦</button>` : `<span class="small muted">Tap something in the room to change it</span>`}<button class="undo" data-action="h-undo" ${undoN ? '' : 'disabled'} aria-label="Undo">↩️</button></div>
-      ${shopTray(mid, h, r)}
-      <div class="btn-row"><button class="btn" data-action="h-edit" data-id="">✓ Done</button><button class="btn secondary" data-action="h-room-edit" data-id="${r.id}">⚙️ Room</button></div>`
-    : `<div class="btn-row"><button class="btn" data-action="h-edit" data-id="${r.id}">✏️ Decorate</button><button class="btn secondary" data-action="go" data-to="avatar">🧍 My avatar</button></div>
-      <p class="small muted" style="text-align:center;margin-top:-4px">Tap the floor to walk · tap your avatar to wave 👋</p>`}`;
+  const tr = edit && ui.hTry?.room === r.id ? ui.hTry : null;
+  const trySurf = edit && ui.hTrySurf?.room === r.id ? ui.hTrySurf : null;
+  const opts = { edit, sel: tr ? 'try' : ui.hSel, night, avatars, newId: ui.hNew, ghost: tr ? { f: tr.f, x: tr.x, y: tr.y } : null, wall: trySurf?.kind === 'walls' ? trySurf.id : null, floor: trySurf?.kind === 'floors' ? trySurf.id : null };
+  const tryName = tr ? FURN[tr.f].name : trySurf ? (trySurf.kind === 'walls' ? WALLS : FLOORS)[trySurf.id][0] : '';
+  const tryPrice = tr ? FURN[tr.f].price : trySurf ? (trySurf.kind === 'walls' ? WALLS : FLOORS)[trySurf.id][1] : 0;
+  const bar = tr || trySurf
+    ? `<div class="hsel-bar try"><span class="try-label">Try it: <b>${esc(tryName)}</b></span><button class="try-no" data-action="h-try-cancel" aria-label="No thanks">✕</button><button class="try-yes" data-action="h-try-keep">Keep it · ${GEM} ${tryPrice}</button></div>`
+    : `<div class="hsel-bar${sel ? '' : ' empty'}">${sel ? `<b>${esc(selName)}</b><button data-action="h-flip" aria-label="Flip">↔️</button><button data-action="h-size" data-d="-1" aria-label="Smaller">➖</button><button data-action="h-size" data-d="1" aria-label="Bigger">➕</button><button data-action="h-front" aria-label="Bring forward">⬆️</button><button data-action="h-store" aria-label="Put away">📦</button>` : `<span class="small muted">Tap an item below to try it</span>`}<button class="undo" data-action="h-undo" ${undoN ? '' : 'disabled'} aria-label="Undo">↩️</button><button class="done" data-action="h-edit" data-id="">Done</button></div>`;
+  return `${edit ? '' : `<div class="room-tabs">${h.rooms.map((x) => `<button class="${x.id === r.id ? 'on' : ''}" data-action="go" data-to="room/${x.id}"><span>${ROOM_TYPES[x.type]?.[0] || '🏠'}</span>${esc(x.name)}</button>`).join('')}${owner && h.rooms.length < MAX_ROOMS ? '<button class="add" data-action="h-add-room">＋</button>' : ''}</div>`}
+    <div class="room-stage${edit ? ' editing' : ''}">
+      ${roomHTML(r, opts)}
+      <button class="rs-btn rs-home" data-action="go" data-to="house/${mid}" aria-label="Whole house">🏡</button>
+      <button class="rs-btn rs-night" data-action="h-night" data-id="${r.id}" aria-label="Day / night">${night ? '☀️' : '🌙'}</button>
+      ${edit && !seen().hTip ? `<div class="h-tip">✨ Drag things to move them. Tap one to flip, resize or put it away! <button data-action="h-tip-ok">Got it</button></div>` : ''}
+    </div>
+    ${!owner ? `<p class="room-hint">Visiting ${esc(member(mid).name)}’s ${esc(r.name.toLowerCase())} · tap the floor to walk around!</p>`
+    : edit ? `<div class="h-drawer">${bar}${shopTray(mid, h, r)}</div><div class="h-drawer-space"></div>`
+    : `<div class="room-actions"><button class="btn" data-action="h-edit" data-id="${r.id}">✏️ Decorate</button><button class="btn secondary" data-action="go" data-to="avatar">🧍 My avatar</button></div>
+      <p class="room-hint">Tap the floor to walk · tap your avatar to wave 👋</p>`}`;
 };
 function shopTray(mid, h, r) {
   const cat = ui.hCat || 'furniture';
@@ -355,7 +363,7 @@ function pushUndo(r) {
 }
 function placeItem(r, f, extra = {}) {
   const wall = f && f.place === 'wall';
-  const it = { id: uid(), f: f ? f.id : 'sq', x: 30 + Math.round(Math.random() * 40), y: wall ? 40 + Math.round(Math.random() * 10) : 80 + Math.round(Math.random() * 12), ...extra };
+  const it = { id: uid(), f: f ? f.id : 'sq', x: 30 + Math.round(Math.random() * 40), y: wall ? 40 + Math.round(Math.random() * 10) : f && f.layer === 0 ? 84 : 84 + Math.round(Math.random() * 10), ...extra };
   r.items.push(it);
   ui.hSel = it.id; ui.hNew = it.id;
   if (typeof sqSound === 'function') sqSound('pop');
@@ -366,12 +374,21 @@ function placeItem(r, f, extra = {}) {
    Drag to move (edit mode)
    ========================================================= */
 let hDrag = null;
+// Where an item may go: wall things stay on the back wall, floor things on the floor (anchor = bottom center).
+function snapBox(it) {
+  const f = FURN[it.f];
+  if (!f || it.f === 'sq') return [8, 92, 70, 100];
+  if (f.layer === 0) return [16, 84, 70, 96];
+  if (f.place === 'wall') return [16, 84, 18, 60];
+  if (f.place === 'floor') return [8, 92, 70, 100];
+  return [8, 92, 18, 100];
+}
 document.addEventListener('pointerdown', (e) => {
   const el = e.target.closest('.room.editing .hi');
   if (!el) return;
   const roomEl = el.closest('.room'), rect = roomEl.getBoundingClientRect();
   const found = findRoom(roomEl.dataset.room); if (!found) return;
-  const it = found.r.items.find((x) => x.id === el.dataset.hi); if (!it) return;
+  const it = el.dataset.hi === 'try' ? ui.hTry : found.r.items.find((x) => x.id === el.dataset.hi); if (!it) return;
   e.preventDefault();
   hDrag = { el, it, r: found.r, snap: JSON.stringify({ items: found.r.items, wall: found.r.wall, floor: found.r.floor }), rect, sx: e.clientX, sy: e.clientY, ox: it.x, oy: it.y, moved: false };
   roomEl.querySelectorAll('.hi.sel').forEach((x) => x.classList.remove('sel'));
@@ -383,7 +400,8 @@ document.addEventListener('pointermove', (e) => {
   const { el, it, rect, sx, sy, ox, oy } = hDrag;
   const dx = ((e.clientX - sx) / rect.width) * 100, dy = ((e.clientY - sy) / rect.height) * 100;
   if (Math.abs(dx) + Math.abs(dy) > 1) hDrag.moved = true;
-  const x = Math.max(2, Math.min(98, ox + dx)), y = Math.max(8, Math.min(100, oy + dy));
+  const [x0, x1, y0, y1] = snapBox(it);
+  const x = Math.max(x0, Math.min(x1, ox + dx)), y = Math.max(y0, Math.min(y1, oy + dy));
   el.style.left = x + '%'; el.style.top = y + '%';
   hDrag.x = x; hDrag.y = y;
 });
@@ -393,6 +411,7 @@ for (const ev of ['pointerup', 'pointercancel']) document.addEventListener(ev, (
   hDrag = null;
   el.classList.remove('dragging');
   ui.hSel = it.id;
+  if (it === ui.hTry) { if (moved && x != null) { it.x = x; it.y = y; } render(); return; }
   if (moved && x != null) { const st = ((ui.hUndo ||= {})[r.id] ||= []); st.push(snap); it.x = Math.round(x * 10) / 10; it.y = Math.round(y * 10) / 10; save(); }
   render();
 });
@@ -477,14 +496,14 @@ views.friend = (param) => {
    Wiring
    ========================================================= */
 KID_ROUTES.push('house', 'room', 'town', 'fhouse');
-for (const a of ['h-undo', 'h-tip-ok', 'av-wave', 'h-add-room', 'h-style', 'h-like', 'h-note', 'h-note-del', 'h-vote', 'h-night', 'h-edit', 'h-room-edit', 'h-cat', 'h-pick', 'h-place-sq', 'h-surface', 'h-flip', 'h-size', 'h-front', 'h-store', 'fh-room', 'fh-like']) KID_ACTIONS.add(a);
+for (const a of ['h-try-cancel', 'h-try-keep', 'h-undo', 'h-tip-ok', 'av-wave', 'h-add-room', 'h-style', 'h-like', 'h-note', 'h-note-del', 'h-vote', 'h-night', 'h-edit', 'h-room-edit', 'h-cat', 'h-pick', 'h-place-sq', 'h-surface', 'h-flip', 'h-size', 'h-front', 'h-store', 'fh-room', 'fh-like']) KID_ACTIONS.add(a);
 const curRoom = () => { const r = currentRoute(); return r.name === 'room' ? findRoom(r.param) : null; };
 const selItem = () => { const f = curRoom(); return f ? f.r.items.find((i) => i.id === ui.hSel) : null; };
 Object.assign(actions, {
   'h-add-room': () => addRoomSheet(),
   'h-style': () => houseStyleSheet(),
   'h-room-edit': (el) => { const f = findRoom(el.dataset.id); if (f) roomSheet(f.r); },
-  'h-edit': (el) => { ui.hEdit = el.dataset.id || null; ui.hSel = null; render(); },
+  'h-edit': (el) => { ui.hEdit = el.dataset.id || null; ui.hSel = null; ui.hTry = null; ui.hTrySurf = null; render(); window.scrollTo(0, 0); },
   'h-cat': (el) => { ui.hCat = el.dataset.c; render(); },
   'h-night': (el) => { const f = findRoom(el.dataset.id); if (!f) return; if (canEdit(f.mid)) { f.r.night = !f.r.night; save(); } else { ui.hPeek ||= {}; ui.hPeek[f.r.id] = !(ui.hPeek[f.r.id] ?? f.r.night); } render(); },
   'h-pick': (el) => {
@@ -493,6 +512,13 @@ Object.assign(actions, {
     if (f.unlock && !isUnlocked(f, found.mid)) { toast(`🔒 ${ULTS[f.unlock]?.how || 'Keep going'} to earn this!`); return; }
     if (h.inv[f.id] > 0) { pushUndo(found.r); h.inv[f.id]--; placeItem(found.r, f); save(); render(); return; }
     if (!f.price) { pushUndo(found.r); placeItem(found.r, f); save(); render(); return; }
+    // Try before you buy: a see-through preview you can drag around, then Keep it or ✕.
+    const wall = f.place === 'wall';
+    ui.hTrySurf = null;
+    ui.hTry = { room: found.r.id, f: f.id, x: 50, y: wall ? 42 : f.layer === 0 ? 84 : 90 };
+    if (typeof sqSound === 'function') sqSound('pop');
+    render();
+    return;
     openSheet({
       title: `Buy ${f.name}?`, saveLabel: `${GEM} ${f.price}`, values: {},
       fields: [{ type: 'html', html: `<div class="buy-preview"><span style="font-size:64px">${f.svg ? '' : f.e}</span>${f.svg ? `<div style="width:110px">${FURN_SVG[f.svg]()}</div>` : ''}<div><b>${esc(f.name)}</b><div class="small muted">You have ${gemBalance(found.mid)} ${GEM}${owned(h, f.id) ? ` · you own ${owned(h, f.id)}` : ''}</div></div></div>` }],
@@ -516,7 +542,11 @@ Object.assign(actions, {
     const walls = el.dataset.kind === 'walls', src = walls ? WALLS : FLOORS, have = walls ? found.h.walls : found.h.floors, id = el.dataset.id;
     const [name, price] = src[id];
     const apply = () => { pushUndo(found.r); if (walls) found.r.wall = id; else found.r.floor = id; have[id] = true; };
-    if (!price || have[id]) { apply(); save(); render(); return; }
+    if (!price || have[id]) { ui.hTrySurf = null; apply(); save(); render(); return; }
+    ui.hTry = null;
+    ui.hTrySurf = { room: found.r.id, kind: el.dataset.kind, id };
+    render();
+    return;
     openSheet({ title: `${name} ${walls ? 'wallpaper' : 'floor'}?`, saveLabel: `${GEM} ${price}`, values: {}, fields: [{ type: 'html', html: `<div class="h-preview" style="background:${src[id][2]}"></div><p class="small muted">Once you buy it, you can use it in every room.</p>` }],
       onSave() { if (!spendGems(found.mid, price, `${name} ${walls ? 'wallpaper' : 'floor'}`, 'house')) return false; apply(); } });
   },
@@ -524,6 +554,27 @@ Object.assign(actions, {
   'h-size': (el) => { const it = selItem(); if (it) { pushUndo(curRoom().r); it.s = Math.max(0.5, Math.min(2.2, Math.round(((it.s || 1) + Number(el.dataset.d) * 0.15) * 100) / 100)); save(); render(); } },
   'h-front': () => { const f = curRoom(), it = selItem(); if (f && it) { pushUndo(f.r); for (const x of f.r.items) delete x.zb; it.zb = 1; save(); render(); toast('⬆️ In front'); } },
   'h-store': () => { const f = curRoom(), it = selItem(); if (!f || !it) return; pushUndo(f.r); f.r.items = f.r.items.filter((x) => x !== it); if (it.f !== 'sq') f.h.inv[it.f] = (f.h.inv[it.f] || 0) + 1; ui.hSel = null; save(); render(); toast('📦 Put away — find it in the shop tray'); },
+  'h-try-cancel': () => { ui.hTry = null; ui.hTrySurf = null; render(); },
+  'h-try-keep': () => {
+    const found = curRoom(); if (!found) return;
+    const mid = found.mid;
+    if (ui.hTry) {
+      const t = ui.hTry, f = FURN[t.f];
+      if (!spendGems(mid, f.price, `Bought a ${f.name} for my house`, 'house')) return;
+      pushUndo(found.r);
+      const it = { id: uid(), f: f.id, x: t.x, y: t.y };
+      found.r.items.push(it); ui.hSel = it.id; ui.hNew = it.id; ui.hTry = null;
+      if (f.price >= 150) logAct('🏡', `got a ${f.name} for their Dream House!`, 'house/' + mid);
+    } else if (ui.hTrySurf) {
+      const t = ui.hTrySurf, walls = t.kind === 'walls', src = walls ? WALLS : FLOORS, [name, price] = src[t.id];
+      if (!spendGems(mid, price, `${name} ${walls ? 'wallpaper' : 'floor'}`, 'house')) return;
+      pushUndo(found.r);
+      if (walls) { found.r.wall = t.id; found.h.walls[t.id] = true; } else { found.r.floor = t.id; found.h.floors[t.id] = true; }
+      ui.hTrySurf = null;
+    }
+    if (typeof sqSound === 'function') sqSound('win');
+    confetti(); save(); render();
+  },
   'h-undo': () => {
     const f = curRoom(); if (!f) return;
     const st = ui.hUndo?.[f.r.id]; if (!st?.length) return;
@@ -565,10 +616,11 @@ afterRender = function () {
   _afterRenderH();
   const r = currentRoute();
   if (r.name === 'house' && (!r.param || r.param === actor())) { seen().houseNotes = Date.now(); try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch {} }
-  if (r.name !== 'room') { ui.hEdit = null; ui.hSel = null; ui.hUndo = {}; }
+  if (r.name !== 'room') { ui.hEdit = null; ui.hSel = null; ui.hUndo = {}; ui.hTry = null; ui.hTrySurf = null; }
+  document.body.classList.toggle('house-editing', r.name === 'room' && !!ui.hEdit);
   if (ui.hNew) setTimeout(() => { ui.hNew = null; }, 700);
   if (r.name !== 'fhouse') ui.fRoom = null;
-  document.body.classList.toggle('route-room', r.name === 'room' || r.name === 'fhouse');
+  document.body.classList.toggle('route-room', ['room', 'fhouse', 'house'].includes(r.name));
 };
 // More grid + kid home entry points
 const _moreGridH = moreGrid;
