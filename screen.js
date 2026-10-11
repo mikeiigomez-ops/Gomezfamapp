@@ -328,7 +328,7 @@ views.home = () => {
     { to: 'budget', e: '🧾', label: 'Bills', sub: billsDue ? `${billsDue} due soon` : 'All paid', color: '#10b981', attrs: 'data-btab="bills"', alert: billsDue > 0 },
     { to: 'chat', e: '💬', label: 'Chat', sub: unread ? `${unread} new` : 'Family', color: '#8b5cf6', badge: unread || '' },
     { to: 'kids', e: '🧒', label: 'Kids', sub: kids().length ? `${kids().length} kid${kids().length > 1 ? 's' : ''}` : 'Set up', color: '#ec4899' },
-    { to: 'games', e: '🎮', label: 'Games', sub: turns ? 'Your turn!' : 'Play', color: '#0ea5e9', badge: turns || '' },
+    { to: 'play', e: '🎮', label: 'Play', sub: turns ? 'Your turn!' : 'Games & collecting', color: '#0ea5e9', badge: turns || '' },
     { to: 'shop', e: '🛒', label: 'Groceries', sub: listN ? `${listN} on list` : 'List', color: '#84cc16' },
     { to: 'more', e: '✨', label: 'More', sub: 'Everything else', color: '#64748b' },
   ];
@@ -372,6 +372,7 @@ views.more = (g) => {
   }
   return `<div class="launch">${groups.map((x) => {
     const [e, color] = MORE_GROUPS[x.label] || ['📁', '#64748b'];
+    if (x.label === 'Play & collect') return tileHTML({ to: 'play', e, label: 'Play', sub: 'Games & collecting', color });
     return tileHTML({ to: 'more/' + slug(x.label), e, label: x.label, sub: `${x.tiles.length} things`, color });
   }).join('')}${tileHTML({ to: 'settings', e: '⚙️', label: 'Settings', sub: 'Family & app', color: '#64748b' })}</div>`;
 };
@@ -467,3 +468,34 @@ function simpleLauncher(id) {
     </section>
     <div class="launch big">${tiles.map(tileHTML).join('')}</div>`;
 }
+
+/* ---------- Play: every game and every collecting thing on one screen ---------- */
+Object.assign(TITLES, { play: 'Play' });
+views.play = () => {
+  const me = actor();
+  const turns = typeof myTurnGames === 'function' ? myTurnGames().length : 0;
+  const liveC4 = me ? c4Games().filter((g) => !c4Status(g).over && (g.a === me || g.b === me)).length : 0;
+  const wrec = me ? wordOf(me) : null;
+  const triv = me ? triviaWaiting(me).length : 0;
+  const h = me ? houseOf(me) : null;
+  const n = me ? new Set(myItems(me).map((i) => i.sid)).size : 0;
+  const free = me && state.squish.free[me] !== today();
+  const kid = kidModeId();
+  const friendsOk = typeof views.friends === 'function' && (!kid || (typeof kidRule === 'function' && kidRule(kid).on));
+  const tiles = [
+    { to: 'word', e: '🔤', label: 'Family Word', sub: wrec?.done ? (wrec.won ? `Solved in ${wrec.g.length} ✓` : 'Done today') : 'Today’s puzzle', color: '#16a34a' },
+    liveC4 ? { to: 'games', e: '🔴', label: 'Connect Four', sub: turns ? 'Your turn!' : `${liveC4} game${liveC4 > 1 ? 's' : ''} going`, color: '#dc2626', badge: turns || '' }
+      : { act: 'c4-new', e: '🔴', label: 'Connect Four', sub: 'Challenge', color: '#dc2626' },
+    { to: 'memory', e: '🃏', label: 'Memory', sub: 'Find the pairs', color: '#7c3aed' },
+    { act: 'trivia-open', e: '🧠', label: 'Trivia', sub: triv ? `${triv} new!` : 'Family quiz', color: '#0284c7', badge: triv || '' },
+    { to: 'squishies', e: '🧸', label: 'Squishies', sub: free ? '🎁 Free box!' : `${n} collected`, color: '#ec4899', badge: free ? '!' : '' },
+    { to: 'house', e: '🏡', label: 'Dream House', sub: h ? `${h.rooms.length} room${h.rooms.length > 1 ? 's' : ''}` : 'Move in!', color: '#8b5cf6' },
+    { to: 'avatar', e: '🧍', label: 'My avatar', sub: 'Dress up', color: '#f97316' },
+    { to: 'town', e: '🏘️', label: 'Town', sub: 'Visit & vote', color: '#f59e0b' },
+    { to: 'gems', e: GEM, label: 'Gems', sub: me ? `${gemBalance(me)} gems` : 'Wallets', color: '#7c3aed' },
+    friendsOk ? { to: 'friends', e: '👯', label: 'Friends', sub: 'Trade & chat', color: '#f43f5e' } : null,
+    { to: 'games', e: '🏆', label: 'Scores', sub: 'Champs', color: '#eab308' },
+  ].filter(Boolean);
+  return `${needMe()}<div class="launch">${tiles.map(tileHTML).join('')}</div>`;
+};
+KID_ROUTES.push('play');
