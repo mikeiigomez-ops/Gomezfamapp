@@ -367,16 +367,15 @@ function extraEventsOn(s) {
   return out;
 }
 
-const WHATS_NEW = 'v14';
+const WHATS_NEW = 'v15';
 function whatsNewCard() {
   if (state.settings.whatsNewSeen === WHATS_NEW) return '';
   const item = (attrs, emoji, title, text) => `<button class="row tap" style="width:100%;text-align:left;padding:10px 0;background:none" ${attrs}><div class="avatar">${emoji}</div><div class="grow"><div class="title">${title}</div><div class="sub" style="white-space:normal">${text}</div></div>${ICON.chev}</button>`;
   return `<div class="card install-tip">
-    <h3>✨ A new look: screens, not scrolling</h3>
-    ${item('data-action="go" data-to="home"', '🔲', 'Tap a tile to go in', 'Home, More and Kid home are now big tiles. The back button brings you out')}
-    ${item('data-action="go" data-to="today"', '☀️', 'My Day', 'Everything that used to be on Home: today, bills, chores, birthdays')}
-    ${item('data-action="go" data-to="memory"', '🃏', 'Games go full screen', 'Every board fits, on every level')}
-    <div class="small muted" style="margin:8px 0 10px">Longer screens are split into pages: swipe left/right or tap ‹ ›. On iPad, sideways gives you two pages at once.</div>
+    <h3>🗺️ New: Squishvale adventure</h3>
+    ${item('data-action="go" data-to="world"', '⭐', 'The Lost Squish Stars', '8 chapters across a big open world. Walk around, help the townsfolk, play mini-games and bring the stars home')}
+    ${item('data-action="go" data-to="world"', '🫧', 'Catch squishies in the wild', 'Walk through tall grass and toss a bubble when the ring turns green')}
+    ${item('data-action="go" data-to="world"', '🤝', 'Play together', 'Everyone in the family shows up on the map live. Stand close for a teamwork bonus')}
     <button class="btn secondary block" data-action="whats-new-ok">Got it</button>
   </div>`;
 }

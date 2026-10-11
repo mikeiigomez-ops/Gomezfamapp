@@ -7,7 +7,7 @@
 
 const LIVE_TTL = 90 * 1000;       // a spot older than this means they left
 const LIVE_BEAT = 25 * 1000;      // re-send while sitting still
-const LIVE_ROUTES = ['house', 'room', 'town'];
+const LIVE_ROUTES = ['house', 'room', 'town', 'world'];
 const Live = { all: {}, sent: '', timer: null, beat: null, unsub: null, fallback: false, stopT: null, seenHere: {} };
 
 const liveOn = () => typeof Sync !== 'undefined' && !!Sync.ref && !!Sync.fb && Sync.cfg?.familyId && (Sync.status === 'synced' || Sync.status === 'offline');
@@ -16,6 +16,7 @@ const liveFresh = (v) => v && v.room && Date.now() - (v.at || 0) < LIVE_TTL;
 /* ---------- Where am I? ---------- */
 function liveMine() {
   const me = actor(), { name, param } = currentRoute();
+  if (me && name === 'world' && document.visibilityState === 'visible' && typeof worldLive === 'function') { const w = worldLive(); if (w) return { room: '', w, at: Date.now() }; }
   if (!me || name !== 'room' || document.visibilityState !== 'visible') return { room: '', at: Date.now() };
   const found = findRoom(param);
   if (!found || ui.hEdit === found.r.id) return { room: '', at: Date.now() };
@@ -35,8 +36,8 @@ async function liveSend(force) {
   const rec = liveMine();
   const key = JSON.stringify({ ...rec, at: 0 });
   if (!force && key === Live.sent) return;
-  if (!rec.room && !Live.sent) return; // never been anywhere: nothing to clear
-  Live.sent = rec.room ? key : '';
+  if (!rec.room && !rec.w && !Live.sent) return; // never been anywhere: nothing to clear
+  Live.sent = rec.room || rec.w ? key : '';
   const fs = Sync.fb.fs;
   try {
     if (!Live.fallback) await fs.setDoc(fs.doc(Sync.fb.db, 'families', Sync.cfg.familyId, 'live', me), rec);
@@ -47,7 +48,7 @@ async function liveSend(force) {
 }
 function liveBeat() {
   clearInterval(Live.beat);
-  Live.beat = setInterval(() => { if (currentRoute().name === 'room') liveSend(true); }, LIVE_BEAT);
+  Live.beat = setInterval(() => { if (['room', 'world'].includes(currentRoute().name)) liveSend(true); }, LIVE_BEAT);
 }
 
 /* ---------- Receive ---------- */
