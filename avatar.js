@@ -190,14 +190,13 @@ views.avatar = (pid) => {
     shoes: `<div class="av-grid">${Object.entries(AV_SHOES).map(([k, [l]]) => opt('shoes', k, l, 'body')).join('')}</div><div class="av-label">Color</div>${swatches('shoesC', AV_CLOTH.map((c, i) => [i, c]))}`,
     extras: `<div class="av-grid">${Object.entries(AV_ACC).map(([k, [l]]) => opt('acc', k, l)).join('')}</div>`,
   }[tab];
-  return `<div class="av-stage" style="--c:${member(mid).color}">
+  return `<div class="av-layout"><div class="av-stage" style="--c:${member(mid).color}">
       <div class="av-big">${avatarSVG(a, { cls: 'idle' })}</div>
       <div class="av-name">${esc(member(mid).name)}</div>
-      <div class="av-stage-btns"><button data-action="av-random" data-id="${mid}">🎲 Surprise me</button><span class="gem-pill">${GEM} <b>${gemBalance(mid)}</b></span></div>
+      <div class="av-stage-btns"><button data-action="av-random" data-id="${mid}">🎲 Surprise me</button><span class="gem-pill">${GEM} <b>${gemBalance(mid)}</b></span><button class="av-done" data-action="go" data-to="house${mid !== me ? '/' + mid : ''}">✓ Done</button></div>
     </div>
-    <div class="av-tabs">${AV_TABS.map(([k, e, l]) => `<button class="${tab === k ? 'active' : ''}" data-action="av-tab" data-tab="${k}"><span>${e}</span>${l}</button>`).join('')}</div>
-    <div class="card av-panel">${body}</div>
-    <button class="btn block" data-action="go" data-to="house${mid !== me ? '/' + mid : ''}">✓ Done — go to my house</button>`;
+    <div class="av-side"><div class="av-tabs">${AV_TABS.map(([k, e, l]) => `<button class="${tab === k ? 'active' : ''}" data-action="av-tab" data-tab="${k}"><span>${e}</span>${l}</button>`).join('')}</div>
+    <div class="card av-panel" data-pages="av-${tab}">${body}</div></div></div>`;
 };
 function setAvatar(mid, patch) {
   state.avatars[mid] = { ...avatarOf(mid), ...patch };

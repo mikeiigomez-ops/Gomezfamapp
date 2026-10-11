@@ -367,20 +367,16 @@ function extraEventsOn(s) {
   return out;
 }
 
-const WHATS_NEW = 'v11';
+const WHATS_NEW = 'v14';
 function whatsNewCard() {
   if (state.settings.whatsNewSeen === WHATS_NEW) return '';
   const item = (attrs, emoji, title, text) => `<button class="row tap" style="width:100%;text-align:left;padding:10px 0;background:none" ${attrs}><div class="avatar">${emoji}</div><div class="grow"><div class="title">${title}</div><div class="sub" style="white-space:normal">${text}</div></div>${ICON.chev}</button>`;
   return `<div class="card install-tip">
-    <h3>🏡 Dream House is here!</h3>
-    ${item('data-action="go" data-to="avatar"', '🧍', 'Make your avatar', 'Hair, eyes, outfits, shoes & accessories — then walk around your rooms and wave')}
-    ${item('data-action="go" data-to="house"', '🏡', 'Dream House', 'Your own dollhouse — decorate rooms, adopt pets, show off squishies, flip the lights to night')}
-    ${item('data-action="go" data-to="town"', '🏘️', 'Gomez Town', 'Visit each other, leave ❤️ & notes, vote House of the Week (winner gets 30 💎)')}
-    ${item('data-action="go" data-to="gems"', '💎', 'Gems', 'Kids earn Gems from chores, routines & high-fives — or trade allowance for them (with your OK)')}
-    ${item('data-action="go" data-to="squishies"', '🧸', 'Squishies', '54 collectible squishies: mystery boxes with fair odds, a daily free box, a shop, fusing & a collection book')}
-    ${item('data-action="go" data-to="squishies" data-sq-tab="unlocks"', '👑', '183 collectibles to find', 'Niddos you press & hold to squeeze, 🎃 Spooky season, ✨ shinies, and Ultimates you earn by doing chores')}
-    ${item('data-action="go" data-to="friends"', '👯', 'Friends Circles', 'Invite friend families to trade squishies and chat — with parent controls for every kid')}
-    <div class="small muted" style="margin:8px 0 10px">Tip: swipe a list row <b>right</b> to check it off, <b>left</b> to delete. Drag any sheet down to close it.</div>
+    <h3>✨ A new look: screens, not scrolling</h3>
+    ${item('data-action="go" data-to="home"', '🔲', 'Tap a tile to go in', 'Home, More and Kid home are now big tiles. The back button brings you out')}
+    ${item('data-action="go" data-to="today"', '☀️', 'My Day', 'Everything that used to be on Home: today, bills, chores, birthdays')}
+    ${item('data-action="go" data-to="memory"', '🃏', 'Games go full screen', 'Every board fits, on every level')}
+    <div class="small muted" style="margin:8px 0 10px">Longer screens are split into pages: swipe left/right or tap ‹ ›. On iPad, sideways gives you two pages at once.</div>
     <button class="btn secondary block" data-action="whats-new-ok">Got it</button>
   </div>`;
 }
@@ -498,7 +494,7 @@ Object.assign(actions, {
   'open-search': () => {
     if (location.hash !== '#search') history.pushState(null, '', '#search');
     render();
-    window.scrollTo(0, 0);
+    viewEl.scrollTop = 0;
     const input = $('#searchInput');
     if (input) { input.focus(); input.setSelectionRange(input.value.length, input.value.length); }
   },
@@ -894,7 +890,7 @@ async function loadWeather(force) {
     if (!res.ok) throw new Error('weather ' + res.status);
     const data = await res.json();
     localStorage.setItem(WX_KEY, JSON.stringify({ t: Date.now(), lat: loc.lat, lon: loc.lon, data }));
-    if (currentRoute().name === 'home') render();
+    if (['home', 'today'].includes(currentRoute().name)) render();
   } catch (e) { console.warn('weather', e); }
   finally { wxLoading = false; }
 }

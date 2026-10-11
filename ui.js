@@ -3,8 +3,8 @@
 'use strict';
 
 /* ---------- Large title → compact title on scroll ---------- */
-function updateScrolled() { document.body.classList.toggle('scrolled', window.scrollY > 24); }
-window.addEventListener('scroll', updateScrolled, { passive: true });
+function updateScrolled() { document.body.classList.toggle('scrolled', viewEl.scrollTop > 4); }
+viewEl.addEventListener('scroll', updateScrolled, { passive: true });
 
 /* ---------- Tab indicator ---------- */
 function moveTabInk() {

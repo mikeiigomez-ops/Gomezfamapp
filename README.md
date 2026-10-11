@@ -3,7 +3,8 @@
 A family web app you can install on your iPhone home screen. It has no build step and no server: plain HTML, CSS and JavaScript.
 
 ## Features
-- **Home**: today's events, tonight's dinner, budget left, bills due, chores, upcoming birthdays and trip countdowns
+- **Screen-based layout**: every screen fits the display, with no scrolling. Home, More and Kid home are screens of big tiles. Longer screens split into pages you swipe or tap through (‹ 1 of 3 ›), and games go full screen with the board sized to fit. On iPad, tiles and boards grow to fill the screen, and in landscape a side rail replaces the tab bar and two pages show side by side
+- **Home**: a greeting with today's highlights and tiles for everything; **My Day** has today's events, tonight's dinner, budget left, bills due, chores, upcoming birthdays and trip countdowns
 - **Budget**: monthly category budgets, a spending and income log, and **Recurring** bills and paychecks (monthly, every 2 weeks, weekly or yearly) with a 2-week "coming up" view, safe-to-spend until payday, cash flow, and bulk add by pasting
 - **Shopping**: a quick-add list grouped by aisle ("2 lb chicken" works), staples you always buy with stocked/low/out status, and sharing the list by text
 - **Calendar**: color-coded by family member, repeating events, birthdays, bill due dates and US holidays

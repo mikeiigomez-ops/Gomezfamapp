@@ -1422,15 +1422,19 @@ function render() {
     }
     if (typeof afterRender === 'function') afterRender();
   };
-  // Smooth cross-fade between screens (skipped in automated browsers so tests see the DOM immediately).
-  if (changed && document.startViewTransition && !navigator.webdriver && !reduceMotion()) document.startViewTransition(paint);
-  else paint();
+  // Paint synchronously. (Safari's view transitions sometimes left the new screen undrawn until a scroll,
+  // so screens now just fade in with a plain opacity animation.)
+  paint();
+  if (changed) {
+    viewEl.scrollTop = 0;
+    if (!navigator.webdriver && !reduceMotion()) { viewEl.classList.remove('enter'); void viewEl.offsetWidth; viewEl.classList.add('enter'); }
+  }
 }
 function go(to) {
   if (location.hash.slice(1) === to) { render(); return; }
   location.hash = to;
 }
-window.addEventListener('hashchange', () => { if (!$('#sheet').hidden) closeSheet(); render(); window.scrollTo(0, 0); });
+window.addEventListener('hashchange', () => { if (!$('#sheet').hidden) closeSheet(); render(); });
 
 const ACCENTS = {
   terracotta: ['#c9583a', '#e8954f'], ocean: ['#2563d6', '#19a3c9'], forest: ['#1f7a63', '#6aa84f'],

@@ -80,9 +80,9 @@ views.c4 = (id) => {
   const player = (pid, cls) => `<div class="c4-player ${cls}${!st.over && st.turn === pid ? ' turn' : ''}"><span class="disc ${cls}"></span><b>${esc(playerEmoji(pid))} ${esc(playerName(pid))}</b></div>`;
   return `<div class="c4-players">${player(g.a, 'red')}<span class="small muted">vs</span>${player(g.b, 'yellow')}</div>
     <div class="c4-status${st.over ? ' over' : ''}">${esc(status)}</div>
-    <div class="c4-board${can ? ' live' : ''}">${[...Array(C4_COLS)].map((_, c) => `<button class="c4-col" data-action="c4-drop" data-id="${g.id}" data-c="${c}" ${can && grid[c].length < C4_ROWS ? '' : 'disabled'} aria-label="Column ${c + 1}">
+    <div class="game-stage"><div class="c4-board${can ? ' live' : ''}">${[...Array(C4_COLS)].map((_, c) => `<button class="c4-col" data-action="c4-drop" data-id="${g.id}" data-c="${c}" ${can && grid[c].length < C4_ROWS ? '' : 'disabled'} aria-label="Column ${c + 1}">
       ${[...Array(C4_ROWS)].map((_, k) => { const r = C4_ROWS - 1 - k; const p = grid[c][r]; return `<span class="c4-cell">${p !== undefined ? `<span class="disc ${p ? 'yellow' : 'red'}${c === lastCol && r === lastRow ? ' drop' : ''}${winSet.has(`${c},${r}`) ? ' win' : ''}" style="--fall:${k + 1}"></span>` : ''}</span>`; }).join('')}
-    </button>`).join('')}</div>
+    </button>`).join('')}</div></div>
     ${g.mode === 'remote' && !st.over ? `<p class="small muted" style="text-align:center;margin:10px 0">${st.turn === me ? 'Tap a column to drop your piece.' : `${playerName(st.turn)} plays on their phone — you’ll get a 🔔 when it’s your turn.`}</p>` : ''}
     <div class="btn-row">${st.over ? `<button class="btn" data-action="c4-rematch" data-id="${g.id}">🔁 Rematch</button>` : g.mode !== 'remote' && g.moves.length ? `<button class="btn secondary" data-action="c4-undo" data-id="${g.id}">↩️ Undo</button>` : ''}<button class="btn secondary" data-action="c4-del" data-id="${g.id}">${st.over ? 'Remove' : 'Quit game'}</button></div>`;
 };
@@ -172,12 +172,12 @@ views.word = () => {
   const family = state.members.filter((m) => m.id !== me && wordOf(m.id)?.g?.length);
   return `<div class="wd-head"><span>${fmtDate(today(), { weekday: 'long', month: 'short', day: 'numeric' })} · ${len} letters</span><span>🔥 ${wordStreak(me)} day streak</span></div>
     ${len === 4 && hint ? `<div class="wd-hint">${ui.wordHint ? `Hint: <span class="big-hint">${hint}</span>` : '<button class="mini-btn" data-action="word-hint">💡 Show a hint</button>'}</div>` : ''}
-    <div class="wd-board" style="--len:${len}">${board}</div>
+    <div class="game-stage"><div class="wd-board" style="--len:${len}">${board}</div></div>
     ${rec.done ? `<div class="card wd-result">${rec.won ? `<div class="wd-big">🎉 ${['Genius!', 'Amazing!', 'Great!', 'Nice!', 'Phew!', 'Just made it!'][rec.g.length - 1]}</div><div>Solved in ${rec.g.length}/6</div>` : `<div class="wd-big">So close!</div><div>The word was <b>${w}</b></div>`}
       <div class="btn-row"><button class="btn" data-action="word-share">📤 Share</button><button class="btn secondary" data-action="go" data-to="games">More games</button></div>
       <div class="small muted">New word tomorrow!</div></div>` : ''}
     ${kb}
-    ${family.length ? `<div class="section-title">Family today</div><div class="card wd-family">${family.map((m) => { const r = wordOf(m.id); const fw = dailyWord(r.len || wordLen(m.id)).w; return `<div class="wf">${avatar(m, true)}<div><b>${esc(m.name)}</b> <span class="small muted">${r.done ? (r.won ? `${r.g.length}/6` : 'X/6') : 'playing…'} · 🔥${wordStreak(m.id)}</span>${miniGrid(r, fw)}</div></div>`; }).join('')}</div>` : ''}`;
+    ${family.length ? `<div class="section-title game-extra">Family today</div><div class="card wd-family game-extra">${family.map((m) => { const r = wordOf(m.id); const fw = dailyWord(r.len || wordLen(m.id)).w; return `<div class="wf">${avatar(m, true)}<div><b>${esc(m.name)}</b> <span class="small muted">${r.done ? (r.won ? `${r.g.length}/6` : 'X/6') : 'playing…'} · 🔥${wordStreak(m.id)}</span>${miniGrid(r, fw)}</div></div>`; }).join('')}</div>` : ''}`;
 };
 function wordKey(k) {
   const me = actor(); if (!me) return;
@@ -236,14 +236,15 @@ views.memory = () => {
   const defLevel = typeof isSimple === 'function' && me && isSimple(me) ? 'easy' : 'normal';
   if (!ui.mem) memStart(defLevel);
   const m = ui.mem, [, , cols] = MEM_LEVELS[m.level];
-  const board = `<div class="mem-board" style="--cols:${cols}">${m.cards.map((c, i) => `<button class="mem-card${m.up.includes(i) || m.matched.includes(i) ? ' up' : ''}${m.matched.includes(i) ? ' got' : ''}" data-action="mem-flip" data-i="${i}" aria-label="Card"><span class="mem-back">❓</span><span class="mem-front">${c}</span></button>`).join('')}</div>`;
+  const board = `<div class="mem-board" style="--cols:${cols};--rows:${m.cards.length / cols}">${m.cards.map((c, i) => `<button class="mem-card${m.up.includes(i) || m.matched.includes(i) ? ' up' : ''}${m.matched.includes(i) ? ' got' : ''}" data-action="mem-flip" data-i="${i}" aria-label="Card"><span class="mem-back">❓</span><span class="mem-front">${c}</span></button>`).join('')}</div>`;
   const secs = m.done ? m.secs : 0;
   const best = memBest(m.level).slice(0, 5);
   return `<div class="segmented">${Object.entries(MEM_LEVELS).map(([k, [, l]]) => `<button class="${m.level === k ? 'active' : ''}" data-action="mem-level" data-l="${k}">${l}</button>`).join('')}</div>
     <div class="mem-stats"><span>🃏 <b class="mem-moves">${m.moves}</b> moves</span><span>✅ <b class="mem-pairs">${m.matched.length / 2}</b>/${m.cards.length / 2}</span></div>
-    ${board}
-    ${m.done ? `<div class="card wd-result"><div class="wd-big">🎉 You matched them all!</div><div>${m.moves} moves · ${secs}s</div><div class="btn-row"><button class="btn" data-action="mem-level" data-l="${m.level}">Play again</button></div></div>` : ''}
-    ${best.length ? `<div class="section-title">Family best · ${MEM_LEVELS[m.level][1]}</div><div class="card flush">${best.map((s, i) => `<div class="row"><div class="avatar">${['🥇', '🥈', '🥉', '4', '5'][i]}</div><div class="grow"><div class="title">${esc(playerEmoji(s.who))} ${esc(playerName(s.who))}</div><div class="sub">${timeAgo(s.at)}</div></div><span class="small"><b>${s.moves}</b> moves · ${s.secs}s</span></div>`).join('')}</div>` : ''}`;
+    <div class="game-stage">${board}
+    ${m.done ? `<div class="game-over"><div class="card wd-result"><div class="wd-big">🎉 You matched them all!</div><div>${m.moves} moves · ${secs}s</div><div class="btn-row"><button class="btn" data-action="mem-level" data-l="${m.level}">Play again</button></div>
+    ${best.length ? `<div class="go-best"><b>Family best · ${MEM_LEVELS[m.level][1]}</b>${best.slice(0, 3).map((s, i) => `<div>${['🥇', '🥈', '🥉'][i]} ${esc(playerEmoji(s.who))} ${esc(playerName(s.who))} · <b>${s.moves}</b> moves</div>`).join('')}</div>` : ''}</div></div>` : ''}</div>
+    ${!m.done && best.length ? `<div class="section-title game-extra">Family best · ${MEM_LEVELS[m.level][1]}</div><div class="card flush game-extra">${best.map((s, i) => `<div class="row"><div class="avatar">${['🥇', '🥈', '🥉', '4', '5'][i]}</div><div class="grow"><div class="title">${esc(playerEmoji(s.who))} ${esc(playerName(s.who))}</div><div class="sub">${timeAgo(s.at)}</div></div><span class="small"><b>${s.moves}</b> moves · ${s.secs}s</span></div>`).join('')}</div>` : ''}`;
 };
 function memFlip(i) {
   const m = ui.mem;

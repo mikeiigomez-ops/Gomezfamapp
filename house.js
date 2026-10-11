@@ -241,7 +241,7 @@ function shopTray(mid, h, r) {
       return `<button class="h-card${locked ? ' locked' : ''}" data-action="h-pick" data-f="${f.id}"><span class="h-ic">${f.svg ? FURN_SVG[f.svg]() : f.e}</span><span>${esc(f.name)}</span><small>${locked ? '🔒 Earn it' : inv ? `×${inv} to place` : f.price ? `${GEM} ${f.price}` : 'Free'}</small></button>`;
     }).join('');
   }
-  return `<div class="h-tray">${chips}<div class="h-grid" data-keep="hgrid-${cat}">${grid}</div></div>`;
+  return `<div class="h-tray">${chips}<div class="h-grid" data-pages="hgrid-${cat}">${grid}</div></div>`;
 }
 // Gomez Town + House of the Week
 function houseOfWeek() {
@@ -503,7 +503,7 @@ Object.assign(actions, {
   'h-add-room': () => addRoomSheet(),
   'h-style': () => houseStyleSheet(),
   'h-room-edit': (el) => { const f = findRoom(el.dataset.id); if (f) roomSheet(f.r); },
-  'h-edit': (el) => { ui.hEdit = el.dataset.id || null; ui.hSel = null; ui.hTry = null; ui.hTrySurf = null; render(); window.scrollTo(0, 0); },
+  'h-edit': (el) => { ui.hEdit = el.dataset.id || null; ui.hSel = null; ui.hTry = null; ui.hTrySurf = null; render(); viewEl.scrollTop = 0; },
   'h-cat': (el) => { ui.hCat = el.dataset.c; render(); },
   'h-night': (el) => { const f = findRoom(el.dataset.id); if (!f) return; if (canEdit(f.mid)) { f.r.night = !f.r.night; save(); } else { ui.hPeek ||= {}; ui.hPeek[f.r.id] = !(ui.hPeek[f.r.id] ?? f.r.night); } render(); },
   'h-pick': (el) => {

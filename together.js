@@ -121,7 +121,7 @@ chatBar.addEventListener('submit', (e) => {
   chatInput.focus();
   scrollChat();
 });
-function scrollChat() { requestAnimationFrame(() => window.scrollTo(0, document.documentElement.scrollHeight)); }
+function scrollChat() { requestAnimationFrame(() => { viewEl.scrollTop = viewEl.scrollHeight; }); }
 // Keep the composer above the iPhone keyboard.
 if (window.visualViewport) {
   const place = () => {
@@ -638,7 +638,7 @@ afterRender = function () {
   updateBell();
 };
 // Stay pinned to the newest message unless the user scrolled up to read history.
-window.addEventListener('scroll', () => { if (currentRoute().name === 'chat') ui.chatStick = innerHeight + scrollY >= document.documentElement.scrollHeight - 120 ? undefined : false; }, { passive: true });
+viewEl.addEventListener('scroll', () => { if (currentRoute().name === 'chat') ui.chatStick = viewEl.scrollTop + viewEl.clientHeight >= viewEl.scrollHeight - 120 ? undefined : false; }, { passive: true });
 
 // Calendar: "Who's in?" cards for the selected day.
 const _calendarT = views.calendar;
