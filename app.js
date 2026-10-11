@@ -237,7 +237,7 @@ function eventsOn(s) {
   for (const b of state.budget.bills) {
     if (b.showOnCalendar && billOn(b, s)) {
       const inc = b.type === 'income';
-      out.push({ kind: 'bill', id: b.id, title: inc ? `💰 ${b.name} · +${money(b.amount)}` : `💳 ${b.name} · ${money(b.amount)}`, time: '', color: inc ? '#2f8a5b' : '#e0a800', who: EVERYONE });
+      out.push({ kind: 'bill', id: b.id, title: inc ? `💰 ${b.name} · +${money(amountFor(b, s))}` : `💳 ${b.name} · ${money(amountFor(b, s))}`, time: '', color: inc ? '#2f8a5b' : '#e0a800', who: EVERYONE });
     }
   }
   for (const pr of state.projects) {
@@ -294,6 +294,7 @@ function billOccurrences(b, from, to) {
   }
   return out;
 }
+const amountFor = (b, d) => b.amounts?.[d] ?? b.amount;
 const billOn = (b, s) => billOccurrences(b, s, s).length > 0;
 const isPaid = (b, d) => !!(b.paid && b.paid[d]);
 const nextBillDate = (b, from = today()) => billOccurrences(b, from, addDays(from, 400))[0];
@@ -302,7 +303,7 @@ function recurringBetween(from, to, type) {
   const out = [];
   for (const b of state.budget.bills) {
     if (type && b.type !== type) continue;
-    for (const date of billOccurrences(b, from, to)) out.push({ b, date });
+    for (const date of billOccurrences(b, from, to)) out.push({ b, date, amount: amountFor(b, date) });
   }
   return out.sort((x, y) => x.date.localeCompare(y.date) || y.b.amount - x.b.amount);
 }
@@ -467,9 +468,9 @@ views.home = () => {
     ${billsDue.length || payday ? `
       <div class="section-title">Bills this week<button data-action="go" data-to="budget" data-btab="bills">Recurring</button></div>
       <div class="card flush">
-        ${payday ? `<div class="row"><div class="avatar" style="background:var(--good-soft)">💰</div><div class="grow"><div class="title">Payday ${dueLabel(payday.date)}</div><div class="sub">${esc(payday.b.name)} · ${fmtDate(payday.date)}</div></div><span class="amount income">+${money(payday.b.amount, { maximumFractionDigits: 0 })}</span></div>` : ''}
+        ${payday ? `<div class="row"><div class="avatar" style="background:var(--good-soft)">💰</div><div class="grow"><div class="title">Payday ${dueLabel(payday.date)}</div><div class="sub">${esc(payday.b.name)} · ${fmtDate(payday.date)}</div></div><span class="amount income">+${money(payday.amount, { maximumFractionDigits: 0 })}</span></div>` : ''}
         ${billsDue.map(recurRow).join('')}
-        ${billsDue.length ? `<div class="row"><div class="grow small muted">${billsDue.length} bill${billsDue.length > 1 ? 's' : ''} due</div><b>${money(sum(billsDue, (x) => x.b.amount))}</b></div>` : ''}
+        ${billsDue.length ? `<div class="row"><div class="grow small muted">${billsDue.length} bill${billsDue.length > 1 ? 's' : ''} due</div><b>${money(sum(billsDue, (x) => x.amount))}</b></div>` : ''}
       </div>` : ''}
 
     ${choresDue.length ? `
@@ -528,8 +529,8 @@ views.budget = () => {
   let body = '';
   if (tab === 'overview') {
     const mFrom = ym + '-01', mTo = dayInMonth(31, ym);
-    const incM = sum(recurringBetween(mFrom, mTo, 'income'), (x) => x.b.amount);
-    const billM = sum(recurringBetween(mFrom, mTo, 'bill'), (x) => x.b.amount);
+    const incM = sum(recurringBetween(mFrom, mTo, 'income'), (x) => x.amount);
+    const billM = sum(recurringBetween(mFrom, mTo, 'bill'), (x) => x.amount);
     const leftover = incM - billM - s.limit;
     body = `
       ${state.budget.bills.length ? `<div class="card">
@@ -593,7 +594,7 @@ views.budget = () => {
     ${tab === 'bills' ? '' : `<button class="fab" data-action="add-tx" aria-label="Add">${ICON.plus}</button>`}
   `;
 };
-function recurRow({ b, date }) {
+function recurRow({ b, date, amount }) {
   const paid = isPaid(b, date);
   const inc = b.type === 'income';
   const n = daysBetween(today(), date);
@@ -604,7 +605,7 @@ function recurRow({ b, date }) {
       <div class="title">${esc(b.name)}</div>
       <div class="sub"><span style="${late ? 'color:var(--bad);font-weight:600' : ''}">${late ? 'Overdue · ' : ''}${cap(dueLabel(date))}</span> · ${fmtDate(date, { month: 'short', day: 'numeric' })}${b.autopay ? ' · Autopay' : ''}</div>
     </button>
-    <span class="amount${inc ? ' income' : ''}">${inc ? '+' : ''}${money(b.amount)}</span>
+    <span class="amount${inc ? ' income' : ''}">${inc ? '+' : ''}${money(amount ?? b.amount)}${b.varies && !(b.amounts && date in b.amounts) ? '<span class="small muted" style="font-weight:500"> est.</span>' : ''}</span>
     <button class="check${paid ? ' on' : ''}" data-action="toggle-bill" data-id="${b.id}" data-date="${date}" aria-label="${inc ? 'Received' : 'Paid'}">${ICON.check}</button>
   </div>`;
 }
@@ -665,7 +666,7 @@ function recurringView() {
   let payCard = '';
   if (pay) {
     const before = recurringBetween(t, addDays(pay.date, -1), 'bill').filter((x) => !isPaid(x.b, x.date));
-    const owed = sum(before, (x) => x.b.amount);
+    const owed = sum(before, (x) => x.amount);
     const bal = state.settings.balance;
     const safe = bal != null ? bal - owed : null;
     payCard = `<div class="card">
@@ -686,11 +687,11 @@ function recurringView() {
   const recent = recurringBetween(addDays(t, -7), addDays(t, -1));
   const soon = recurringBetween(t, addDays(t, 7));
   const later = recurringBetween(addDays(t, 8), addDays(t, 30));
-  const section = (title, list) => list.length ? `<div class="section-title"><span>${title}</span><span class="small" style="text-transform:none">${money(sum(list.filter((x) => x.b.type !== 'income'), (x) => x.b.amount))}</span></div><div class="card flush">${list.map(recurRow).join('')}</div>` : '';
+  const section = (title, list) => list.length ? `<div class="section-title"><span>${title}</span><span class="small" style="text-transform:none">${money(sum(list.filter((x) => x.b.type !== 'income'), (x) => x.amount))}</span></div><div class="card flush">${list.map(recurRow).join('')}</div>` : '';
   return toggle + `
     <div class="card">
       <h3>Coming up</h3>
-      <p style="margin:0 0 10px">${charges.length ? `You have <b>${charges.length}</b> recurring charge${charges.length > 1 ? 's' : ''} for <b>${money(sum(charges, (x) => x.b.amount))}</b> in the next 7 days.` : 'No recurring charges in the next 7 days. 🎉'}</p>
+      <p style="margin:0 0 10px">${charges.length ? `You have <b>${charges.length}</b> recurring charge${charges.length > 1 ? 's' : ''} for <b>${money(sum(charges, (x) => x.amount))}</b> in the next 7 days.` : 'No recurring charges in the next 7 days. 🎉'}</p>
       <div class="wk">${['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d) => `<div class="dow">${d}</div>`).join('')}${strip}</div>
     </div>
     ${payCard}
@@ -1404,7 +1405,8 @@ function billForm(b) {
       { name: 'group', label: 'Group', placeholder: 'e.g. Subscriptions', list: 'billGroups' },
       { type: 'html', html: `<datalist id="billGroups">${BILL_GROUPS.map((g) => `<option value="${g}">`).join('')}</datalist>` },
       { name: 'categoryId', label: 'Also count against budget category', type: 'select', options: [{ value: '', label: '— No, keep separate —' }, ...state.budget.categories.map((c) => ({ value: c.id, label: `${c.emoji} ${c.name}` }))] },
-      { name: 'autopay', label: 'On autopay', type: 'checkbox' },
+      { name: 'autopay', label: 'Automatic (autopay / direct deposit)', type: 'checkbox', hint: 'Marked paid automatically on its date' },
+      { name: 'varies', label: 'Amount changes each time', type: 'checkbox', hint: 'Asks for the real amount when you mark it paid (e.g. electric bill)' },
       { name: 'showOnCalendar', label: 'Show on calendar', type: 'checkbox' },
     ],
     onSave(v) {
@@ -1460,23 +1462,63 @@ function bulkBillsForm() {
     },
   });
 }
+function markBillPaid(b, date, auto) {
+  const inc = b.type === 'income';
+  const amount = amountFor(b, date);
+  b.paid ||= {};
+  let txId = true;
+  if (inc || b.categoryId) {
+    // Automatic entries get a predictable id so two synced phones never log the same bill twice.
+    txId = auto ? `auto-${b.id}-${date}` : uid();
+    if (!state.budget.transactions.some((t) => t.id === txId)) {
+      state.budget.transactions.push({ id: txId, created: Date.now(), type: inc ? 'income' : 'expense', amount, note: b.name, categoryId: inc ? '' : b.categoryId, date: date > today() ? today() : date, memberId: '' });
+    }
+  }
+  b.paid[date] = txId;
+  if (!auto) toast(inc ? `${b.name} received ✓` : `${b.name} marked paid ✓`);
+}
+const lastKnownAmount = (b) => { const ks = Object.keys(b.amounts || {}).sort(); return ks.length ? b.amounts[ks.at(-1)] : null; };
 function toggleBill(b, date) {
   b.paid ||= {};
   if (b.paid[date]) {
     const txId = b.paid[date];
     state.budget.transactions = state.budget.transactions.filter((t) => t.id !== txId);
-    delete b.paid[date];
-  } else {
-    const inc = b.type === 'income';
-    let txId = true;
-    if (inc || b.categoryId) {
-      txId = uid();
-      state.budget.transactions.push({ id: txId, created: Date.now(), type: inc ? 'income' : 'expense', amount: b.amount, note: b.name, categoryId: inc ? '' : b.categoryId, date: date > today() ? today() : date, memberId: '' });
-    }
-    b.paid[date] = txId;
-    toast(inc ? `${b.name} received ✓` : `${b.name} marked paid ✓`);
+    // false (not deleted) so autopay doesn't re-mark something you deliberately unchecked
+    b.paid[date] = false;
+    save(); render();
+    return;
   }
+  if (b.varies) {
+    const typical = lastKnownAmount(b) ?? b.amount;
+    openSheet({
+      title: b.name,
+      saveLabel: b.type === 'income' ? 'Received' : 'Paid',
+      values: { amount: b.amounts?.[date] ?? typical },
+      fields: [
+        { name: 'amount', label: `Amount for ${fmtDate(date, { month: 'long', day: 'numeric' })}`, type: 'money', required: true },
+        { type: 'html', html: `<p class="small muted" style="margin:0 4px">Last time: ${money(typical)}. This updates your budget and cash flow with the real amount.</p>` },
+      ],
+      onSave(v) { (b.amounts ||= {})[date] = v.amount; markBillPaid(b, date); },
+    });
+    return;
+  }
+  markBillPaid(b, date);
   save(); render();
+}
+
+// Autopay / direct deposit: mark anything due (since the item was added, up to 45 days back) as paid.
+function autopayCatchUp() {
+  const t = today();
+  let n = 0;
+  for (const b of state.budget.bills) {
+    if (!b.autopay) continue;
+    const from = [b.since || t, addDays(t, -45)].sort().at(-1);
+    for (const d of billOccurrences(b, from, t)) {
+      if (b.paid?.[d] === undefined) { markBillPaid(b, d, true); n++; }
+    }
+  }
+  if (n) { save(); setTimeout(() => toast(`🤖 Logged ${n} automatic payment${n > 1 ? 's' : ''}`), 600); }
+  return n;
 }
 
 function stapleForm(s) {
@@ -2097,11 +2139,13 @@ document.addEventListener('change', (e) => {
    Boot
    ========================================================= */
 applyTheme();
+autopayCatchUp();
 render();
 
 // Refresh "today" if the app is left open past midnight / resumed from background.
 let lastDay = today();
 document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && autopayCatchUp()) render();
   if (document.visibilityState === 'visible' && today() !== lastDay) {
     lastDay = today();
     ui.calSel = lastDay; ui.calMonth = monthKey(lastDay); ui.budgetMonth = monthKey(lastDay); ui.mealsWeek = weekStart(lastDay);
