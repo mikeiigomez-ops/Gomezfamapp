@@ -858,6 +858,7 @@ views.shop = () => {
       </form>
       <datalist id="stapleNames">${state.shop.staples.map((s) => `<option value="${esc(s.name)}">`).join('')}</datalist>
 
+      ${open.length ? `<button class="store-cta" data-action="go" data-to="store"><span>🛍️</span><span class="grow"><b>Start shopping</b><small>Store mode · ${open.length} item${open.length > 1 ? 's' : ''}${est ? ` · ≈ ${money(est, { maximumFractionDigits: 0 })}` : ''}</small></span>${ICON.chev}</button>` : ''}
       ${suggestions.length ? `<div class="small muted" style="margin:0 4px 6px">Running low — tap to add:</div>
         <div class="chips">${suggestions.map((s) => `<button class="chip" data-action="staple-to-list" data-id="${s.id}">+ ${esc(s.name)}</button>`).join('')}</div>` : ''}
 

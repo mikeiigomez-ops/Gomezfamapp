@@ -774,3 +774,82 @@ Object.assign(actions, {
     input.focus();
   },
 });
+
+/* =========================================================
+   🛍️ Store mode — big, one-handed checklist for the actual trip
+   ========================================================= */
+TITLES.store = 'Store Mode';
+let wakeLock = null;
+async function setWakeLock(on) {
+  try {
+    if (on && !wakeLock && navigator.wakeLock) { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener?.('release', () => { wakeLock = null; }); }
+    else if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
+  } catch { wakeLock = null; }
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && currentRoute().name === 'store') setWakeLock(true); });
+
+views.store = () => {
+  const items = state.shop.list;
+  const open = items.filter((i) => !i.done), done = items.filter((i) => i.done);
+  const total = items.length;
+  const pct = total ? done.length / total : 0;
+  const groups = {};
+  for (const i of open) (groups[i.aisle || 'Other'] ||= []).push(i);
+  const order = Object.keys(groups).sort((a, b) => AISLES.indexOf(a) - AISLES.indexOf(b));
+  const est = sum(open, (i) => stapleByName(i.name)?.price);
+  const row = (i) => `<button class="store-row${i.done ? ' got' : ''}" data-action="toggle-item" data-id="${i.id}">
+      <span class="check${i.done ? ' on' : ''}">${ICON.check}</span>
+      <span class="grow"><b>${esc(i.name)}</b>${i.qty ? `<small>${esc(i.qty)}</small>` : ''}</span>
+    </button>`;
+  return `
+    <div class="store-progress card">
+      <div style="display:flex;justify-content:space-between;align-items:baseline">
+        <div class="stat">${done.length}<span class="muted" style="font-size:18px;font-weight:600"> / ${total}</span></div>
+        <div class="small muted">${open.length ? `${open.length} to go${est ? ` · ≈ ${money(est, { maximumFractionDigits: 0 })}` : ''}` : 'Everything’s in the cart 🎉'}</div>
+      </div>
+      <div class="bar" style="height:10px;margin-top:10px"><i style="width:${pct * 100}%"></i></div>
+      <div class="small muted" style="margin-top:8px">🔆 Screen stays on while you shop</div>
+    </div>
+    ${order.map((a) => `<div class="section-title">${esc(a)}</div><div class="store-list">${groups[a].map(row).join('')}</div>`).join('')}
+    ${!total ? `<div class="card empty"><span class="big">🛒</span>Your list is empty.</div>` : ''}
+    ${done.length ? `<div class="section-title">In the cart</div><div class="store-list">${done.map(row).join('')}</div>` : ''}
+    ${total ? `<div class="store-finish"><button class="btn block" data-action="store-finish">${open.length ? 'Finish trip' : '✓ Finish trip'}</button></div>` : ''}
+  `;
+};
+
+Object.assign(actions, {
+  'store-finish': () => {
+    const got = state.shop.list.filter((i) => i.done);
+    const est = sum(got, (i) => stapleByName(i.name)?.price);
+    const groceries = state.budget.categories.find((c) => norm(c.name).includes('grocer'));
+    openSheet({
+      title: 'Finish trip',
+      saveLabel: 'Done',
+      values: { amount: est ? Math.round(est * 100) / 100 : null, store: '', clear: true },
+      fields: [
+        { name: 'amount', label: 'Receipt total (optional)', type: 'money', placeholder: 'Logs it to your budget' },
+        { name: 'store', label: 'Store', placeholder: 'e.g. Costco' },
+        { name: 'clear', label: `Clear the ${got.length} item${got.length === 1 ? '' : 's'} in the cart`, type: 'checkbox', hint: 'Staples are marked stocked' },
+      ],
+      onSave(v) {
+        if (v.amount) state.budget.transactions.push({ id: uid(), created: Date.now(), type: 'expense', amount: v.amount, note: v.store || 'Grocery trip', categoryId: groceries?.id || '', date: today(), memberId: '' });
+        if (v.clear) {
+          for (const i of got) { const s = stapleByName(i.name); if (s) { s.status = 'ok'; s.lastBought = today(); } }
+          state.shop.list = state.shop.list.filter((i) => !i.done);
+        }
+        toast(v.amount ? `🛍️ Trip logged · ${money(v.amount)}` : '🛍️ Trip done');
+        setWakeLock(false);
+        setTimeout(() => go('shop'));
+      },
+    });
+  },
+});
+
+// Store mode hides the tab bar and keeps the screen awake.
+const _afterRenderBase = afterRender;
+afterRender = function () {
+  _afterRenderBase();
+  const inStore = currentRoute().name === 'store';
+  document.body.classList.toggle('store-mode', inStore);
+  setWakeLock(inStore);
+};

@@ -77,6 +77,11 @@ html[data-accent][data-theme="dark"] {
   color-scheme: dark;
 }
 html[data-accent] { --accent-soft: color-mix(in srgb, var(--accent) 14%, var(--surface)); --grad: linear-gradient(135deg, var(--accent), var(--accent-2)); }
+/* Filled controls carry white text, so in dark mode they use a deeper version of the accent. */
+@media (prefers-color-scheme: dark) {
+  html[data-accent]:not([data-theme="light"]) { --grad: linear-gradient(135deg, color-mix(in oklab, var(--accent) 72%, black), color-mix(in oklab, var(--accent-2) 66%, black)); }
+}
+html[data-accent][data-theme="dark"] { --grad: linear-gradient(135deg, color-mix(in oklab, var(--accent) 72%, black), color-mix(in oklab, var(--accent-2) 66%, black)); }
 
 /* ---------- Canvas ---------- */
 html[data-accent] body {
@@ -304,7 +309,7 @@ html[data-accent][data-theme="dark"] .hero { background: linear-gradient(145deg,
   background: color-mix(in srgb, var(--accent) 12%, var(--surface-2)); font-size: 22px;
 }
 .countdown .card { border-radius: 20px; }
-.countdown .days { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; font-weight: 800; }
+.countdown .days { background: linear-gradient(135deg, var(--accent), var(--accent-2)); -webkit-background-clip: text; background-clip: text; color: transparent; font-weight: 800; }
 
 /* ---------- Settings: accent swatches ---------- */
 .accent-picker { display: flex; gap: 10px; flex-wrap: wrap; }
@@ -352,3 +357,36 @@ html[data-accent][data-theme="dark"] .hero { background: linear-gradient(145deg,
 .magic-card { padding: 14px 16px; border-radius: 16px; margin: -4px 0 14px; background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent); animation: fade-up .25s var(--ease); }
 .magic-label { font-weight: 750; font-size: 16px; }
 .magic-detail { margin-top: 3px; }
+
+/* ---------- Store mode ---------- */
+.store-cta {
+  width: 100%; display: flex; align-items: center; gap: 12px; text-align: left; color: #fff;
+  padding: 14px 16px; margin-bottom: 14px; border-radius: 18px; background: var(--grad);
+  box-shadow: 0 12px 24px -12px color-mix(in srgb, var(--accent) 90%, transparent);
+  transition: transform .18s var(--ease);
+}
+.store-cta:active { transform: scale(.98); }
+.store-cta > span:first-child { font-size: 26px; }
+.store-cta b { display: block; font-size: 16px; }
+.store-cta small { display: block; opacity: .9; font-size: 13px; }
+.store-cta svg { color: rgba(255, 255, 255, .85); }
+body.store-mode .tabbar { transform: translateY(150%); opacity: 0; pointer-events: none; }
+.tabbar { transition: transform .4s var(--spring), opacity .3s; }
+.store-list { display: flex; flex-direction: column; gap: 8px; }
+.store-row {
+  display: flex; align-items: center; gap: 16px; width: 100%; text-align: left;
+  padding: 16px 18px; min-height: 68px; border-radius: 18px; background: var(--surface); box-shadow: var(--shadow);
+  transition: transform .18s var(--ease), opacity .3s;
+}
+.store-row:active { transform: scale(.98); }
+.store-row .check { width: 34px; height: 34px; flex-basis: 34px; }
+.store-row .check svg { width: 20px; height: 20px; }
+.store-row b { display: block; font-size: 19px; font-weight: 700; letter-spacing: -.01em; }
+.store-row small { display: block; font-size: 14px; color: var(--muted); }
+.store-row.got { opacity: .55; }
+.store-row.got b { text-decoration: line-through; }
+.store-finish { position: sticky; bottom: calc(var(--safe-bottom) + 12px); margin-top: 18px; }
+.store-finish .btn { padding: 16px; font-size: 17px; border-radius: 18px; }
+body.store-mode main { padding-bottom: calc(var(--safe-bottom) + 40px); }
+.store-row.pop .check { animation: check-pop .45s var(--spring); }
+.store-row.pop.got .check svg path { animation: check-draw .35s .08s var(--ease) both; }
