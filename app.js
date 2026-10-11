@@ -92,6 +92,13 @@ function defaultState() {
     activity: [],
     rewards: [],
     redemptions: [],
+    routines: [],
+    piggy: {},
+    wishes: [],
+    board: [],
+    trips: [],
+    debts: [],
+    kidAccounts: {},
     settings: { currency: 'USD', theme: 'auto', showHolidays: true, giftBudget: 0, welcomeDismissed: false },
   };
 }
@@ -141,6 +148,13 @@ function migrate(s) {
   s.activity ??= [];
   s.rewards ??= [];
   s.redemptions ??= [];
+  s.routines ??= [];
+  s.piggy ??= {};
+  s.wishes ??= [];
+  s.board ??= [];
+  s.trips ??= [];
+  s.debts ??= [];
+  s.kidAccounts ??= {};
   for (const pr of s.projects) { pr.items ??= []; pr.steps ??= []; }
   s.settings = { ...d.settings, ...(s.settings || {}) };
   s.version = 1;
@@ -1367,7 +1381,7 @@ function render() {
   const detail = { person: () => person(param)?.name, project: () => state.projects.find((x) => x.id === param)?.name,
     goal: () => state.goals.find((x) => x.id === param)?.name, recipe: () => state.recipes.find((x) => x.id === param)?.name }[name];
   const title = (detail && detail()) || TITLES[name];
-  const html = (name === 'home' || detail ? '' : `<h1 class="large-title">${esc(title)}</h1>`) + views[name](param);
+  const html = (name === 'home' || name === 'kid' || detail ? '' : `<h1 class="large-title">${esc(title)}</h1>`) + views[name](param);
   const key = name + '/' + (param || '');
   const changed = lastRouteKey !== null && lastRouteKey !== key;
   lastRouteKey = key;
@@ -1375,7 +1389,7 @@ function render() {
     viewEl.innerHTML = html;
     const tab = name === 'person' ? 'gifts' : name;
     $('#title').textContent = title;
-    $('#backBtn').hidden = TABS.includes(name);
+    $('#backBtn').hidden = TABS.includes(name) || name === 'kid';
     document.querySelectorAll('.tabbar [data-tab]').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
     if (ui.pop) {
       const sel = `[data-action="${ui.pop.a}"]${ui.pop.id ? `[data-id="${ui.pop.id}"]` : ''}${ui.pop.date ? `[data-date="${ui.pop.date}"]` : ''}`;
@@ -2052,6 +2066,7 @@ function memberForm(m) {
       ] },
       { type: 'html', html: `<div class="chips" style="margin-top:-6px">${['👩', '👨', '👧', '👦', '👶', '👵', '👴', '🐶', '🐱'].map((e) => `<button type="button" class="chip" data-action="pick-emoji" data-emoji="${e}">${e}</button>`).join('')}</div>` },
       { name: 'color', label: 'Calendar color', type: 'color' },
+      { name: 'kid', label: 'This is a kid', type: 'checkbox', hint: 'Gets Kid Mode, routines, an allowance & a wish list' },
     ],
     onSave(v) {
       if (isNew) state.members.push({ id: uid(), ...v });

@@ -25,6 +25,16 @@ A family web app you can install on your iPhone home screen. It has no build ste
 - **Rewards store**: kids redeem chore points for rewards, and a grown-up approves
 - **Plan my week**: fills open nights from your recipes and favorites, skipping recent repeats, and shops the ingredients
 - **Customize Home**: reorder and hide sections, per phone
+- **Kid Mode**: a kid-safe app (chores, routines, points, piggy bank, wishes, badges) that takes a parent PIN to exit
+- **Kid accounts**: a kid's login is built from a parent's email (e.g. `you+sofia@gmail.com`). The parent approves it from their inbox, and the kid's device joins by scanning a QR code
+- **Routines**: morning, bedtime and homework checklists with on-time stars
+- **Allowance & piggy bank**: Save / Spend / Give jars, an automatic weekly allowance, cashing in points, and a savings goal
+- **Wish lists**: kids add wishes that parents can move into the gift plan without the kid seeing
+- **Badges & levels** for kids
+- **Fridge board & polls**: notes with reactions and family votes
+- **Packing lists**: per-person lists from trip templates
+- **Debt payoff planner**: snowball vs avalanche, debt-free date, interest saved
+- **Subscription audit**: monthly and yearly totals, streaming overlap, automatic price-change detection, keep/cancel review
 - **Settings**: family members, currency, dark mode, and backup/restore
 
 ## Install on iPhone

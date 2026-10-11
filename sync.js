@@ -10,7 +10,7 @@
 const SYNC_KEY = 'gomezfam:sync'; // { config, familyId, joining }
 const BASE_KEY = 'gomezfam:base'; // { rev, data } — last server copy merged into this phone
 const FIREBASE_URL = 'https://www.gstatic.com/firebasejs/10.14.1/';
-const LOCAL_ONLY = ['theme', 'accent', 'welcomeDismissed', 'whatsNewSeen', 'weather', 'me', 'homeLayout']; // per-phone settings that never sync
+const LOCAL_ONLY = ['theme', 'accent', 'welcomeDismissed', 'whatsNewSeen', 'weather', 'me', 'homeLayout', 'kidMode', 'meBeforeKid']; // per-phone settings that never sync
 const INVITE_PREFIX = 'GFAM1.';
 
 const readJSON = (k) => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } };
@@ -97,7 +97,7 @@ async function loadFirebase(config) {
 function setStatus(status, message = '') {
   Sync.status = status;
   Sync.message = message;
-  if (currentRoute().name === 'settings') render();
+  if (['settings', 'kid'].includes(currentRoute().name)) render();
 }
 
 async function startSync() {
@@ -117,10 +117,29 @@ async function startSync() {
 function onAuth() {
   stopListening();
   const u = Sync.user;
-  if (!u) return setStatus('signed-out');
+  if (!u) return Sync.cfg.kid ? kidAuth() : setStatus('signed-out');
   if (!u.emailVerified) return setStatus('unverified');
   if (!Sync.cfg.familyId) return setStatus('no-family');
   listen();
+}
+
+// Kid devices sign in with the login a parent created (parent+kid@…); the approval email goes to the parent.
+async function kidAuth() {
+  const { au, auth } = Sync.fb;
+  const { email, pw } = Sync.cfg.kid;
+  setStatus('connecting');
+  try {
+    await au.signInWithEmailAndPassword(auth, email, pw);
+  } catch (e) {
+    if (['auth/user-not-found', 'auth/invalid-credential', 'auth/invalid-login-credentials'].includes(e.code)) {
+      try {
+        const cred = await au.createUserWithEmailAndPassword(auth, email, pw);
+        await au.sendEmailVerification(cred.user);
+      } catch (e2) {
+        setStatus('error', e2.code === 'auth/email-already-in-use' ? 'This kid already has a login with a different code. On the parent phone: Kids → Device setup code, and scan that one.' : authMsg(e2));
+      }
+    } else setStatus('error', authMsg(e));
+  }
 }
 
 function stopListening() { if (Sync.unsub) { Sync.unsub(); Sync.unsub = null; } }
@@ -206,7 +225,7 @@ async function push() {
 function markSynced() {
   Sync.lastSynced = Date.now();
   if (Sync.status !== 'synced') setStatus('synced');
-  else if (currentRoute().name === 'settings') render();
+  else if (['settings', 'kid'].includes(currentRoute().name)) render();
 }
 
 function syncError(e) {
@@ -308,13 +327,17 @@ function syncCardHTML() {
       <div class="btn-row" style="margin:0">
         <button class="btn" data-action="sync-setup">Set up</button>
         <button class="btn secondary" data-action="sync-join">Join with invite</button>
-      </div>`;
+      </div>
+      <button class="btn secondary block" style="margin-top:8px" data-action="kid-scan">🧒 This is a kid's device</button>`;
   } else if (s === 'connecting' || s === 'off') {
     body = `<p class="small muted" style="margin:0">Connecting…</p>`;
   } else if (s === 'signed-out') {
     body = `<p class="small" style="margin:0 0 10px">Sign in to sync this phone with your family.</p>
       <div class="btn-row" style="margin:0"><button class="btn" data-action="sync-signin">Sign in</button><button class="btn secondary" data-action="sync-signup">Create account</button></div>
       <button class="mini-btn" style="margin-top:6px" data-action="sync-forgot">Forgot password?</button>`;
+  } else if (s === 'unverified' && Sync.cfg.kid) {
+    body = `<p class="small" style="margin:0 0 10px">📧 Waiting for a parent to approve this device. They got an email for <b>${esc(Sync.cfg.kid.email)}</b> — tap the link in it.</p>
+      <button class="btn block" data-action="sync-verified">It's approved</button>`;
   } else if (s === 'unverified') {
     body = `<p class="small" style="margin:0 0 10px">📧 We sent a confirmation link to <b>${esc(email)}</b>. Tap it, then come back here. (Check spam too.)</p>
       <div class="btn-row" style="margin:0"><button class="btn" data-action="sync-verified">I've confirmed</button><button class="btn secondary" data-action="sync-resend">Resend</button></div>

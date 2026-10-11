@@ -367,22 +367,20 @@ function extraEventsOn(s) {
   return out;
 }
 
-const WHATS_NEW = 'v5';
+const WHATS_NEW = 'v6';
 function whatsNewCard() {
   if (state.settings.whatsNewSeen === WHATS_NEW) return '';
   const item = (attrs, emoji, title, text) => `<button class="row tap" style="width:100%;text-align:left;padding:10px 0;background:none" ${attrs}><div class="avatar">${emoji}</div><div class="grow"><div class="title">${title}</div><div class="sub" style="white-space:normal">${text}</div></div>${ICON.chev}</button>`;
   return `<div class="card install-tip">
-    <h3>🚀 10 new features</h3>
-    ${item('data-action="go" data-to="wrapped"', '🎬', 'Family Wrapped', 'Your month as a story — spending, chores MVP, favorite dinner')}
-    ${item('data-action="go" data-to="settings"', '🔐', 'Face ID lock', 'Settings → Privacy lock')}
-    ${item('data-action="magic-add"', '🎙️', 'Talk to Magic Add', 'Tap the mic and say “spent 40 dollars at Costco”')}
-    ${item('data-action="go" data-to="activity"', '📰', 'Family activity', 'See who added, paid and finished what')}
-    ${item('data-action="go" data-to="shop"', '🛒', 'Shop together, live', 'See when someone’s at the store and add to their list')}
-    ${item('data-action="go" data-to="budget" data-btab="bills"', '📈', '30-day forecast', 'Where your checking balance is headed')}
-    ${item('data-action="go" data-to="chores" data-ctab="rewards"', '🏆', 'Rewards store', 'Kids trade chore points for treats')}
-    ${item('data-action="go" data-to="meals"', '🍽️', 'Plan my week', 'Fill every open night in one tap')}
-    ${item('data-action="go" data-to="settings"', '🗣️', 'Siri & Shortcuts', '“Hey Siri, Gomez add …” — setup in Settings')}
-    ${item('data-action="home-customize"', '🧩', 'Customize Home', 'Reorder or hide anything on this screen')}
+    <h3>🧒 Kids & family update</h3>
+    ${item('data-action="go" data-to="kids"', '🧒', 'Kid Mode & kid accounts', 'A kid-safe app for each child — set up their own device with a QR code')}
+    ${item('data-action="go" data-to="routines"', '🌅', 'Routines', 'Morning, bedtime & homework checklists with ⭐ stars')}
+    ${item('data-action="go" data-to="kids"', '🐷', 'Allowance & piggy bank', 'Save / Spend / Give jars, paid automatically')}
+    ${item('data-action="go" data-to="wishes"', '🎁', 'Wish lists & badges', 'Kids’ wishes flow into your gift plan; levels & badges for kids')}
+    ${item('data-action="go" data-to="board"', '📌', 'Fridge board & polls', 'Family notes, reactions and votes')}
+    ${item('data-action="go" data-to="packing"', '🧳', 'Packing lists', 'Per-person lists from trip templates')}
+    ${item('data-action="go" data-to="debts"', '💳', 'Debt payoff plan', 'Your debt-free date and interest saved')}
+    ${item('data-action="go" data-to="subs"', '🔁', 'Subscription audit', 'Yearly totals, price hikes and what to cancel')}
     <div class="small muted" style="margin:8px 0 10px">Tip: swipe a list row <b>right</b> to check it off, <b>left</b> to delete. Drag any sheet down to close it.</div>
     <button class="btn secondary block" data-action="whats-new-ok">Got it</button>
   </div>`;
