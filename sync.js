@@ -306,7 +306,7 @@ function syncCardHTML() {
   if (!Sync.cfg?.config) {
     body = `<p class="small" style="margin:0 0 10px">Share one copy of the budget, lists, calendar and everything else between your phones. Changes show up on every phone within seconds.</p>
       <div class="btn-row" style="margin:0">
-        <button class="btn" data-action="sync-setup">Set up (first phone)</button>
+        <button class="btn" data-action="sync-setup">Set up</button>
         <button class="btn secondary" data-action="sync-join">Join with invite</button>
       </div>`;
   } else if (s === 'connecting' || s === 'off') {

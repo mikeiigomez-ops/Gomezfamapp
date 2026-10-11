@@ -53,6 +53,7 @@ html[data-accent] {
     --shadow: 0 0 0 1px rgba(255, 255, 255, .05), 0 8px 20px -10px rgba(0, 0, 0, .7);
     --shadow-lg: 0 0 0 1px rgba(255, 255, 255, .06), 0 24px 48px -16px rgba(0, 0, 0, .8);
     --glass: color-mix(in srgb, var(--surface) 72%, transparent);
+    --accent-soft: color-mix(in srgb, var(--accent) 20%, var(--surface));
     color-scheme: dark;
   }
 }
@@ -72,6 +73,7 @@ html[data-accent][data-theme="dark"] {
   --shadow: 0 0 0 1px rgba(255, 255, 255, .05), 0 8px 20px -10px rgba(0, 0, 0, .7);
   --shadow-lg: 0 0 0 1px rgba(255, 255, 255, .06), 0 24px 48px -16px rgba(0, 0, 0, .8);
   --glass: color-mix(in srgb, var(--surface) 72%, transparent);
+  --accent-soft: color-mix(in srgb, var(--accent) 20%, var(--surface));
   color-scheme: dark;
 }
 html[data-accent] { --accent-soft: color-mix(in srgb, var(--accent) 14%, var(--surface)); --grad: linear-gradient(135deg, var(--accent), var(--accent-2)); }
