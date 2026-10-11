@@ -342,3 +342,13 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .wk-day em { position: absolute; top: 0; right: calc(50% - 22px); font-style: normal; font-size: 10px; font-weight: 800; width: 15px; height: 15px; border-radius: 50%; background: var(--good); color: #fff; display: grid; place-items: center; }
 .wk-day .dots { display: flex; gap: 2px; height: 6px; margin-top: 2px; }
 .wk-day .dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+
+/* ---------- Charts ---------- */
+.chart { width: 100%; height: auto; display: block; margin: 4px 0 2px; stroke: none; }
+.chart path, .chart rect, .chart text { stroke: none; }
+.avg-key { display: inline-block; width: 14px; border-top: 1.5px dashed var(--muted); vertical-align: middle; margin-right: 2px; }
+.chart .chart-base { stroke: var(--line); stroke-width: 1; }
+.chart .chart-avg { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; opacity: .7; }
+.chart .chart-lbl { fill: var(--muted); font-size: 11px; font-weight: 600; }
+.chart .chart-lbl.sel { fill: var(--text); }
+.chart .chart-val { fill: var(--text); font-size: 12px; font-weight: 750; }

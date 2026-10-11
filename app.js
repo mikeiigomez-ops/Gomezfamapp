@@ -577,6 +577,8 @@ views.budget = () => {
         </button>`;
       }).join('')}</div>`).join('')
       : `<div class="card empty"><span class="big">🧾</span>No spending logged for ${fmtMonth(ym)}.<br>Tap + to add an expense.</div>`;
+  } else if (tab === 'trends') {
+    body = trendsView(ym);
   } else {
     body = recurringView();
   }
@@ -588,7 +590,7 @@ views.budget = () => {
       <button class="icon-btn" data-action="budget-month" data-n="1" aria-label="Next month" ${tab === 'bills' ? 'style="visibility:hidden"' : ''}>${ICON.right}</button>
     </div>
     <div class="segmented">
-      ${[['overview', 'Overview'], ['activity', 'Activity'], ['bills', 'Recurring']].map(([k, l]) => `<button class="${tab === k ? 'active' : ''}" data-action="budget-tab" data-tab="${k}">${l}</button>`).join('')}
+      ${[['overview', 'Overview'], ['activity', 'Activity'], ['trends', 'Trends'], ['bills', 'Recurring']].map(([k, l]) => `<button class="${tab === k ? 'active' : ''}" data-action="budget-tab" data-tab="${k}">${l}</button>`).join('')}
     </div>
     ${body}
     ${tab === 'bills' ? '' : `<button class="fab" data-action="add-tx" aria-label="Add">${ICON.plus}</button>`}
@@ -699,6 +701,110 @@ function recurringView() {
     ${section('Coming later', later)}
     ${section('Recent', recent)}
   ` + fab;
+}
+
+/* ---------- Spending trends ---------- */
+const spentIn = (ym, catId) => sum(state.budget.transactions.filter((t) => t.type !== 'income' && t.date.startsWith(ym) && (catId === undefined || t.categoryId === catId)), (t) => t.amount);
+// Rounded-top bar anchored to the baseline.
+function barPath(x, y, w, h, r = 4) {
+  if (h <= 0) return '';
+  r = Math.min(r, h, w / 2);
+  return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
+}
+function niceMax(v) {
+  if (v <= 0) return 100;
+  const p = Math.pow(10, Math.floor(Math.log10(v)));
+  return [1, 2, 2.5, 5, 10].map((m) => m * p).find((m) => m >= v);
+}
+
+function trendsView(ym) {
+  const months = [...Array(6)].map((_, i) => addMonths(ym, i - 5));
+  const totals = months.map((m) => spentIn(m));
+  const hasAny = totals.some((v) => v > 0);
+  if (!hasAny) return `<div class="card empty"><span class="big">📊</span>Log some spending and your trends will show up here.</div>`;
+  const sel = months.includes(ui.trendSel) ? ui.trendSel : ym;
+  const selIdx = months.indexOf(sel);
+  const prev = addMonths(sel, -1);
+  const past = totals.slice(0, 5).filter((v) => v > 0);
+  const avg = past.length ? sum(past, (v) => v) / past.length : 0;
+
+  // Chart geometry (viewBox units)
+  const W = 340, H = 170, top = 22, bottom = 26, left = 4, right = 4;
+  const plotH = H - top - bottom, colW = (W - left - right) / 6, barW = Math.min(30, colW * 0.5);
+  const max = niceMax(Math.max(...totals, avg));
+  const y = (v) => top + plotH - (v / max) * plotH;
+  const bars = months.map((m, i) => {
+    const v = totals[i];
+    const x = left + colW * i + (colW - barW) / 2;
+    const isSel = i === selIdx;
+    return `<g>
+      <path d="${barPath(x, y(v), barW, top + plotH - y(v))}" fill="var(--accent)" opacity="${isSel ? 1 : 0.38}"/>
+      ${isSel ? `<text x="${x + barW / 2}" y="${y(v) - 7}" text-anchor="middle" class="chart-val">${esc(money(v, { maximumFractionDigits: 0 }))}</text>` : ''}
+      <text x="${x + barW / 2}" y="${H - 8}" text-anchor="middle" class="chart-lbl${isSel ? ' sel' : ''}">${parse(m + '-01').toLocaleDateString(undefined, { month: 'short' })}</text>
+      <rect x="${left + colW * i}" y="0" width="${colW}" height="${H}" fill="transparent" data-action="trend-month" data-ym="${m}" style="cursor:pointer"><title>${fmtMonth(m)}: ${money(v)}</title></rect>
+    </g>`;
+  }).join('');
+  const avgLine = avg ? `<line x1="${left}" x2="${W - right}" y1="${y(avg)}" y2="${y(avg)}" class="chart-avg"/>` : '';
+  const chart = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Spending per month, last 6 months">
+    <line x1="${left}" x2="${W - right}" y1="${top + plotH}" y2="${top + plotH}" class="chart-base"/>
+    ${avgLine}${bars}</svg>`;
+
+  // Pace: this month so far vs the same point last month
+  let pace = '';
+  const t = today();
+  if (sel === monthKey(t)) {
+    const day = parse(t).getDate();
+    const lastSame = sum(state.budget.transactions.filter((x) => x.type !== 'income' && x.date.startsWith(prev) && parse(x.date).getDate() <= day), (x) => x.amount);
+    const now = totals[selIdx];
+    if (lastSame > 0) {
+      const diff = now - lastSame;
+      const pct = Math.round((Math.abs(diff) / lastSame) * 100);
+      pace = `<div class="card"><div class="stat-label">Pace vs. last month</div>
+        <div style="font-size:17px;font-weight:650;margin-top:2px">${diff > 0 ? '▲' : '▼'} ${money(Math.abs(diff), { maximumFractionDigits: 0 })} ${diff > 0 ? 'more' : 'less'} <span class="muted" style="font-weight:500">(${pct}%)</span></div>
+        <div class="small muted">than by day ${day} of ${parse(prev + '-01').toLocaleDateString(undefined, { month: 'long' })} — ${diff > 0 ? 'spending is running ahead' : 'nice, you\'re spending less'}</div></div>`;
+    }
+  }
+
+  // Where it went
+  const cats = [...state.budget.categories, { id: '', emoji: '📦', name: 'Uncategorized' }]
+    .map((c) => ({ c, v: c.id ? spentIn(sel, c.id) : sum(state.budget.transactions.filter((x) => x.type !== 'income' && x.date.startsWith(sel) && !state.budget.categories.some((k) => k.id === x.categoryId)), (x) => x.amount), pv: c.id ? spentIn(prev, c.id) : 0 }))
+    .filter((x) => x.v > 0)
+    .sort((a, b) => b.v - a.v);
+  const selTotal = totals[selIdx] || 1;
+  const topCat = cats[0] ? cats[0].v : 1;
+  const where = cats.map(({ c, v, pv }) => {
+    const d = v - pv;
+    return `<div class="cat-row">
+      <div class="top"><span>${esc(c.emoji)} ${esc(c.name)} <span class="muted small">${Math.round((v / selTotal) * 100)}%</span></span><span>${money(v, { maximumFractionDigits: 0 })}</span></div>
+      <div class="bar"><i style="width:${(v / topCat) * 100}%;background:var(--accent)"></i></div>
+      ${pv || v ? `<div class="small muted" style="margin-top:3px">${pv ? `${d >= 0 ? '▲' : '▼'} ${money(Math.abs(d), { maximumFractionDigits: 0 })} vs ${parse(prev + '-01').toLocaleDateString(undefined, { month: 'short' })}` : `New this month`}</div>` : ''}
+    </div>`;
+  }).join('');
+
+  const biggest = state.budget.transactions.filter((x) => x.type !== 'income' && x.date.startsWith(sel)).sort((a, b) => b.amount - a.amount).slice(0, 5);
+  const income = sum(state.budget.transactions.filter((x) => x.type === 'income' && x.date.startsWith(sel)), (x) => x.amount);
+
+  return `
+    <div class="card">
+      <h3>Spending · last 6 months</h3>
+      ${chart}
+      <div class="small muted" style="text-align:center">${avg ? `<span class="avg-key"></span> Average ${esc(money(avg, { maximumFractionDigits: 0 }))}/mo · ` : ''}Tap a month for details</div>
+    </div>
+    ${pace}
+    ${income ? `<div class="card">
+      <h3>${fmtMonth(sel)}</h3>
+      <div class="kv"><span class="muted">Money in</span><b>${money(income)}</b></div>
+      <div class="kv"><span class="muted">Money out</span><b>${money(totals[selIdx])}</b></div>
+      <div class="kv" style="border-top:1px solid var(--line);margin-top:6px;padding-top:8px"><span>${income >= totals[selIdx] ? 'Saved' : 'Overspent'}</span><b>${money(Math.abs(income - totals[selIdx]))} <span class="muted small" style="font-weight:500">(${Math.round((Math.abs(income - totals[selIdx]) / income) * 100)}% of income)</span></b></div>
+    </div>` : ''}
+    <div class="section-title">Where it went · ${parse(sel + '-01').toLocaleDateString(undefined, { month: 'long' })}</div>
+    <div class="card">${where || '<div class="empty small">No spending this month.</div>'}</div>
+    ${biggest.length ? `<div class="section-title">Biggest expenses</div>
+    <div class="card flush">${biggest.map((x) => `<button class="row tap" style="width:100%;text-align:left" data-action="edit-tx" data-id="${x.id}">
+      <div class="avatar">${esc(category(x.categoryId).emoji)}</div>
+      <div class="grow"><div class="title">${esc(x.note || category(x.categoryId).name)}</div><div class="sub">${fmtDate(x.date)} · ${esc(category(x.categoryId).name)}</div></div>
+      <span class="amount">${money(x.amount)}</span></button>`).join('')}</div>` : ''}
+  `;
 }
 
 const ordinal = (n) => n + (['th', 'st', 'nd', 'rd'][(n % 100 - 20) % 10] || ['th', 'st', 'nd', 'rd'][n % 100] || 'th');
@@ -1902,6 +2008,7 @@ const actions = {
   // Budget
   'budget-month': (el) => { ui.budgetMonth = addMonths(ui.budgetMonth, +el.dataset.n); render(); },
   'budget-tab': (el) => { ui.budgetTab = el.dataset.tab; render(); },
+  'trend-month': (el) => { ui.trendSel = el.dataset.ym; render(); },
   'add-tx': () => txForm(null),
   'edit-tx': (el) => txForm(findIn(state.budget.transactions, el.dataset.id)),
   'add-category': () => categoryForm(null),
