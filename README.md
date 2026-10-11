@@ -4,7 +4,7 @@ A family web app you can install on your iPhone home screen. It has no build ste
 
 ## Features
 - **Home**: today's events, tonight's dinner, budget left, bills due, chores, upcoming birthdays and trip countdowns
-- **Budget**: monthly category budgets, spending and income log, and a monthly bills checklist (marking a bill paid logs the expense)
+- **Budget**: monthly category budgets, a spending and income log, and **Recurring** bills and paychecks (monthly, every 2 weeks, weekly or yearly) with a 2-week "coming up" view, safe-to-spend until payday, cash flow, and bulk add by pasting
 - **Shopping**: a quick-add list grouped by aisle ("2 lb chicken" works), staples you always buy with stocked/low/out status, and sharing the list by text
 - **Calendar**: color-coded by family member, repeating events, birthdays, bill due dates and US holidays
 - **Gifts**: people with birthdays, sizes and wish lists; gift ideas tracked idea → bought → wrapped → given; yearly gift budget and Christmas countdown
