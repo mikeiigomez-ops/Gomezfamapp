@@ -202,8 +202,12 @@ views.room = (roomId) => {
   const sel = edit ? r.items.find((i) => i.id === ui.hSel) : null;
   const selName = sel ? (sel.f === 'sq' ? SQ[sel.sid]?.name : FURN[sel.f]?.name) : '';
   const night = ui.hPeek?.[r.id] ?? r.night;
-  const avatars = edit ? [] : [{ key: owner ? 'me' : 'own', me: owner, a: avatarOf(mid), x: r.av?.x ?? 72, y: r.av?.y ?? 95, name: member(mid).name }];
+  // Live visitors (live.js): the owner walks where they really are, and anyone else in the room shows up too.
+  const live = !edit && typeof liveInRoom === 'function' ? liveInRoom(r.id) : {};
+  const ownAt = !owner && live[mid] ? live[mid] : r.av;
+  const avatars = edit ? [] : [{ key: owner ? 'me' : 'own', me: owner, a: avatarOf(mid), x: ownAt?.x ?? 72, y: ownAt?.y ?? 95, name: member(mid).name }];
   if (!owner && me) { const v = ui.hVis?.[r.id] || { x: 24, y: 97 }; avatars.push({ key: 'me', me: true, a: avatarOf(me), x: v.x, y: v.y, name: member(me).name }); }
+  for (const [id, v] of Object.entries(live)) if (id !== mid && id !== me) avatars.push({ key: 'live-' + id, me: false, a: avatarOf(id), x: v.x, y: v.y, name: member(id).name });
   const undoN = (ui.hUndo?.[r.id] || []).length;
   const tr = edit && ui.hTry?.room === r.id ? ui.hTry : null;
   const trySurf = edit && ui.hTrySurf?.room === r.id ? ui.hTrySurf : null;

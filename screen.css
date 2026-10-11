@@ -244,3 +244,9 @@ body.house-editing .h-drawer-space { display: none; }
 .av-looks button { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; border-radius: 16px; background: var(--surface-2); font-size: 15px; font-weight: 800; color: var(--text); }
 .av-looks button span { font-size: 24px; }
 .av-looks button.on { background: var(--accent-soft); box-shadow: 0 0 0 2.5px var(--accent); }
+
+/* Live visits: who's over right now */
+.live-here { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; margin: 8px 0 4px; }
+.live-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 6px 12px; border-radius: 18px; background: var(--good-soft); color: var(--text); font-size: 13.5px; font-weight: 750; }
+.live-chip .live-dot { width: 9px; height: 9px; flex-basis: 9px; }
+.hav[data-av^="live-"] .hav-name { background: var(--good); color: #fff; }

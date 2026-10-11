@@ -152,6 +152,7 @@ function listen() {
     if (!snap.exists()) return setStatus('error', 'That family wasn\'t found. Check the invite code.');
     const d = snap.data();
     Sync.emails = d.emails || [];
+    if (typeof liveFromDoc === 'function') liveFromDoc(d.live);
     let remote;
     try { remote = JSON.parse(d.data); } catch { return setStatus('error', 'The shared data looks damaged.'); }
     const rev = d.rev || 0;
