@@ -352,3 +352,32 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .chart .chart-lbl { fill: var(--muted); font-size: 11px; font-weight: 600; }
 .chart .chart-lbl.sel { fill: var(--text); }
 .chart .chart-val { fill: var(--text); font-size: 12px; font-weight: 750; }
+
+/* ---------- Home extras ---------- */
+.quick-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: -4px 0 14px; }
+.quick-row .chip { padding: 8px 2px; font-size: 13px; text-align: center; white-space: nowrap; }
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 12px; }
+.mini-tile { margin: 0; padding: 12px 8px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; }
+.mini-tile .emoji { font-size: 24px; }
+.mini-tile b { font-size: 14px; }
+.mini-tile .small { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.mini-tile:active { transform: scale(.97); }
+
+/* ---------- Goals ---------- */
+.ring-box { position: relative; display: inline-grid; place-items: center; flex: 0 0 auto; }
+.ring-box > span { position: absolute; inset: 0; display: grid; place-items: center; font-size: 26px; line-height: 1; }
+.ring-box.big > span { font-size: 40px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+.ring-box.big > span b { font-size: 18px; }
+.goal-ring { width: auto; height: auto; }
+.goal-ring circle { fill: none; }
+.goal-ring .track { stroke: var(--surface-2); }
+.goal-ring .val { stroke: var(--accent); stroke-linecap: round; transition: stroke-dashoffset .5s; }
+.goal-ring.done .val { stroke: var(--good); }
+.confetti { position: fixed; inset: 0; pointer-events: none; z-index: 70; overflow: hidden; }
+.confetti span { position: absolute; top: -40px; font-size: 24px; animation: confetti-fall 2.4s ease-in forwards; }
+@keyframes confetti-fall { to { transform: translateY(110vh) rotate(540deg); opacity: .8; } }
+
+/* ---------- Binder ---------- */
+.binder-details { white-space: pre-wrap; margin-top: 8px; font-size: 15px; }
+.binder-hidden { display: block; width: 100%; text-align: left; margin-top: 8px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); color: var(--muted); font-weight: 600; letter-spacing: .04em; }
+a.btn { text-decoration: none; }

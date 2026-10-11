@@ -11,6 +11,10 @@ A family web app you can install on your iPhone home screen. It has no build ste
 - **Meal plan**: weekly dinners, meal autocomplete with remembered ingredients, and one tap to send ingredients to the shopping list
 - **Chores**: assign chores, check them off, and see weekly points with a 👑 leaderboard
 - **House projects**: steps with time estimates, materials with costs, a budget and due dates, starter templates, sending materials to the shopping list, and optional logging of purchases to the budget
+- **Savings goals**: targets with deposits and withdrawals, a monthly amount needed to hit a date, and 🎉 confetti when you reach one
+- **Family binder**: emergency numbers, doctors, insurance, school, Wi-Fi and codes. Private entries stay hidden until tapped, and phone numbers are tap-to-call
+- **Home upkeep**: recurring maintenance (filters, smoke detectors, gutters…) with next-due dates, common tasks to pick from, and reminders on Home and the Calendar
+- **Search** across everything, plus quick-add buttons on Home
 - **Settings**: family members, currency, dark mode, and backup/restore
 
 ## Install on iPhone

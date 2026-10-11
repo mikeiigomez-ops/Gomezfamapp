@@ -85,6 +85,9 @@ function defaultState() {
     meals: {},
     chores: [],
     projects: [],
+    goals: [],
+    binder: [],
+    maintenance: [],
     settings: { currency: 'USD', theme: 'auto', showHolidays: true, giftBudget: 0, welcomeDismissed: false },
   };
 }
@@ -127,6 +130,9 @@ function migrate(s) {
   s.meals ??= {};
   s.chores ??= [];
   s.projects ??= [];
+  s.goals ??= [];
+  s.binder ??= [];
+  s.maintenance ??= [];
   for (const pr of s.projects) { pr.items ??= []; pr.steps ??= []; }
   s.settings = { ...d.settings, ...(s.settings || {}) };
   s.version = 1;
@@ -243,6 +249,7 @@ function eventsOn(s) {
   for (const pr of state.projects) {
     if (pr.dueDate === s && pr.status !== 'done') out.push({ kind: 'project', id: pr.id, title: `${pr.emoji || '🔨'} ${pr.name} due`, time: '', color: '#3b6fd8', who: EVERYONE });
   }
+  if (typeof extraEventsOn === 'function') out.push(...extraEventsOn(s));
   if (state.settings.showHolidays) {
     const h = holidays(parse(s).getFullYear())[s];
     if (h) out.push({ kind: 'holiday', id: '', title: h, time: '', color: '#6b7280', who: EVERYONE });
@@ -426,6 +433,7 @@ views.home = () => {
 
   return `
     <p class="hello">${greet} · ${fmtDate(t, { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+    ${typeof homeQuickAdd === 'function' ? homeQuickAdd() : ''}
 
     ${!state.settings.welcomeDismissed && state.members.length < 2 ? `
       <div class="card install-tip">
@@ -493,21 +501,21 @@ views.home = () => {
       <div class="section-title">Next 7 days<button data-action="go" data-to="calendar">Calendar</button></div>
       <div class="card flush">${upcoming.slice(0, 8).map((e) => eventRow(e, true)).join('')}</div>` : ''}
 
+    ${typeof homeExtras === 'function' ? homeExtras() : ''}
+
     <div class="section-title">More</div>
-    <div class="grid2">
-      <button class="card tile" data-action="go" data-to="meals"><div class="emoji">🍽️</div><b>Meal plan</b><div class="small muted">Plan the week's dinners</div></button>
-      <button class="card tile" data-action="go" data-to="chores"><div class="emoji">🧹</div><b>Chores</b><div class="small muted">${choresDue.length ? `${choresDue.length} to do` : 'All caught up'}</div></button>
-      ${projectsTile()}
-    </div>
+    ${typeof moreGrid === 'function' ? moreGrid() : ''}
   `;
 };
 
 function eventRow(e, showDate) {
-  const clickable = e.kind === 'event' || e.kind === 'birthday' || e.kind === 'bill' || e.kind === 'project';
+  const clickable = ['event', 'birthday', 'bill', 'project', 'upkeep', 'goal'].includes(e.kind);
   const action = e.kind === 'event' ? `data-action="edit-event" data-id="${e.id}"`
     : e.kind === 'birthday' ? `data-action="go" data-to="person/${e.id}"`
     : e.kind === 'bill' ? `data-action="edit-bill" data-id="${e.id}"`
-    : e.kind === 'project' ? `data-action="go" data-to="project/${e.id}"` : '';
+    : e.kind === 'project' ? `data-action="go" data-to="project/${e.id}"`
+    : e.kind === 'upkeep' ? `data-action="upkeep-edit" data-id="${e.id}"`
+    : e.kind === 'goal' ? `data-action="go" data-to="goal/${e.id}"` : '';
   const timeLabel = e.time ? fmtTime(e.time) : (e.kind === 'holiday' ? 'Holiday' : 'All day');
   return `<${clickable ? 'button' : 'div'} class="row${clickable ? ' tap' : ''}" style="width:100%;text-align:left" ${action}>
     <div class="time-col">${showDate ? fmtDate(e.date, { weekday: 'short', day: 'numeric' }) : timeLabel}</div>
@@ -1080,17 +1088,6 @@ function projectStats(pr) {
   return { est, spent, hours, hoursDone, stepsDone, pct, toBuy: pr.items.filter((i) => !i.bought).length };
 }
 const fmtHours = (h) => (h ? `${Math.round(h * 10) / 10} hr${h === 1 ? '' : 's'}` : '—');
-
-function projectsTile() {
-  const open = state.projects.filter((p) => p.status !== 'done');
-  const active = open.filter((p) => p.status === 'active');
-  const next = active[0] || open[0];
-  return `<button class="card tile" style="grid-column:1 / -1;display:flex;gap:12px;align-items:center" data-action="go" data-to="projects">
-    <div class="emoji">🏡</div>
-    <div style="flex:1;min-width:0"><b>House projects</b>
-      <div class="small muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${open.length ? `${active.length} in progress · ${open.length - active.length} planned${next ? ` · ${esc(next.name)}` : ''}` : 'Plan repairs, upgrades & DIY'}</div></div>
-    ${ICON.chev}</button>`;
-}
 
 views.projects = () => {
   const filter = ui.projFilter || 'open';
