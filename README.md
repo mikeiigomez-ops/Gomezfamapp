@@ -17,7 +17,34 @@ A family web app you can install on your iPhone home screen. It has no build ste
 2. Tap **Share**, then **Add to Home Screen**.
 
 ## Data
-Data is saved in the browser on each device (localStorage). It works offline. Use **Settings → Back up** often. You can also send a backup file to another phone and restore it there.
+Each phone saves its data in the browser (localStorage), and the app works offline. **Settings → Back up** exports a backup file.
+
+## Family sync (optional)
+Phones can share one copy of the data through a free Firebase project. Each person signs in with their own email, and only emails on the access list can read the data. Edits made on two phones at the same time are merged.
+
+One-time setup:
+1. Go to https://console.firebase.google.com and click **Create a project** (Google Analytics can be off).
+2. Open **Build → Authentication → Get started → Email/Password** and turn on **Enable**.
+3. Open **Build → Firestore Database → Create database** and pick **production mode**. On the **Rules** tab, replace everything with the rules below and click **Publish**.
+4. Open **Project settings (⚙️) → Your apps → Web (`</>`)** and register the app. Copy the `firebaseConfig` it shows.
+5. In the app, go to **Settings → Family sync → Set up**, paste the config, create an account, and confirm your email. Then tap **Start sharing**.
+6. Under **Who has access**, tap **+ Add person** and enter your partner's email, then tap **Send invite**.
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /families/{familyId} {
+      allow read, update, delete: if request.auth != null
+        && request.auth.token.email_verified
+        && request.auth.token.email in resource.data.emails;
+      allow create: if request.auth != null
+        && request.auth.token.email_verified
+        && request.auth.token.email in request.resource.data.emails;
+    }
+  }
+}
+```
 
 ## Hosting
 The `.github/workflows/pages.yml` workflow deploys the app to GitHub Pages on every push to `main`.

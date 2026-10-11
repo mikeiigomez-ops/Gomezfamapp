@@ -137,6 +137,7 @@ function save() {
   saveTimer = setTimeout(() => {
     try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
     catch (e) { toast('⚠️ Could not save — storage may be full'); }
+    if (typeof syncAfterSave === 'function') syncAfterSave();
   }, 120);
 }
 window.addEventListener('pagehide', () => { clearTimeout(saveTimer); localStorage.setItem(STORE_KEY, JSON.stringify(state)); });
@@ -973,6 +974,8 @@ views.settings = () => `
     </button>`).join('')}
   </div>
 
+  ${typeof syncCardHTML === 'function' ? syncCardHTML() : ''}
+
   <div class="section-title">Preferences</div>
   <div class="card">
     <div class="field"><label for="setCurrency">Currency</label>
@@ -1089,7 +1092,7 @@ function fieldHTML(f, v) {
       input = `<input id="${id}" name="${f.name}" type="text" inputmode="${f.type === 'money' ? 'decimal' : 'numeric'}" value="${val === null ? '' : esc(val)}" placeholder="${esc(f.placeholder || '')}" ${req}>`;
       break;
     default:
-      input = `<input id="${id}" name="${f.name}" type="${f.type || 'text'}" value="${esc(val)}" placeholder="${esc(f.placeholder || '')}" ${f.list ? `list="${f.list}"` : ''} ${req} autocapitalize="${f.type === 'url' ? 'off' : 'sentences'}">`;
+      input = `<input id="${id}" name="${f.name}" type="${f.type || 'text'}" value="${esc(val)}" placeholder="${esc(f.placeholder || '')}" ${f.list ? `list="${f.list}"` : ''} ${req} autocapitalize="${['url', 'email', 'password'].includes(f.type) ? 'off' : 'sentences'}"${f.type === 'email' ? ' autocomplete="email"' : f.type === 'password' ? ' autocomplete="current-password"' : ''}>`;
   }
   return `<div class="field"><label for="${id}">${esc(f.label)}</label>${input}</div>`;
 }
@@ -1116,6 +1119,7 @@ function closeSheet() {
   document.body.style.overflow = '';
   document.activeElement?.blur?.();
   sheetCfg = null;
+  if (typeof syncAfterSheet === 'function') setTimeout(syncAfterSheet);
 }
 function submitSheet() {
   if (!sheetCfg) return;
@@ -1682,7 +1686,16 @@ const actions = {
   },
   'import': () => $('#importFile').click(),
   'reset': () => {
-    if (!confirm('Erase ALL family data on this device? This cannot be undone. (Make a backup first!)')) return;
+    const synced = typeof Sync !== 'undefined' && Sync.cfg;
+    if (!confirm(`Erase ALL family data on this ${synced ? 'phone? Sync will be turned off on this phone first, so the family\'s shared data is NOT affected.' : 'device? This cannot be undone. (Make a backup first!)'}`)) return;
+    if (synced) {
+      Sync.ref = null; stopListening(); // stop pushing to the family before erasing
+      localStorage.removeItem('gomezfam:sync'); localStorage.removeItem('gomezfam:base');
+      state = defaultState(); // pagehide re-saves `state`, so reset it too
+      localStorage.setItem(STORE_KEY, JSON.stringify(state));
+      location.reload();
+      return;
+    }
     state = defaultState(); save(); applyTheme(); go('home'); toast('All data erased');
   },
 };
