@@ -431,3 +431,29 @@ body.store-mode main { padding-bottom: calc(var(--safe-bottom) + 40px); }
 .settings-head { text-align: center; padding: 22px 18px; }
 .avatars.big { justify-content: center; padding-left: 14px; }
 .avatars.big span { width: 54px; height: 54px; font-size: 28px; margin-left: -14px; border-width: 3px; border-color: var(--surface); }
+
+/* ---------- Heads-up insights ---------- */
+.insights { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; margin: 0 -16px 6px; padding: 2px 16px 12px; scrollbar-width: none; }
+.insights::-webkit-scrollbar { display: none; }
+.insight {
+  flex: 0 0 74%; max-width: 300px; scroll-snap-align: start; text-align: left; position: relative; overflow: hidden;
+  padding: 14px 14px 14px 58px; border-radius: 18px; background: var(--surface); box-shadow: var(--shadow); min-height: 74px;
+  transition: transform .18s var(--ease);
+}
+.insight:only-child { flex-basis: 100%; max-width: none; }
+.insight:active { transform: scale(.97); }
+.insight .ii { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; font-size: 19px; background: var(--surface-2); }
+.insight b { display: block; font-size: 15px; font-weight: 700; line-height: 1.25; }
+.insight small { display: block; font-size: 13px; color: var(--muted); margin-top: 2px; }
+.insight::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--line); }
+.insight.good::before { background: var(--good); } .insight.good .ii { background: var(--good-soft); }
+.insight.warn::before { background: var(--warn); } .insight.warn .ii { background: var(--warn-soft); }
+.insight.bad::before { background: var(--bad); } .insight.bad .ii { background: var(--bad-soft); }
+
+/* ---------- Calendar who-filter & budget allowance ---------- */
+.who-filter { overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; gap: 8px; padding: 0 0 10px; }
+.who-filter::-webkit-scrollbar { display: none; }
+.who-filter button { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 12px; background: var(--surface); box-shadow: var(--shadow); font-size: 13px; font-weight: 650; color: var(--muted); }
+.who-filter button.on { background: var(--accent-soft); color: var(--accent); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 40%, transparent); }
+.allowance { margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: var(--good-soft); color: var(--good); font-size: 13px; }
+.allowance b { font-weight: 800; }

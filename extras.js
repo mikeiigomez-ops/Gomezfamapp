@@ -388,7 +388,7 @@ function homeQuickAdd() {
     <button class="chip" data-action="quick-grocery"><span class="qi">🛒</span>Grocery</button>
     <button class="chip" data-action="add-event" data-date="${today()}"><span class="qi">📅</span>Event</button>
     <button class="chip" data-action="add-chore"><span class="qi">🧹</span>Chore</button>
-  </div>`;
+  </div>${homeInsights()}`;
 }
 
 function homeExtras() {
@@ -1024,3 +1024,47 @@ Object.assign(actions, {
   'week-day': (el) => { ui.calSel = el.dataset.date; ui.calMonth = monthKey(el.dataset.date); ui.calView = 'month'; go('calendar'); },
   'cal-view': (el) => { ui.calView = el.dataset.v; render(); },
 });
+
+/* =========================================================
+   💡 Heads-up: smart nudges on Home
+   ========================================================= */
+function homeInsights() {
+  const t = today(), ym = monthKey(t);
+  const daysInMonth = new Date(+ym.slice(0, 4), +ym.slice(5), 0).getDate();
+  const day = parse(t).getDate(), left = daysInMonth - day + 1;
+  const out = [];
+  // Budget pace
+  const sm = budgetSummary(ym);
+  if (sm.limit) {
+    const expected = sm.limit * (day / daysInMonth);
+    if (sm.left <= 0) out.push({ p: 0, tone: 'bad', icon: '🚨', title: `Over budget by ${money(-sm.left, { maximumFractionDigits: 0 })}`, sub: `${left} days left in ${fmtDate(t, { month: 'long' })}`, act: 'data-action="go" data-to="budget"' });
+    else out.push({ p: sm.spent > expected * 1.1 ? 1 : 5, tone: sm.spent > expected * 1.1 ? 'warn' : 'good', icon: sm.spent > expected * 1.1 ? '🐢' : '✅', title: `${money(sm.left / left, { maximumFractionDigits: 0 })}/day to stay on budget`, sub: sm.spent > expected * 1.1 ? `Spending is ${Math.round((sm.spent / expected - 1) * 100)}% ahead of pace` : 'You’re on track this month', act: 'data-action="go" data-to="budget" data-btab="trends"' });
+  }
+  // Categories running hot
+  for (const c of state.budget.categories) {
+    if (!c.limit) continue;
+    const spent = spentIn(ym, c.id), f = spent / c.limit;
+    if (f >= 1) out.push({ p: 1, tone: 'bad', icon: c.emoji, title: `${c.name} is over by ${money(spent - c.limit, { maximumFractionDigits: 0 })}`, sub: `${money(spent, { maximumFractionDigits: 0 })} of ${money(c.limit, { maximumFractionDigits: 0 })}`, act: 'data-action="go" data-to="budget" data-btab="trends"' });
+    else if (f >= 0.85 && left > 3) out.push({ p: 2, tone: 'warn', icon: c.emoji, title: `${c.name}: ${Math.round(f * 100)}% used`, sub: `${money(c.limit - spent, { maximumFractionDigits: 0 })} left for ${left} days`, act: 'data-action="go" data-to="budget" data-btab="trends"' });
+  }
+  // Birthdays without a gift
+  for (const p of state.people) {
+    const nb = nextBirthday(p);
+    if (!nb) continue;
+    const n = daysBetween(t, nb);
+    if (n > 21) continue;
+    const has = state.gifts.some((g) => g.personId === p.id && Number(g.year) === parse(nb).getFullYear() && g.status !== 'idea');
+    if (!has) out.push({ p: n <= 7 ? 1 : 3, tone: n <= 7 ? 'warn' : '', icon: '🎂', title: `${p.name}'s birthday ${relDays(n).toLowerCase()}`, sub: 'No gift bought yet', act: `data-action="go" data-to="person/${p.id}"` });
+  }
+  // Staples that are out
+  const outOf = state.shop.staples.filter((s) => s.status === 'out' && !state.shop.list.some((i) => !i.done && norm(i.name) === norm(s.name)));
+  if (outOf.length) out.push({ p: 3, tone: '', icon: '🥚', title: `Out of ${outOf.slice(0, 2).map((s) => s.name.toLowerCase()).join(' & ')}${outOf.length > 2 ? ` +${outOf.length - 2}` : ''}`, sub: 'Tap to add to the list', act: 'data-action="add-low-to-list"' });
+  // Goal behind
+  for (const g of state.goals) {
+    const pl = goalPlan(g);
+    if (pl.pct < 1 && pl.perMonth && pl.months <= 2) out.push({ p: 3, tone: '', icon: g.emoji || '🎯', title: `${g.name}: ${money(pl.left, { maximumFractionDigits: 0 })} to go`, sub: `${pl.months} month${pl.months > 1 ? 's' : ''} left · ${money(pl.perMonth, { maximumFractionDigits: 0 })}/mo`, act: `data-action="go" data-to="goal/${g.id}"` });
+  }
+  if (!out.length) return '';
+  out.sort((a, b) => a.p - b.p);
+  return `<div class="insights">${out.slice(0, 6).map((x) => `<button class="insight ${x.tone}" ${x.act}><span class="ii">${esc(x.icon)}</span><b>${esc(x.title)}</b><small>${esc(x.sub)}</small></button>`).join('')}</div>`;
+}

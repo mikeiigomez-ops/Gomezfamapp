@@ -227,6 +227,8 @@ function holidays(y) {
   return (holidayCache[y] = h);
 }
 
+// Calendar view respects the member filter; whole-family items (birthdays, bills, holidays) always show.
+const calEventsOn = (s) => eventsOn(s).filter((e) => !ui.calWho || e.kind !== 'event' || !e.who?.id || e.who.id === ui.calWho);
 function eventsOn(s) {
   const out = [];
   for (const ev of state.events) {
@@ -578,6 +580,7 @@ views.budget = () => {
             <div class="kv"><span class="muted">Spent</span><b>${money(s.spent)}</b></div>
             <div class="kv"><span class="muted">Left</span><b style="color:${s.left < 0 ? 'var(--bad)' : 'var(--good)'}">${money(s.left)}</b></div>
             ${s.income ? `<div class="kv"><span class="muted">Income</span><b>${money(s.income)}</b></div>` : ''}
+            ${ym === monthKey(today()) && s.limit && s.left > 0 ? `<div class="allowance">≈ <b>${money(s.left / (new Date(+ym.slice(0, 4), +ym.slice(5), 0).getDate() - parse(today()).getDate() + 1), { maximumFractionDigits: 0 })}/day</b> for the rest of the month</div>` : ''}
           </div>
         </div>
       </div>
@@ -925,13 +928,13 @@ views.calendar = () => {
   for (let i = 0; i < 42; i++) {
     const s = addDays(start, i);
     if (i === 35 && s.slice(0, 7) !== ym) break; // drop empty 6th row
-    const evs = eventsOn(s);
+    const evs = calEventsOn(s);
     cells.push(`<button class="cal-day${s.slice(0, 7) !== ym ? ' other' : ''}${s === t ? ' today' : ''}${s === ui.calSel ? ' sel' : ''}" data-action="cal-select" data-date="${s}">
       <span>${parse(s).getDate()}</span>
       <div class="dots">${evs.slice(0, 3).map((e) => `<i style="background:${e.color}"></i>`).join('')}</div>
     </button>`);
   }
-  const sel = eventsOn(ui.calSel);
+  const sel = calEventsOn(ui.calSel);
   return `${typeof calendarTabs === 'function' ? calendarTabs() : ''}
     <div class="month-nav">
       <button class="icon-btn" data-action="cal-month" data-n="-1" aria-label="Previous month">${ICON.left}</button>
@@ -941,7 +944,9 @@ views.calendar = () => {
     <div class="card cal">
       <div class="cal-grid">${['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d) => `<div class="dow">${d}</div>`).join('')}${cells.join('')}</div>
     </div>
-    ${state.members.length > 1 ? `<div class="legend">${state.members.map((m) => `<span><i class="dot" style="background:${m.color}"></i>${esc(m.name)}</span>`).join('')}</div>` : ''}
+    ${state.members.length > 1 ? `<div class="legend who-filter">
+      <button class="${!ui.calWho ? 'on' : ''}" data-action="cal-who" data-id="">Everyone</button>
+      ${state.members.map((m) => `<button class="${ui.calWho === m.id ? 'on' : ''}" data-action="cal-who" data-id="${m.id}" style="--c:${m.color}"><i class="dot" style="background:${m.color}"></i>${esc(m.name)}</button>`).join('')}</div>` : ''}
     <div class="section-title">${ui.calSel === t ? 'Today' : fmtDate(ui.calSel, { weekday: 'long', month: 'long', day: 'numeric' })}
       ${ui.calSel !== t ? '<button data-action="cal-today">Today</button>' : ''}</div>
     <div class="card flush">${sel.length ? sel.map((e) => eventRow(e)).join('') : '<div class="empty small">No events. Tap + to add one.</div>'}</div>
@@ -2131,6 +2136,7 @@ const actions = {
   // Calendar
   'cal-month': (el) => { ui.calMonth = addMonths(ui.calMonth, +el.dataset.n); ui.calSel = ui.calMonth === monthKey(today()) ? today() : ui.calMonth + '-01'; render(); },
   'cal-select': (el) => { ui.calSel = el.dataset.date; if (monthKey(ui.calSel) !== ui.calMonth) ui.calMonth = monthKey(ui.calSel); render(); },
+  'cal-who': (el) => { ui.calWho = el.dataset.id; render(); },
   'cal-today': () => { ui.calSel = today(); ui.calMonth = monthKey(today()); render(); },
   'add-event': (el) => eventForm(null, el.dataset.date),
   'edit-event': (el) => eventForm(findIn(state.events, el.dataset.id)),
