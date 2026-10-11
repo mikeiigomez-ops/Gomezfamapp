@@ -338,6 +338,7 @@ function searchResults(q) {
     ...state.chores.filter((c) => has(c.title)).map((c) => row(`data-action="edit-chore" data-id="${c.id}"`, '🧹', c.title, FREQ_LABEL[c.freq] || '')),
     ...state.maintenance.filter((u) => has(u.title, u.notes)).map((u) => row(`data-action="upkeep-edit" data-id="${u.id}"`, esc(u.emoji || '🔧'), u.title, everyLabel(u.months))),
   ]);
+  add('Recipes', state.recipes.filter((r) => has(r.name, r.tags, r.ingredients)).map((r) => row(`data-action="go" data-to="recipe/${r.id}"`, esc(r.emoji || '📖'), r.name, `${splitList(r.ingredients).length} ingredients${r.tags ? ' · ' + r.tags : ''}`)));
   add('Goals', state.goals.filter((g) => has(g.name)).map((g) => row(`data-action="go" data-to="goal/${g.id}"`, esc(g.emoji || '🎯'), g.name, `${Math.round(goalPlan(g).pct * 100)}% saved`)));
   add('Binder', state.binder.filter((e) => has(e.title, e.phone, e.secret ? '' : e.details)).map((e) => row(`data-action="go" data-to="binder"`, (BINDER_SECTIONS.find((s) => s[0] === e.section) || [])[1] || '📝', e.title, e.phone || (e.secret ? 'Private' : (e.details || '').split('\n')[0]))));
 
@@ -366,8 +367,25 @@ function extraEventsOn(s) {
   return out;
 }
 
+const WHATS_NEW = 'v2';
+function whatsNewCard() {
+  if (state.settings.whatsNewSeen === WHATS_NEW) return '';
+  const item = (to, emoji, title, text, extra = '') => `<button class="row tap" style="width:100%;text-align:left;padding:10px 0" data-action="go" data-to="${to}" ${extra}><div class="avatar">${emoji}</div><div class="grow"><div class="title">${title}</div><div class="sub" style="white-space:normal">${text}</div></div>${ICON.chev}</button>`;
+  return `<div class="card install-tip">
+    <h3>✨ New in the app</h3>
+    ${item('budget', '📊', 'Spending trends', 'Budget → Trends: 6-month chart & where it went', 'data-btab="trends"')}
+    ${item('budget', '🤖', 'Smarter bills', 'Autopay logs itself; electric-style bills ask for the real amount', 'data-btab="bills"')}
+    ${item('goals', '🎯', 'Savings goals', 'Save for trips, emergencies, anything')}
+    ${item('upkeep', '🔧', 'Home upkeep', 'Filter changes, smoke detectors, gutters — reminded on time')}
+    ${item('binder', '📒', 'Family binder', 'Doctors, insurance, Wi-Fi, emergency numbers')}
+    ${item('meals', '📖', 'Recipe box', 'Save recipes, plan them, shop the ingredients', 'data-mtab="recipes"')}
+    <div class="small muted" style="margin:6px 0 10px">Plus 🔎 search (top right) and quick-add buttons below.</div>
+    <button class="btn secondary block" data-action="whats-new-ok">Got it</button>
+  </div>`;
+}
+
 function homeQuickAdd() {
-  return `<div class="quick-row">
+  return `${whatsNewCard()}<div class="quick-row">
     <button class="chip" data-action="add-tx">💸 Expense</button>
     <button class="chip" data-action="quick-grocery">🛒 Grocery</button>
     <button class="chip" data-action="add-event" data-date="${today()}">📅 Event</button>
@@ -486,4 +504,126 @@ Object.assign(actions, {
     fields: [{ name: 'name', label: 'Item', required: true, placeholder: 'e.g. Milk', list: 'qgStaples' }, { type: 'html', html: `<datalist id="qgStaples">${state.shop.staples.map((s) => `<option value="${esc(s.name)}">`).join('')}</datalist>` }],
     onSave(v) { if (addToList(v.name)) toast(`${v.name} added to the list 🛒`); },
   }),
+});
+
+/* =========================================================
+   Recipe box
+   ========================================================= */
+const RECIPE_EMOJI = ['🌮', '🍝', '🍗', '🥩', '🍲', '🥗', '🍕', '🍔', '🐟', '🍳', '🥞', '🍰'];
+TITLES.recipe = 'Recipe';
+
+function mealsTabs() {
+  const tab = ui.mealsTab || 'week';
+  return `<div class="segmented">
+    <button class="${tab === 'week' ? 'active' : ''}" data-action="meals-tab" data-tab="week">This week</button>
+    <button class="${tab === 'recipes' ? 'active' : ''}" data-action="meals-tab" data-tab="recipes">Recipes (${state.recipes.length})</button>
+  </div>`;
+}
+
+function recipesView() {
+  const list = [...state.recipes].sort((a, b) => (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0) || a.name.localeCompare(b.name));
+  const fromMeals = mealHistory().filter((h) => h.date && !state.recipes.some((r) => norm(r.name) === norm(h.name)));
+  return `
+    <div class="card flush">${list.map((r) => `<button class="row tap" style="width:100%;text-align:left" data-action="go" data-to="recipe/${r.id}">
+      <div class="avatar">${esc(r.emoji || '📖')}</div>
+      <div class="grow"><div class="title">${r.favorite ? '⭐ ' : ''}${esc(r.name)}</div>
+        <div class="sub">${[`${splitList(r.ingredients).length} ingredients`, r.minutes ? `${r.minutes} min` : '', r.tags].filter(Boolean).map(esc).join(' · ')}</div></div>${ICON.chev}
+    </button>`).join('') || `<div class="empty"><span class="big">📖</span>Save the family favorites here.<br>Plan them for a night and send the ingredients to the shopping list in one tap.</div>`}</div>
+    ${fromMeals.length ? `<button class="btn secondary block" data-action="recipes-import">📥 Save ${fromMeals.length} meal${fromMeals.length > 1 ? 's' : ''} from your plan as recipes</button>` : ''}
+    <button class="fab" data-action="recipe-new" aria-label="Add recipe">${ICON.plus}</button>
+  `;
+}
+
+views.recipe = (id) => {
+  const r = state.recipes.find((x) => x.id === id);
+  if (!r) return '<div class="card empty">This recipe was deleted.</div>';
+  const ings = splitList(r.ingredients);
+  const steps = String(r.steps || '').split('\n').map((x) => x.replace(/^\s*\d+[.)]\s*/, '').trim()).filter(Boolean);
+  const planned = Object.entries(state.meals).filter(([d, m]) => d >= today() && (m.recipeId === r.id || norm(m.dinner) === norm(r.name))).map(([d]) => d).sort();
+  return `
+    <div class="card">
+      <div style="display:flex;gap:14px;align-items:center">
+        <div class="avatar" style="width:56px;height:56px;flex-basis:56px;font-size:30px">${esc(r.emoji || '📖')}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:21px;font-weight:750;line-height:1.2">${esc(r.name)}</div>
+          <div class="small muted">${[r.minutes ? `⏱ ${r.minutes} min` : '', r.servings ? `🍽 Serves ${r.servings}` : '', r.tags].filter(Boolean).map(esc).join(' · ')}</div>
+        </div>
+        <button class="mini-btn" data-action="recipe-fav" data-id="${r.id}" aria-label="Favorite" style="font-size:22px">${r.favorite ? '⭐' : '☆'}</button>
+      </div>
+      ${planned.length ? `<div class="small" style="margin-top:10px">📅 Planned for ${planned.map((d) => fmtDate(d)).join(', ')}</div>` : ''}
+    </div>
+    <div class="btn-row">
+      <button class="btn" data-action="recipe-plan" data-id="${r.id}">📅 Plan it</button>
+      <button class="btn secondary" data-action="recipe-shop" data-id="${r.id}">🛒 Shop it</button>
+    </div>
+    <div class="section-title">Ingredients</div>
+    <div class="card">${ings.length ? `<ul class="recipe-list">${ings.map((i) => `<li>${esc(i)}</li>`).join('')}</ul>` : '<div class="small muted">No ingredients yet.</div>'}</div>
+    ${steps.length ? `<div class="section-title">Steps</div><div class="card"><ol class="recipe-list steps">${steps.map((x) => `<li>${esc(x)}</li>`).join('')}</ol></div>` : ''}
+    ${r.link ? `<a class="btn secondary block" style="margin-bottom:12px" href="${esc(safeUrl(r.link))}" target="_blank" rel="noopener">🔗 Open original recipe</a>` : ''}
+    ${r.notes ? `<div class="card small" style="white-space:pre-wrap">${esc(r.notes)}</div>` : ''}
+    <button class="btn secondary block" data-action="recipe-edit" data-id="${r.id}">Edit recipe</button>
+  `;
+};
+
+function recipeForm(r) {
+  const isNew = !r;
+  openSheet({
+    title: isNew ? 'New recipe' : 'Edit recipe',
+    values: r || { emoji: '🍲' },
+    fields: [
+      { row: [{ name: 'emoji', label: 'Emoji', placeholder: '🍲' }, { name: 'name', label: 'Recipe', required: true, placeholder: "e.g. Abuela's tamales" }] },
+      { type: 'html', html: `<div class="chips" style="margin-top:-6px">${RECIPE_EMOJI.map((e) => `<button type="button" class="chip" data-action="pick-emoji" data-emoji="${e}">${e}</button>`).join('')}</div>` },
+      { row: [{ name: 'minutes', label: 'Time (min)', type: 'number', placeholder: '30' }, { name: 'servings', label: 'Serves', type: 'number', placeholder: '4' }] },
+      { name: 'ingredients', label: 'Ingredients (one per line)', type: 'textarea', placeholder: '1 lb ground beef\nTaco shells\nShredded cheese' },
+      { name: 'steps', label: 'Steps (one per line)', type: 'textarea', placeholder: 'Brown the beef\nAdd seasoning…' },
+      { row: [{ name: 'tags', label: 'Tags', placeholder: 'e.g. Quick, Kids love it' }, { name: 'link', label: 'Link', type: 'url', placeholder: 'https://…' }] },
+      { name: 'notes', label: 'Notes', type: 'textarea', placeholder: 'Tweaks, sides, who likes it…' },
+      { name: 'favorite', label: '⭐ Family favorite', type: 'checkbox' },
+    ],
+    onSave(v) {
+      if (isNew) { const nr = { id: uid(), ...v }; state.recipes.push(nr); setTimeout(() => go('recipe/' + nr.id)); }
+      else Object.assign(r, v);
+    },
+    onDelete: isNew ? null : () => { withUndo(`${r.name} deleted`, () => { state.recipes = state.recipes.filter((x) => x.id !== r.id); }); ui.mealsTab = 'recipes'; go('meals'); },
+  });
+}
+
+Object.assign(actions, {
+  'whats-new-ok': () => { state.settings.whatsNewSeen = WHATS_NEW; save(); render(); },
+  'meals-tab': (el) => { ui.mealsTab = el.dataset.tab; render(); },
+  'recipe-new': () => recipeForm(null),
+  'recipe-edit': (el) => recipeForm(findIn(state.recipes, el.dataset.id)),
+  'recipe-fav': (el) => { const r = findIn(state.recipes, el.dataset.id); r.favorite = !r.favorite; save(); render(); },
+  'recipe-shop': (el) => {
+    const r = findIn(state.recipes, el.dataset.id);
+    const n = splitList(r.ingredients).filter((x) => addToList(x, r.name, true)).length;
+    toast(n ? `Added ${n} item${n > 1 ? 's' : ''} to the list 🛒` : 'Everything is already on the list');
+    save();
+  },
+  'recipe-plan': (el) => {
+    const r = findIn(state.recipes, el.dataset.id);
+    const t = today();
+    const free = [...Array(14)].map((_, i) => addDays(t, i)).find((d) => !state.meals[d]?.dinner) || t;
+    openSheet({
+      title: `Plan ${r.name}`,
+      saveLabel: 'Plan',
+      values: { date: free, shop: true },
+      fields: [
+        { name: 'date', label: 'Which night?', type: 'date', required: true },
+        { name: 'shop', label: 'Add ingredients to shopping list', type: 'checkbox' },
+      ],
+      onSave(v) {
+        const prev = state.meals[v.date]?.dinner;
+        state.meals[v.date] = { ...(state.meals[v.date] || {}), dinner: r.name, ingredients: splitList(r.ingredients).join(', '), recipeId: r.id };
+        const n = v.shop ? splitList(r.ingredients).filter((x) => addToList(x, r.name, true)).length : 0;
+        toast(`${r.name} on ${fmtDate(v.date, { weekday: 'long' })}${prev && norm(prev) !== norm(r.name) ? ` (replaced ${prev})` : ''}${n ? ` · ${n} items to the list` : ''}`);
+      },
+    });
+  },
+  'recipes-import': () => {
+    const fromMeals = mealHistory().filter((h) => h.date && !state.recipes.some((r) => norm(r.name) === norm(h.name)));
+    for (const h of fromMeals) state.recipes.push({ id: uid(), emoji: '🍲', name: h.name, ingredients: splitList(h.ingredients).join('\n') });
+    save(); render();
+    toast(`Saved ${fromMeals.length} recipe${fromMeals.length > 1 ? 's' : ''} — tap one to add steps`);
+  },
 });

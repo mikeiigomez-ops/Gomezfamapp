@@ -10,7 +10,7 @@
 const SYNC_KEY = 'gomezfam:sync'; // { config, familyId, joining }
 const BASE_KEY = 'gomezfam:base'; // { rev, data } — last server copy merged into this phone
 const FIREBASE_URL = 'https://www.gstatic.com/firebasejs/10.14.1/';
-const LOCAL_ONLY = ['theme', 'welcomeDismissed']; // per-phone settings that never sync
+const LOCAL_ONLY = ['theme', 'welcomeDismissed', 'whatsNewSeen']; // per-phone settings that never sync
 const INVITE_PREFIX = 'GFAM1.';
 
 const readJSON = (k) => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } };

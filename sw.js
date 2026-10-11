@@ -1,6 +1,6 @@
 // Network-first service worker: always tries for the latest version,
 // falls back to the cached copy when offline.
-const CACHE = 'gomezfam-v7';
+const CACHE = 'gomezfam-v8';
 const SHELL = ['./', './index.html', './styles.css', './app.js', './extras.js', './sync.js', './manifest.webmanifest', './icons/apple-touch-icon.png', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {

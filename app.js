@@ -88,6 +88,7 @@ function defaultState() {
     goals: [],
     binder: [],
     maintenance: [],
+    recipes: [],
     settings: { currency: 'USD', theme: 'auto', showHolidays: true, giftBudget: 0, welcomeDismissed: false },
   };
 }
@@ -133,6 +134,7 @@ function migrate(s) {
   s.goals ??= [];
   s.binder ??= [];
   s.maintenance ??= [];
+  s.recipes ??= [];
   for (const pr of s.projects) { pr.items ??= []; pr.steps ??= []; }
   s.settings = { ...d.settings, ...(s.settings || {}) };
   s.version = 1;
@@ -1015,12 +1017,13 @@ const safeUrl = (u) => (/^https?:\/\//i.test(u) ? u : 'https://' + u);
 
 /* ---------- Meals ---------- */
 views.meals = () => {
+  if (ui.mealsTab === 'recipes' && typeof recipesView === 'function') return mealsTabs() + recipesView();
   const ws = ui.mealsWeek;
   const t = today();
   const days = [...Array(7)].map((_, i) => addDays(ws, i));
   const planned = days.filter((d) => state.meals[d]?.dinner).length;
   const ingredients = days.flatMap((d) => splitList(state.meals[d]?.ingredients));
-  return `
+  return `${typeof mealsTabs === 'function' ? mealsTabs() : ''}
     <div class="month-nav">
       <button class="icon-btn" data-action="meals-week" data-n="-7" aria-label="Previous week">${ICON.left}</button>
       <h2>${ws === weekStart(t) ? 'This week' : `Week of ${fmtDate(ws, { month: 'short', day: 'numeric' })}`}</h2>
@@ -1051,6 +1054,10 @@ function mealHistory() {
     if (!m.dinner) continue;
     const k = norm(m.dinner);
     if (!byName[k] || d > byName[k].date) byName[k] = { name: m.dinner, ingredients: m.ingredients || '', date: d };
+  }
+  for (const r of state.recipes || []) {
+    const k = norm(r.name);
+    if (!byName[k]) byName[k] = { name: r.name, ingredients: splitList(r.ingredients).join(', '), date: '' };
   }
   return Object.values(byName);
 }
@@ -1994,7 +2001,7 @@ function memberForm(m) {
    ========================================================= */
 const findIn = (arr, id) => arr.find((x) => x.id === id);
 const actions = {
-  'go': (el) => { if (el.dataset.btab) ui.budgetTab = el.dataset.btab; go(el.dataset.to); },
+  'go': (el) => { if (el.dataset.btab) ui.budgetTab = el.dataset.btab; if (el.dataset.mtab) ui.mealsTab = el.dataset.mtab; go(el.dataset.to); },
   'back': () => { if (history.length > 1) history.back(); else go('home'); },
   'sheet-cancel': closeSheet,
   'sheet-save': submitSheet,

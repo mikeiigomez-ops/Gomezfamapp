@@ -381,3 +381,9 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .binder-details { white-space: pre-wrap; margin-top: 8px; font-size: 15px; }
 .binder-hidden { display: block; width: 100%; text-align: left; margin-top: 8px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); color: var(--muted); font-weight: 600; letter-spacing: .04em; }
 a.btn { text-decoration: none; }
+
+/* ---------- Recipes ---------- */
+.recipe-list { margin: 0; padding-left: 22px; line-height: 1.55; }
+.recipe-list li { padding: 3px 0; }
+.recipe-list.steps li { padding: 6px 0; }
+.recipe-list.steps li::marker { font-weight: 700; color: var(--accent); }
