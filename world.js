@@ -560,15 +560,15 @@ function tryStep(dir) {
   const p = wMe(); if (!p || WG.busy || WG.move) return false;
   WG.pos.d = dir;
   const [dx, dy] = DIRS[dir], nx = WG.pos.x + dx, ny = WG.pos.y + dy;
-  if (blockedAt(nx, ny, p)) { bump(nx, ny, p); return false; }
+  if (blockedAt(nx, ny, p)) { worldBump(nx, ny, p); return false; }
   WG.move = { fx: WG.pos.x, fy: WG.pos.y, tx: nx, ty: ny, t: 0, dur: getWorld().at(nx, ny) === T.ICE ? 0.08 : 0.17, dir };
   WG.pos.x = nx; WG.pos.y = ny;
   return true;
 }
-function bump(x, y, p) {
+function worldBump(x, y, p) {
   const o = getWorld().occ.get(x + ',' + y);
   if (Date.now() - (WG.bumpT || 0) < 600) return; // holding into a wall: react once, not every frame
-  WG.bumpT = Date.now(); navigator.vibrate?.(10);
+  WG.bumpT = Date.now(); if (typeof haptic === "function") haptic();
   if (getWorld().at(x, y) === T.CLOUD && !hasCloud(p)) { toast('☁️ The cloud bridge blew away! Maybe someone can call it back…'); return; }
   if (o && o.type === 'blocker' && objVisible(o, p)) { toast(BLOCKER_TEXT[o.kind] || 'The way is blocked.'); return; }
   const r = WG.roamers.find((q) => q.on && q.x === x && q.y === y);
@@ -876,7 +876,8 @@ function dialog(lines) {
       d.querySelector('.wd-name').textContent = who === 'you' ? member(actor()).name : o?.name || '';
       const el = d.querySelector('.wd-text'); el.textContent = ''; full = false;
       let k = 0; clearInterval(timer);
-      timer = setInterval(() => { k += 2; el.textContent = text.slice(0, k); if (k >= text.length) { clearInterval(timer); full = true; } }, 24);
+      if (reduceMotion()) { el.textContent = text; full = true; } // Reduce Motion: the whole line at once
+      else timer = setInterval(() => { k += 2; el.textContent = text.slice(0, k); if (k >= text.length) { clearInterval(timer); full = true; } }, 24);
       const say = d.querySelector('.wd-say'); say.hidden = !simpleNow(); say.onclick = (e) => { e.stopPropagation(); speak(text); };
       if (simpleNow() && typeof readAloudOn === 'function' && readAloudOn(actor()) && i === 0) speak(text);
     };

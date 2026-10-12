@@ -214,7 +214,7 @@ function squishReward(who, n) {
       state.squish.sqDay[who] = day;
       state.squish.sqBank[who] = (state.squish.sqBank[who] || 0) + 1;
       sqSound('win');
-      if (navigator.vibrate) navigator.vibrate([20, 40, 20]);
+      haptic();
       toast(`🎉 ${every} squishes! You earned a free Mystery Box`);
       save(); render();
       return;

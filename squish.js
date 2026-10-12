@@ -511,7 +511,7 @@ Object.assign(actions, {
     const me = actor(), sid = el.dataset.sid;
     el.classList.remove('squishing'); void el.offsetWidth; el.classList.add('squishing');
     sqSound('squish');
-    if (navigator.vibrate) navigator.vibrate(12);
+    haptic();
     const mine = me ? myItems(me).filter((i) => i.sid === sid) : [];
     if (!mine.length) return;
     mine[0].sq = (mine[0].sq || 0) + 1;

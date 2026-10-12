@@ -310,7 +310,7 @@ document.addEventListener('pointerdown', (e) => {
   b.classList.remove('bounce');
   b.classList.add('squeezing');
   sqSound('goo');
-  if (navigator.vibrate) navigator.vibrate(20);
+  haptic();
   ndHold = { b, sid: b.dataset.nd, t: Date.now() };
 });
 function ndRelease() {

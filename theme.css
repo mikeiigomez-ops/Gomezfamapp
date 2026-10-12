@@ -331,9 +331,7 @@ html[data-accent][data-theme="dark"] .hero { background: linear-gradient(145deg,
 .fade-up { animation: fade-up .5s var(--ease) both; }
 @keyframes fade-up { from { opacity: 0; transform: translateY(12px); } }
 
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
-}
+/* Reduced motion lives in motion.css (calm fades instead of switching everything off) */
 
 /* ---------- Budget ring label ---------- */
 .ring { position: relative; }
@@ -1746,4 +1744,3 @@ html[data-theme="dark"] .earn-btn { color: #c4b5fd; }
 html[data-theme="dark"] .gem-pill { background: linear-gradient(135deg, #1e2a44, #2e2450); color: #d8b4fe; }
 .sq-tabs3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .sq-tabs3 button { min-width: 0; }
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-iteration-count: 1 !important; } }

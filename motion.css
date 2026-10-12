@@ -1,0 +1,153 @@
+/* =====================================================================
+   Motion: one set of timing tokens and transform/opacity animations (loaded last).
+   1. Motion tokens
+   ===================================================================== */
+:root {
+  --dur-press: 90ms;    /* finger-down: almost instant */
+  --dur-fast: 160ms;    /* exits, small fades, color changes */
+  --dur-base: 240ms;    /* route enter, page turn, toast */
+  --dur-slow: 380ms;    /* sheet enter, pops */
+  --dur-slower: 560ms;  /* celebrations, reveals */
+  --ease-out: cubic-bezier(.22, 1, .36, 1);       /* enter / settle */
+  --ease-in: cubic-bezier(.4, 0, 1, 1);           /* exit */
+  --ease-in-out: cubic-bezier(.65, 0, .35, 1);    /* move across screen */
+  --ease-sheet: cubic-bezier(.32, .72, 0, 1);     /* iOS sheet: fast, no overshoot */
+  --ease-spring: cubic-bezier(.34, 1.3, .5, 1);   /* fallback before linear() is available */
+  --ease-bounce: cubic-bezier(.3, 1.6, .5, 1);
+  /* Old names now point at the new tokens, so every existing rule picks them up */
+  --ease: var(--ease-out);
+  --spring: var(--ease-spring);
+}
+@supports (transition-timing-function: linear(0, 1)) {
+  :root {
+    /* real damped springs (zeta 0.75 / 0.4); Safari 17.2+, Chrome 113+ */
+    --ease-spring: linear(0, .033, .115, .224, .344, .463, .576, .677, .763, .835, .893, .938, .971, .995, 1.011, 1.021, 1.026, 1.028, 1.028, 1.026, 1.023, 1.019, 1.016, 1.013, 1.01, 1.007, 1.005, 1.003, 1);
+    --ease-bounce: linear(0, .122, .401, .718, .99, 1.169, 1.247, 1.242, 1.184, 1.104, 1.029, .973, .942, .936, .946, .965, .985, 1.002, 1.012, 1.016, 1.015, 1.011, 1.006, 1.001, .998, .996, .996, .997, 1);
+  }
+}
+
+/* =====================================================================
+   2. Route enter: content rises in, the screen itself is not faded.
+   Animates the children, not #view, so position:fixed children (.fab,
+   .h-drawer) keep the viewport as their containing block.
+   ===================================================================== */
+#view.enter { animation: none; }
+#view.enter > :not(.fab):not(.h-drawer),
+#view.enter-back > :not(.fab):not(.h-drawer),
+#view.enter-push > :not(.fab):not(.h-drawer) { animation: route-in var(--dur-base) var(--ease-out) both; }
+#view.enter-push > :not(.fab):not(.h-drawer) { animation-name: route-push; }
+#view.enter-back > :not(.fab):not(.h-drawer) { animation-name: route-back; }
+#view[class*="enter"] > :nth-child(2) { animation-delay: 25ms; }
+#view[class*="enter"] > :nth-child(3) { animation-delay: 50ms; }
+#view[class*="enter"] > :nth-child(n+4) { animation-delay: 70ms; }
+@keyframes route-in { from { opacity: 0; transform: translateY(10px); } }
+@keyframes route-push { from { opacity: 0; transform: translateX(24px); } }
+@keyframes route-back { from { opacity: 0; transform: translateX(-24px); } }
+/* page turns use the same tokens */
+#view.pg-in-r > :not(.fab):not(.h-drawer), #view.pg-in-l > :not(.fab):not(.h-drawer),
+.pg-region.pg-in-r > :not(.pg-mini), .pg-region.pg-in-l > :not(.pg-mini) { animation-duration: var(--dur-base); animation-timing-function: var(--ease-out); }
+
+/* =====================================================================
+   3. Bottom sheet: iOS curve (no overshoot, so no gap under the sheet),
+   plus an exit. A slab under the sheet covers any spring overshoot.
+   ===================================================================== */
+.sheet { animation: sheet-up var(--dur-slow) var(--ease-sheet) both; }
+.sheet::after { content: ""; position: absolute; left: 0; right: 0; top: 100%; height: 60px; background: inherit; pointer-events: none; }
+.sheet-backdrop { animation: fade var(--dur-base) var(--ease-out) both; }
+.sheet.closing { animation: sheet-down var(--dur-fast) var(--ease-in) both; pointer-events: none; }
+.sheet-backdrop.closing { animation: fade-out var(--dur-fast) var(--ease-in) both; pointer-events: none; }
+@keyframes sheet-down { to { transform: translateY(100%); } }
+@keyframes fade-out { to { opacity: 0; } }
+
+/* =====================================================================
+   4. Press feedback: fast press-in, springy release (iOS / Toca feel)
+   ===================================================================== */
+.card.tile, .row.tap, .chip, .btn, .mini-tile, .hstat, .hero-dinner, .segmented button, .fab, .tabbar button, .icon-btn, .check, .pill[data-action], .launch .tile, .sq-tile, .treat, .reward, .job-main {
+  transition: transform var(--dur-slow) var(--ease-spring), background-color var(--dur-fast), box-shadow var(--dur-fast), opacity var(--dur-fast);
+  touch-action: manipulation;
+}
+.card.tile:active, .row.tap:active, .chip:active, .btn:active, .mini-tile:active, .hstat:active, .hero-dinner:active, .fab:active, .icon-btn:active, .pill[data-action]:active, .launch .tile:active, .sq-tile:active, .treat:active, .reward:active, .job-main:active {
+  transition-duration: var(--dur-press); transition-timing-function: var(--ease-out);
+}
+/* Kids: squash on press, jelly on release */
+body.kid-mode .launch .tile:active, body.kid-mode .sq-tile:active, body.kid-mode .treat:active, body.kid-mode .job-main:active { transform: scale(1.04, .9); }
+body.kid-mode .launch .tile, body.kid-mode .sq-tile, body.kid-mode .treat, body.kid-mode .job-main { transform-origin: 50% 100%; transition-timing-function: var(--ease-bounce); transition-duration: var(--dur-slower); }
+/* Kids: tile emoji idle bob, staggered so the grid breathes */
+body.kid-mode .launch .tile-e { animation: idle-bob 2.8s var(--ease-in-out) infinite; }
+body.kid-mode .launch .tile:nth-child(3n+2) .tile-e { animation-delay: -.9s; }
+body.kid-mode .launch .tile:nth-child(3n) .tile-e { animation-delay: -1.8s; }
+@keyframes idle-bob { 50% { transform: translateY(-3px) rotate(-2deg); } }
+
+/* Tab switch: the new tab's icon does a little boing (tabbar persists, so it only fires on change) */
+.tabbar button.active svg, .tabbar button.active .kt { animation: tab-boing var(--dur-slower) var(--ease-out); }
+@keyframes tab-boing { 0% { transform: scale(1); } 30% { transform: scale(.82, 1.12) translateY(-2px); } 60% { transform: scale(1.1, .94); } 100% { transform: translateY(-1px) scale(1.06); } }
+/* tab buttons are equal width: only animate the ink's transform */
+.tab-ink { transition: transform var(--dur-slow) var(--ease-spring), opacity var(--dur-fast); }
+
+/* =====================================================================
+   5. Toast: springy in, quick ease-in out
+   ===================================================================== */
+.toast { transition: transform var(--dur-fast) var(--ease-in), opacity var(--dur-fast) var(--ease-in); }
+.toast.show { transition: transform var(--dur-slow) var(--ease-spring), opacity var(--dur-fast) var(--ease-out); }
+
+/* =====================================================================
+   6. Celebrate: one clean spring (the old check-pop ran a spring per
+   keyframe segment and hung at 1.16x), confetti ABOVE the dim layer, exit.
+   ===================================================================== */
+.celebrate { animation: fade var(--dur-base) var(--ease-out) both; }
+.celebrate-card { animation: pop-in var(--dur-slower) var(--ease-bounce) both; }
+.celebrate-title { display: inline-block; animation: pop-in var(--dur-slower) 120ms var(--ease-bounce) both; }
+.celebrate.closing { animation: fade-out var(--dur-fast) var(--ease-in) both; }
+.celebrate.closing .celebrate-card { animation: pop-out var(--dur-fast) var(--ease-in) both; }
+@keyframes pop-in { from { opacity: 0; transform: scale(.6); } 40% { opacity: 1; } }
+@keyframes pop-out { to { opacity: 0; transform: scale(.9); } }
+.confetti { z-index: 135; } /* above .celebrate (120) and .box-reveal (130) */
+.confetti span.burst {
+  top: var(--y, 45%); left: var(--x, 50%) !important;
+  animation: confetti-burst var(--d, 1.4s) cubic-bezier(.15, .7, .4, 1) both !important; will-change: transform, opacity;
+}
+@keyframes confetti-burst {
+  0% { transform: translate(-50%, -50%) scale(.3) rotate(0); opacity: 1; }
+  45% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1) rotate(var(--r)); opacity: 1; }
+  100% { transform: translate(calc(-50% + var(--dx) * 1.2), calc(-50% + var(--dy) + 55vh)) scale(.9) rotate(calc(var(--r) * 2)); opacity: 0; }
+}
+
+/* =====================================================================
+   7. Paint-heavy loops → compositor-only (transform/opacity)
+   ===================================================================== */
+/* live dot / mic: box-shadow pulse → ring pseudo-element */
+.live-dot, .mic-btn.on { position: relative; animation: none; }
+.live-dot::after, .mic-btn.on::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: currentColor; color: var(--good); opacity: .5; animation: ring-out 1.6s var(--ease-out) infinite; pointer-events: none; }
+.mic-btn.on::after { color: var(--bad); }
+@keyframes ring-out { to { transform: scale(2.4); opacity: 0; } }
+/* your-turn glow */
+.your-turn { position: relative; animation: none; }
+.your-turn::after { content: ""; position: absolute; inset: -3px; border-radius: inherit; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); opacity: 0; animation: breathe 2s var(--ease-in-out) infinite; pointer-events: none; }
+@keyframes breathe { 50% { opacity: 1; } }
+/* Squishvale A-button ready */
+.wh-a.ready { animation: wready-s 1s var(--ease-in-out) infinite; box-shadow: 0 0 0 6px rgba(255, 212, 59, .65), 0 8px 22px rgba(255, 107, 157, .5); }
+@keyframes wready-s { 50% { transform: scale(1.08); } }
+/* Dream House clouds: left → translate */
+.hs-cloud, .street .hs-cloud { left: 0; animation-name: cloud-x; }
+.hs-cloud.c2 { transform: none; scale: .7; }
+@keyframes cloud-x { from { translate: -90px 0; } to { translate: calc(100vw + 20px) 0; } }
+
+/* =====================================================================
+   8. Reduced motion: keep fades (they orient), drop travel/scale/loops.
+   Replaces the .01ms blanket rule, which also removed every fade.
+   ===================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: var(--dur-fast) !important; animation-iteration-count: 1 !important; transition-duration: var(--dur-fast) !important; transition-property: opacity, background-color, color, border-color !important; }
+  #view[class*="enter"] > *, #view[class*="pg-in"] > *, .pg-region > * { animation-name: fade !important; }
+  .sheet { animation-name: fade !important; } .sheet.closing { animation-name: fade-out !important; }
+  .celebrate-card, .celebrate-title, .br-card, .br-sq { animation-name: fade !important; }
+  .confetti, .br-rays, .hs-cloud, .dh-smoke, .live-dot::after, .mic-btn.on::after { animation: none !important; }
+  .confetti { display: none; }
+}
+
+/* Dream House decorating: lift the item while dragging (inner node, so the
+   outer translate(-50%,-100%) anchor is untouched) */
+.room.editing .hi .hii { transition: transform var(--dur-fast) var(--ease-out); }
+.room.editing .hi.dragging .hii { transform: translateY(-6%) scale(1.1); }
+
+@media (prefers-reduced-motion: reduce) { .wenc { animation: wfadein .2s both !important; } }
