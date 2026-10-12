@@ -401,7 +401,7 @@ views.kid = () => {
   const syncWait = typeof Sync !== 'undefined' && Sync.cfg?.kid && Sync.status !== 'synced' && Sync.status !== 'offline';
   const rsvp = typeof rsvpUpcoming === 'function' ? rsvpUpcoming(10).filter(({ ev, d }) => !ev.rsvp?.[d]?.[id]).slice(0, 1) : [];
   const tiles = [
-    { to: 'chores', e: '🧹', label: 'My chores', sub: todo ? `${todo} to do` : 'All done! 🎉', color: '#3b82f6', badge: todo || '' },
+    { to: 'chores', e: '🧹', label: 'My chores', sub: todo ? `${todo} to do` : myChores.length ? 'All done! 🎉' : 'None yet', color: '#3b82f6', badge: todo || '' },
     rs.length ? { to: 'routines', e: '🌅', label: 'Routines', sub: rsLeft ? `${rsLeft} to finish` : 'Done ✓', color: '#f59e0b' } : null,
     { to: 'squishies', e: '🧸', label: 'Squishies', sub: free ? '🎁 Free box!' : `${n} collected`, color: '#ec4899', badge: free ? '!' : '' },
     { to: 'house', e: '🏡', label: 'Dream House', sub: h ? `${h.rooms.length} room${h.rooms.length > 1 ? 's' : ''}` : 'Move in!', color: '#8b5cf6' },
@@ -410,7 +410,7 @@ views.kid = () => {
     fr ? { to: 'friends', e: '👯', label: 'Friends', sub: frNew ? `${frNew} new` : 'Trade & chat', color: '#f43f5e', badge: frNew || '' } : null,
     { to: 'gems', e: GEM, label: 'Gems', sub: `${gemBalance(id)} game gems`, color: '#7c3aed' },
     { to: 'chores', e: '🏆', label: 'Rewards', sub: `${pointsBalance(id)} points`, color: '#eab308', attrs: 'data-ctab="rewards"' },
-    { to: 'piggy', e: '🐷', label: 'Piggy bank', sub: money(jarTotal(id, 'save') + jarTotal(id, 'spend') + jarTotal(id, 'give'), { maximumFractionDigits: 0 }), color: '#e85d8a' },
+    moneyMode(id) !== 'none' ? { to: 'piggy', e: '🐷', label: 'Piggy bank', sub: money(jarTotal(id, 'save') + jarTotal(id, 'spend') + jarTotal(id, 'give'), { maximumFractionDigits: 0 }), color: '#e85d8a' } : null,
     { to: 'checkin', e: esc(checkinOf(id)?.mood || '😊'), label: 'Check-in', sub: checkinOf(id) ? 'Done ✓' : 'How are you?', color: '#f97316' },
     { act: 'kudos-new', e: '🙌', label: 'High-five', sub: 'Cheer someone', color: '#14b8a6' },
     { to: 'wishes', e: '🎁', label: 'My wishes', sub: `${state.wishes.filter((w) => w.memberId === id).length}`, color: '#a855f7' },
@@ -446,7 +446,7 @@ function simpleLauncher(id) {
   const unread = state.chat.filter((x) => x.at > (seen().chat || 0) && x.who !== id).length;
   const syncWait = typeof Sync !== 'undefined' && Sync.cfg?.kid && Sync.status !== 'synced' && Sync.status !== 'offline';
   const tiles = [
-    { to: 'chores', e: '🧹', label: 'My jobs', sub: left ? `${left} to do` : 'All done! 🎉', color: '#3b82f6', badge: left || '' },
+    { to: 'chores', e: '🧹', label: 'My jobs', sub: left ? `${left} to do` : jobs.length ? 'All done! 🎉' : 'None yet', color: '#3b82f6', badge: left || '' },
     { to: 'routines', e: esc(now?.emoji || '🌅'), label: 'My routine', sub: now ? (routineComplete(now) ? 'Done! ⭐' : `${steps} of ${now.steps.length}`) : 'None yet', color: '#f59e0b' },
     { to: 'treats', e: '🎁', label: 'Treats', sub: `⭐ ${stars}`, color: '#ec4899' },
     { to: 'squishies', e: '🧸', label: 'Squishies', sub: free ? 'Free box!' : 'My collection', color: '#a855f7', badge: free ? '!' : '' },

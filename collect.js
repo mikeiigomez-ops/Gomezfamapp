@@ -196,7 +196,7 @@ function niddoSVG(s, opts = {}) {
    ========================================================= */
 Object.assign(BOXES, {
   niddo: { name: 'Niddo Capsule', emoji: '🫧', cost: 30, odds: { C: 58, R: 28, E: 10, L: 3.5, M: 0.5 }, pity: 5, pityTier: 'R', shiny: 0.02 },
-  spooky: { name: 'Spooky Box', emoji: '🎃', cost: 40, odds: { C: 55, R: 30, E: 11, L: 3.6, M: 0.4 }, pity: 6, pityTier: 'E', season: 'spooky', shiny: 0.03 },
+  spooky: { name: 'Spooky Box', emoji: '🎃', cost: 40, odds: { C: 55, R: 30, E: 11, L: 4, M: 0 }, pity: 6, pityTier: 'E', season: 'spooky', shiny: 0.03 },
   winter: { name: 'Snow Globe Box', emoji: '❄️', cost: 40, odds: { C: 55, R: 30, E: 11, L: 3.5, M: 0.5 }, pity: 6, pityTier: 'E', season: 'winter', shiny: 0.03 },
 });
 BOXES.free.shiny = 0.01; BOXES.deluxe.shiny = 0.05;

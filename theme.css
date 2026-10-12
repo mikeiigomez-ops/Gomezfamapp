@@ -528,6 +528,7 @@ body.store-mode main { padding-bottom: calc(var(--safe-bottom) + 40px); }
 
 /* Privacy lock */
 body.locked { overflow: hidden; }
+body.locked > :not(.lock):not(script) { visibility: hidden !important; }
 .lock {
   position: fixed; inset: 0; z-index: 200; display: grid; place-items: center;
   background: var(--bg); background-image: radial-gradient(120% 60% at 50% 0%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 70%);

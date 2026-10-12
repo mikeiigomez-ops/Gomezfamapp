@@ -116,7 +116,7 @@ function onePiggy(id, kid) {
 function stickerBook(id) {
   const bs = badgesFor(id), got = bs.filter((b) => b.got), next = bs.filter((b) => !b.got).slice(0, 3);
   return `<div class="sticker-grid">${got.map((b) => `<div class="sticker"><span>${b.emoji}</span><b>${esc(b.name)}</b></div>`).join('') || '<div class="card empty" style="grid-column:1/-1">Do jobs and routines to earn stickers! 🌟</div>'}</div>
-    ${next.length ? `<div class="section-title">Next stickers</div><div class="sticker-grid">${next.map((b) => `<div class="sticker locked"><span>❓</span><b>${esc(b.how)}</b></div>`).join('')}</div>` : ''}`;
+    ${next.length ? `<div class="section-title">Next stickers</div><div class="sticker-grid">${next.map((b) => `<div class="sticker locked"><span style="filter:grayscale(1);opacity:.45">${b.emoji}</span><b>${esc(b.how)}</b></div>`).join('')}</div>` : ''}`;
 }
 
 /* =========================================================
@@ -247,7 +247,7 @@ Object.assign(actions, {
       title: `💵 ${member(id).name}'s allowance`,
       values: { amount: a.amount, day: a.day },
       fields: [{ row: [{ name: 'amount', label: 'Every week', type: 'money', placeholder: '0 = none' }, { name: 'day', label: 'Paid on', type: 'select', options: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((d, i) => ({ value: i, label: d })) }] }],
-      onSave(v) { pg.allowance = v.amount ? { amount: v.amount, day: Number(v.day), split: { save: 0, spend: 100, give: 0 } } : null; if (!pg.lastPaid) pg.lastPaid = today(); toast(v.amount ? 'Allowance set — goes into the piggy bank' : 'Allowance off'); },
+      onSave(v) { pg.allowance = v.amount ? { amount: v.amount, day: Number(v.day), split: { save: 0, spend: 100, give: 0 } } : null; if (!pg.lastPaid) pg.lastPaid = addDays(today(), -1); toast(v.amount ? 'Allowance set — goes into the piggy bank' : 'Allowance off'); },
     });
   },
   'piggy-add': (el) => (moneyMode(el.dataset.id) === 'jars' ? _pAdd(el) : onePiggyMoney(el.dataset.id, 1)),
@@ -273,3 +273,11 @@ views.kids = () => _kidsView()
     const k = kids().find((x) => esc(x.name) === name);
     return `${pre}${name}</b>${k && k.simple ? ' <span class="pill accent">Simple</span>' : ''}`;
   });
+// Pre-readers: hear the name of any tile, tab, sticker, treat or wish they tap
+document.addEventListener('click', (e) => {
+  const id = simpleKid();
+  if (!id || !readAloudOn(id) || e.target.closest('.say')) return;
+  const el = e.target.closest('.tile, .lt, .tabbar button, .sticker, .treat.can, .wish');
+  const label = el && (el.querySelector('b') || el.querySelector('span:last-child'))?.textContent.trim();
+  if (label) speak(label);
+}, true);

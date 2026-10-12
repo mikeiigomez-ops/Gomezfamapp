@@ -118,25 +118,33 @@ function defaultState() {
   };
 }
 
+let loadFailed = false;
 function load() {
+  let raw = null;
   try {
-    const raw = localStorage.getItem(STORE_KEY);
+    raw = localStorage.getItem(STORE_KEY);
     if (!raw) return defaultState();
     return migrate(JSON.parse(raw));
   } catch (e) {
     console.error('Could not load saved data', e);
+    loadFailed = true;
+    try { if (raw) localStorage.setItem(STORE_KEY + ':broken', raw); } catch {} // never lose the original
     return defaultState();
   }
 }
 
 // Fill in any keys added in later versions so older saves keep working.
 function migrate(s) {
+  if (!s || typeof s !== 'object' || Array.isArray(s)) throw new Error('bad save');
   const d = defaultState();
   s.members ??= d.members;
+  if (!Array.isArray(s.members)) s.members = d.members;
+  for (const m of s.members) if (m && !/^#[0-9a-f]{3,8}$/i.test(m.color || '')) m.color = COLORS[0];
   s.budget ??= d.budget;
   s.budget.categories ??= d.budget.categories;
   s.budget.transactions ??= [];
   s.budget.bills ??= [];
+  s.budget.bills = s.budget.bills.filter((b) => b && typeof b === 'object');
   for (const b of s.budget.bills) {
     b.type ||= 'bill';
     b.freq ||= 'monthly';
@@ -155,6 +163,7 @@ function migrate(s) {
   s.gifts ??= [];
   s.meals ??= {};
   s.chores ??= [];
+  for (const c of s.chores) for (const l of c?.log || []) if (l && !l.id) l.id = `cl-${l.date}-${l.memberId || ''}`; // stable ids so two phones' check-offs merge
   s.projects ??= [];
   s.goals ??= [];
   s.binder ??= [];
@@ -176,6 +185,7 @@ function migrate(s) {
   s.squish ??= {}; s.squish.items ??= []; s.squish.trades ??= []; s.squish.pity ??= {}; s.squish.free ??= {}; s.squish.dust ??= {};
   s.houses ??= {}; s.houseVotes ??= {}; s.avatars ??= {};
   s.friends ??= {}; s.friends.circleId ??= ''; s.friends.rules ??= {}; s.friends.muted ??= {};
+  s.projects = s.projects.filter((p) => p && typeof p === 'object');
   for (const pr of s.projects) { pr.items ??= []; pr.steps ??= []; }
   s.settings = { ...d.settings, ...(s.settings || {}) };
   s.version = 1;
@@ -1401,8 +1411,15 @@ function render() {
   // Detail screens carry their own header card, so they skip the large title and show the item's name when scrolled.
   const detail = { person: () => person(param)?.name, project: () => state.projects.find((x) => x.id === param)?.name,
     goal: () => state.goals.find((x) => x.id === param)?.name, recipe: () => state.recipes.find((x) => x.id === param)?.name }[name];
-  const title = (detail && detail()) || TITLES[name];
-  const html = (name === 'home' || name === 'kid' || detail ? '' : `<h1 class="large-title">${esc(title)}</h1>`) + views[name](param);
+  let title = TITLES[name], html;
+  try {
+    title = (detail && detail()) || TITLES[name];
+    html = (name === 'home' || name === 'kid' || detail ? '' : `<h1 class="large-title">${esc(title)}</h1>`) + views[name](param);
+  } catch (e) {
+    // One broken screen never strands you: show a way out instead of freezing on the old screen
+    console.error('render ' + name, e);
+    html = `<div class="card empty"><span class="big">😵</span>This screen hit a snag. Your data is safe.<div class="btn-row" style="justify-content:center"><button class="btn" data-action="go" data-to="${typeof inKidMode === 'function' && inKidMode() ? 'kid' : 'home'}">Back to Home</button></div></div>`;
+  }
   const key = name + '/' + (param || '');
   const changed = lastRouteKey !== null && lastRouteKey !== key;
   lastRouteKey = key;
@@ -1420,7 +1437,7 @@ function render() {
       viewEl.querySelector(sel)?.classList.add('pop');
       ui.pop = null;
     }
-    if (typeof afterRender === 'function') afterRender();
+    if (typeof afterRender === 'function') { try { afterRender(); } catch (e) { console.error('afterRender', e); } }
   };
   // Paint synchronously. (Safari's view transitions sometimes left the new screen undrawn until a scroll,
   // so screens now just fade in with a plain opacity animation.)
@@ -1460,10 +1477,12 @@ function toast(msg, undo) {
   toastTimer = setTimeout(() => el.classList.remove('show'), undo ? 5000 : 2200);
 }
 function withUndo(msg, mutate) {
-  const snap = JSON.stringify(state);
+  const before = JSON.parse(JSON.stringify(state));
   mutate();
+  const after = JSON.parse(JSON.stringify(state));
   save(); render();
-  toast(msg, () => { state = JSON.parse(snap); save(); render(); });
+  // Undo only this change; keep anything that arrived from other phones since.
+  toast(msg, () => { state = typeof mergeState === 'function' ? migrate(mergeState(after, before, JSON.parse(JSON.stringify(state)))) : before; save(); render(); });
 }
 
 /* =========================================================
@@ -2068,7 +2087,7 @@ function toggleChore(c) {
     return;
   }
   const finish = (memberId) => {
-    c.log.push({ date: t, memberId });
+    c.log.push({ id: `cl-${t}-${memberId || ''}`, date: t, memberId });
     const m = memberId ? member(memberId) : null;
     toast(`${m ? m.name + ' earned' : 'Earned'} ${c.points || 1} point${(c.points || 1) > 1 ? 's' : ''} ⭐`);
     save(); render();
@@ -2348,8 +2367,8 @@ document.addEventListener('change', (e) => {
   if (el.id === 'importFile' && el.files?.[0]) {
     el.files[0].text().then((txt) => {
       const data = JSON.parse(txt);
-      if (!data || typeof data !== 'object' || !data.version) throw new Error('Not a backup file');
-      if (!confirm('Replace everything on this device with this backup?')) return;
+      if (!data || typeof data !== 'object' || Array.isArray(data) || !data.version || !Array.isArray(data.members)) throw new Error('Not a backup file');
+      if (!confirm(typeof Sync !== 'undefined' && Sync.ref ? 'Replace the WHOLE FAMILY’s shared data (every phone) with this backup?' : 'Replace everything on this device with this backup?')) return;
       state = migrate(data); save(); applyTheme(); render(); toast('Backup restored ✓');
     }).catch(() => toast('That file is not a valid backup')).finally(() => { el.value = ''; });
     return;

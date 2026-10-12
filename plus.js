@@ -454,9 +454,16 @@ function showLock() {
     ${cfg.cred ? `<button class="lock-faceid" data-action="lock-faceid">Unlock with Face ID</button>` : ''}
   </div>`;
   document.body.classList.add('locked');
+  // The lock hides the app from screen readers and keyboards too, not just from eyes
+  for (const id of ['app', 'sheet', 'sheetBackdrop', 'toast']) document.getElementById(id)?.setAttribute('inert', '');
   lockedAt = Date.now();
 }
-function unlock() { $('#lock')?.remove(); document.body.classList.remove('locked'); pinBuf = ''; pinFails = 0; }
+let pendingDeepLink = '';
+function unlock() {
+  $('#lock')?.remove(); document.body.classList.remove('locked'); pinBuf = ''; pinFails = 0;
+  for (const id of ['app', 'sheet', 'sheetBackdrop', 'toast']) document.getElementById(id)?.removeAttribute('inert');
+  if (pendingDeepLink) { history.replaceState(null, '', location.pathname + pendingDeepLink); pendingDeepLink = ''; handleDeepLink(); }
+}
 async function tryFaceId() {
   const cfg = lockCfg();
   if (!cfg?.cred) return;
@@ -557,13 +564,15 @@ function openMagicWith(text) {
    9 · Siri & Shortcuts deep links:  …/#add=<text>   (add &go to save without asking)
    ========================================================= */
 function handleDeepLink() {
-  const m = location.hash.match(/^#add=([^&]*)(&go)?/);
+  const m = location.hash.match(/^#(go&)?add=([^&]*)(&go)?/);
   if (!m) return false;
-  const text = decodeURIComponent(m[1].replace(/\+/g, ' ')).trim();
+  if ($('#lock')) { pendingDeepLink = location.hash; history.replaceState(null, '', location.pathname + '#home'); return true; } // finish after unlocking
+  if (typeof inKidMode === 'function' && inKidMode()) { history.replaceState(null, '', location.pathname + '#kid'); toast('Ask a grown-up 🙂'); return true; }
+  const text = decodeURIComponent(m[2].replace(/\+/g, ' ')).trim();
   history.replaceState(null, '', location.pathname + '#home');
   render();
   if (!text) { setTimeout(() => openMagicWith('')); return true; }
-  if (m[2]) {
+  if (m[1] || m[3]) {
     const r = parseMagic(text);
     if (r) { openMagicWith(text); setTimeout(() => submitSheet(), 50); return true; }
   }

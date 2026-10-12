@@ -181,6 +181,9 @@ function listen() {
     if (!snap.exists()) return setStatus('error', 'That family wasn\'t found. Check the invite code.');
     const d = snap.data();
     Sync.emails = d.emails || [];
+    // Kid logins made before kid roles existed: list them as kids (parent phones only)
+    const kidEmails = Object.values(state.kidAccounts || {}).map((a) => String(a?.email || '').toLowerCase()).filter(Boolean);
+    if (!Sync.cfg.kid && kidEmails.some((e) => !(d.kids || []).includes(e))) Sync.fb.fs.updateDoc(Sync.ref, { kids: Sync.fb.fs.arrayUnion(...kidEmails) }).catch(() => {});
     if (typeof liveFromDoc === 'function') liveFromDoc(d.live);
     let remote;
     try { remote = JSON.parse(d.data); } catch { return setStatus('error', 'The shared data looks damaged.'); }
@@ -198,14 +201,25 @@ function listen() {
   }, (err) => syncError(err));
 }
 
+// Redraw after another phone's change without wiping what you're typing in a field on screen
+function renderRemote() {
+  const ae = document.activeElement;
+  const keep = ae && viewEl.contains(ae) && ae.name && /^(INPUT|TEXTAREA)$/.test(ae.tagName) && !/^(checkbox|radio|file)$/.test(ae.type)
+    ? { sel: (ae.form?.dataset.submit ? `[data-submit="${ae.form.dataset.submit}"] ` : '') + `[name="${ae.name}"]`, v: ae.value, s: ae.selectionStart, e: ae.selectionEnd } : null;
+  render();
+  if (!keep) return;
+  const el = viewEl.querySelector(keep.sel);
+  if (el && el !== document.activeElement) { el.value = keep.v; el.focus({ preventScroll: true }); try { el.setSelectionRange(keep.s, keep.e); } catch {} }
+}
 function applyRemote(remote, rev) {
   if (Sync.base && rev <= Sync.base.rev) return; // our own write echoing back, or an older copy
   if (sheetIsOpen() || Sync.pushing) { Sync.pending = { remote, rev }; return; }
   Sync.pending = null;
   const local = shared(state);
   const merged = Sync.base ? mergeState(Sync.base.data, local, remote) : remote;
+  const next = same(merged, local) ? null : adopt(merged); // may throw: then the baseline stays put
   setBase(remote, rev);
-  if (!same(merged, local)) { state = adopt(merged); persistLocal(); if (typeof activityResync === 'function') activityResync(); render(); }
+  if (next) { state = next; persistLocal(); if (typeof activityResync === 'function') activityResync(); renderRemote(); }
   if (!same(merged, remote)) schedulePush();
 }
 
@@ -240,7 +254,7 @@ async function push() {
     // Fold in anything changed on this phone while the write was in flight.
     const now = shared(state);
     const next = mergeState(start, now, merged);
-    if (!same(next, now)) { state = adopt(next); persistLocal(); if (typeof activityResync === 'function') activityResync(); render(); }
+    if (!same(next, now)) { state = adopt(next); persistLocal(); if (typeof activityResync === 'function') activityResync(); renderRemote(); }
     if (!same(next, merged)) Sync.dirty = true;
     markSynced();
     const size = JSON.stringify(merged).length;
@@ -517,6 +531,8 @@ Object.assign(actions, {
 
 /* ---------- Boot ---------- */
 (function bootSync() {
+  // This phone's saved data couldn't be read: take the family copy instead of pushing an empty one
+  if (typeof loadFailed !== 'undefined' && loadFailed && Sync.cfg?.familyId) { Sync.cfg.joining = true; saveCfg(); }
   // Opened from an invite link (…/#join=GFAM1.xxxx): go straight to the join sheet.
   const m = location.hash.match(/^#join=(.+)$/);
   if (m) {

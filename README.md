@@ -79,12 +79,15 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /families/{familyId} {
-      allow read, update, delete: if request.auth != null
-        && request.auth.token.email_verified
-        && request.auth.token.email in resource.data.emails;
-      allow create: if request.auth != null
-        && request.auth.token.email_verified
-        && request.auth.token.email in request.resource.data.emails;
+      function signedIn() { return request.auth != null && request.auth.token.email_verified; }
+      function isMember() { return signedIn() && request.auth.token.email in resource.data.emails; }
+      // Kid logins (listed in "kids") can sync app data but never change who has access or delete the family
+      function isKid() { return request.auth.token.email in resource.data.get('kids', []); }
+      allow read: if isMember();
+      allow update: if isMember() && (!isKid()
+        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['data', 'rev', 'updatedAt', 'updatedBy', 'live']));
+      allow delete: if isMember() && !isKid();
+      allow create: if signedIn() && request.auth.token.email in request.resource.data.emails;
     }
     // Live visits: each person's spot in Dream House or Squishvale, readable by the family
     match /families/{familyId}/live/{memberId} {

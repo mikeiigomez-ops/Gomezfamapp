@@ -13,12 +13,21 @@ const CIRCLE_RULES = `rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /families/{familyId} {
-      allow read, update, delete: if request.auth != null
+      function signedIn() { return request.auth != null && request.auth.token.email_verified; }
+      function isMember() { return signedIn() && request.auth.token.email in resource.data.emails; }
+      // Kid logins (listed in "kids") can sync app data but never change who has access or delete the family
+      function isKid() { return request.auth.token.email in resource.data.get('kids', []); }
+      allow read: if isMember();
+      allow update: if isMember() && (!isKid()
+        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['data', 'rev', 'updatedAt', 'updatedBy', 'live']));
+      allow delete: if isMember() && !isKid();
+      allow create: if signedIn() && request.auth.token.email in request.resource.data.emails;
+    }
+    // Live visits: each person's spot in Dream House or Squishvale, readable by the family
+    match /families/{familyId}/live/{memberId} {
+      allow read, write: if request.auth != null
         && request.auth.token.email_verified
-        && request.auth.token.email in resource.data.emails;
-      allow create: if request.auth != null
-        && request.auth.token.email_verified
-        && request.auth.token.email in request.resource.data.emails;
+        && request.auth.token.email in get(/databases/$(database)/documents/families/$(familyId)).data.emails;
     }
     match /circles/{circleId} {
       allow read, update: if request.auth != null
@@ -75,6 +84,10 @@ function unsafeText(t) {
   if ((t.match(/\d/g) || []).length >= 7) return 'no phone numbers';
   if (/\b\d{2,6}\s+\w+\s+(st|street|ave|avenue|rd|road|dr|drive|ln|lane|ct|court|blvd|way)\b/i.test(t)) return 'no addresses';
   if (/\b(snap(chat)?|insta(gram)?|tiktok|discord|whatsapp|roblox user(name)?)\b/i.test(t)) return 'no usernames from other apps';
+  if (/\bdot ?(com|net|org)\b/i.test(t)) return 'no links';
+  if ((t.match(/\d/g) || []).length + (t.match(/\b(zero|one|two|three|four|five|six|seven|eight|nine)\b/gi) || []).length >= 7) return 'no phone numbers';
+  if (/\b(snap|sc|ig|tik ?tok|whats ?app|roblox|fortnite|minecraft|you ?tube|kik|telegram|facetime|messenger|xbox|psn|gamertag|user ?name|add me)\b/i.test(t)) return 'no usernames from other apps';
+  if (/\b(where do you live|what school|your address|home alone|send (me )?(a )?(pic|photo|selfie)|keep (it|this) (a )?secret|don.?t tell)\b/i.test(t)) return 'let’s keep personal stuff private';
   if (BAD_WORDS.test(t)) return 'let’s keep it kind';
   return '';
 }
@@ -90,8 +103,26 @@ const Circle = (() => {
 const clone = (x) => JSON.parse(JSON.stringify(x));
 const circle = () => (Circle.id && Circle.id === state.friends.circleId ? Circle.local : null);
 function persistCircle() { try { localStorage.setItem(CIRCLE_KEY, JSON.stringify({ id: Circle.id, local: Circle.local, base: Circle.base })); } catch {} }
+// Circle data is written by other families: treat it as untrusted and clean it where it enters the app.
+const SAFE_KEY = /^[A-Za-z0-9_-]{1,40}(:[A-Za-z0-9_-]{1,40})?$/, SAFE_COLOR = /^#[0-9a-fA-F]{3,8}$/, RX_OK = ['❤️', '😂', '👍', '😮', '🎉'];
+const clampN = (v, lo, hi, d) => { v = Number(v); return Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d; };
 function normCircle(d) {
-  d.fams ||= {}; d.people ||= {}; d.chat ||= []; d.trades ||= []; d.shows ||= {}; d.invites ||= {};
+  for (const k of ['fams', 'people', 'shows', 'invites']) if (!d[k] || typeof d[k] !== 'object' || Array.isArray(d[k])) d[k] = {};
+  for (const k of ['chat', 'trades']) if (!Array.isArray(d[k])) d[k] = [];
+  for (const o of [d.fams, d.people, d.shows]) for (const k of Object.keys(o)) if (!SAFE_KEY.test(k) || !o[k] || typeof o[k] !== 'object') delete o[k];
+  for (const p of Object.values(d.people)) { if (!SAFE_COLOR.test(p.color || '')) p.color = '#999999'; p.name = String(p.name || '').slice(0, 30); p.emoji = String(p.emoji || '🙂').slice(0, 8); }
+  for (const x of Object.values(d.fams)) { x.name = String(x.name || '').slice(0, 40); x.emoji = String(x.emoji || '🏡').slice(0, 8); }
+  d.chat = d.chat.filter((m) => m && SAFE_KEY.test(String(m.id)) && SAFE_KEY.test(String(m.from)) && typeof m.text === 'string');
+  for (const m of d.chat) { m.text = m.text.slice(0, 500); m.at = clampN(m.at, 0, 9e15, 0); if (m.rx && typeof m.rx === 'object') { for (const e of Object.keys(m.rx)) if (!RX_OK.includes(e)) delete m.rx[e]; } else delete m.rx; }
+  d.trades = d.trades.filter((t) => t && SAFE_KEY.test(String(t.id)) && SAFE_KEY.test(String(t.from)) && SAFE_KEY.test(String(t.to)) && Array.isArray(t.give) && Array.isArray(t.get));
+  for (const t of d.trades) t.at = clampN(t.at, 0, 9e15, 0);
+  for (const s of Object.values(d.shows)) {
+    const h = s.house; if (!h || typeof h !== 'object') { delete s.house; continue; }
+    if (!SAFE_COLOR.test(h.roof || '')) h.roof = '#e8590c';
+    if (!SAFE_COLOR.test(h.siding || '')) h.siding = '#fff3bf';
+    h.rooms = (Array.isArray(h.rooms) ? h.rooms : []).slice(0, 8).filter((r) => r && typeof r === 'object');
+    for (const r of h.rooms) r.i = (Array.isArray(r.i) ? r.i : []).slice(0, 200).filter(Array.isArray).map(([f, x, y, sc, fl, sid]) => [String(f), clampN(x, 0, 100, 50), clampN(y, 0, 100, 50), clampN(sc, 0.3, 3, 1), fl ? 1 : 0, ...(sid ? [String(sid)] : [])]);
+  }
   return d;
 }
 function circleEmails(d) {
@@ -329,6 +360,7 @@ document.addEventListener('click', async (e) => {
 // Invite links: #join-circle=<code>
 function readPendingCircle() { try { return JSON.parse(localStorage.getItem(PENDING_CIRCLE_KEY) || 'null'); } catch { return null; } }
 function catchInvite() {
+  if (typeof unb64url !== 'function') return false; // sync.js not loaded yet; the load handler retries
   const m = location.hash.match(/^#join-circle=([A-Za-z0-9_-]+)/);
   if (!m) return false;
   try {
@@ -420,16 +452,17 @@ views.fchat = () => {
     if (day !== lastDay) { sep = `<div class="chat-day">${day === today() ? 'Today' : day === addDays(today(), -1) ? 'Yesterday' : fmtDate(day, { weekday: 'long', month: 'short', day: 'numeric' })}</div>`; lastDay = day; last = ''; }
     const p = personOf(x.from) || { name: 'Someone', emoji: '👤', color: '#999' };
     const mine = x.from === me, cont = last === x.from;
+    const hide = !mine && isKidId(actor()) && !['preset', 'sticker'].includes(x.kind) && !!unsafeText(x.text); // shield kids from unsafe incoming messages too
     last = x.from;
     const big = x.kind === 'sticker' || bigEmoji(x.text);
     const rx = Object.entries(x.rx || {}).filter(([, w]) => Object.keys(w).length);
     const canDel = !kidHere() && (isMine(x.from) || mine);
-    return `${sep}<div class="msg${mine ? ' mine' : ''}${cont ? ' cont' : ''}" style="--c:${p.color}">
+    return `${sep}<div class="msg${mine ? ' mine' : ''}${cont ? ' cont' : ''}" style="--c:${esc(p.color)}">
       ${mine ? '' : `<div class="msg-av">${cont ? '' : esc(p.emoji)}</div>`}
       <div class="msg-body">${mine || cont ? '' : `<div class="msg-name">${esc(p.name)} <span class="fam-tag">${esc(famEmoji(famOf(x.from)))} ${esc(famName(famOf(x.from)))}</span></div>`}
-        <button class="bubble${big ? ' big' : ''}${x.kind === 'preset' ? ' preset' : ''}" data-action="fmsg-tap" data-id="${x.id}">${esc(x.text)}<span class="msg-time">${new Date(x.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span></button>
-        ${rx.length ? `<div class="msg-rx">${rx.map(([e, w]) => `<button class="${w[me] ? 'on' : ''}" data-action="fmsg-react" data-id="${x.id}" data-e="${e}">${e}${Object.keys(w).length > 1 ? Object.keys(w).length : ''}</button>`).join('')}</div>` : ''}
-        ${ui.fmsgPick === x.id ? `<div class="rx-pick">${['❤️', '😂', '👍', '😮', '🎉'].map((e) => `<button data-action="fmsg-react" data-id="${x.id}" data-e="${e}">${e}</button>`).join('')}${canDel ? `<button class="rx-del" data-action="fmsg-del" data-id="${x.id}" aria-label="Delete">🗑️</button>` : ''}${!kidHere() && !isMine(x.from) ? `<button class="rx-del" data-action="fmute" data-k="${x.from}" aria-label="Mute">🔇</button>` : ''}</div>` : ''}
+        <button class="bubble${big ? ' big' : ''}${x.kind === 'preset' ? ' preset' : ''}" data-action="fmsg-tap" data-id="${esc(x.id)}">${hide ? '🛡️ <i>Hidden to keep you safe — show a grown-up</i>' : esc(x.text)}<span class="msg-time">${new Date(x.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span></button>
+        ${rx.length ? `<div class="msg-rx">${rx.map(([e, w]) => `<button class="${w[me] ? 'on' : ''}" data-action="fmsg-react" data-id="${esc(x.id)}" data-e="${esc(e)}">${esc(e)}${Object.keys(w).length > 1 ? Object.keys(w).length : ''}</button>`).join('')}</div>` : ''}
+        ${ui.fmsgPick === x.id ? `<div class="rx-pick">${['❤️', '😂', '👍', '😮', '🎉'].map((e) => `<button data-action="fmsg-react" data-id="${esc(x.id)}" data-e="${esc(e)}">${esc(e)}</button>`).join('')}${canDel ? `<button class="rx-del" data-action="fmsg-del" data-id="${x.id}" aria-label="Delete">🗑️</button>` : ''}${!kidHere() && !isMine(x.from) ? `<button class="rx-del" data-action="fmute" data-k="${x.from}" aria-label="Mute">🔇</button>` : ''}</div>` : ''}
       </div></div>`;
   }).join('');
   const why = friendBlock('chat');
@@ -519,9 +552,9 @@ function friendTradeCard(t) {
   return `<div class="card trade-card friend-trade">
     <div class="small"><b>${esc(pName(t.from))}</b> <span class="fam-tag">${esc(famName(famOf(t.from)))}</span> ${esc(status)} · ${timeAgo(t.at)}</div>
     <div class="trade-swap"><div><div class="small muted">${esc(pName(t.from))} gives</div>${row(t.give)}</div><span class="swap-arrow">⇄</span><div><div class="small muted">${esc(pName(t.to))} gives</div>${row(t.get)}</div></div>
-    ${t.status === 'offered' && t.to === me && t.ok?.[famOf(t.from)] ? `<div class="btn-row"><button class="btn secondary" data-action="ft-no" data-id="${t.id}">No thanks</button><button class="btn" data-action="ft-yes" data-id="${t.id}">✅ Accept</button></div>` : ''}
-    ${myApproval ? `<div class="btn-row"><button class="btn secondary" data-action="ft-deny" data-id="${t.id}">🚫 Don’t allow</button><button class="btn" data-action="ft-ok" data-id="${t.id}">👍 Allow trade</button></div>` : ''}
-    ${['offered', 'accepted'].includes(t.status) && t.from === me ? `<button class="mini-btn" data-action="ft-cancel" data-id="${t.id}">Cancel offer</button>` : ''}
+    ${t.status === 'offered' && t.to === me && t.ok?.[famOf(t.from)] ? `<div class="btn-row"><button class="btn secondary" data-action="ft-no" data-id="${esc(t.id)}">No thanks</button><button class="btn" data-action="ft-yes" data-id="${esc(t.id)}">✅ Accept</button></div>` : ''}
+    ${myApproval ? `<div class="btn-row"><button class="btn secondary" data-action="ft-deny" data-id="${esc(t.id)}">🚫 Don’t allow</button><button class="btn" data-action="ft-ok" data-id="${esc(t.id)}">👍 Allow trade</button></div>` : ''}
+    ${['offered', 'accepted'].includes(t.status) && t.from === me ? `<button class="mini-btn" data-action="ft-cancel" data-id="${esc(t.id)}">Cancel offer</button>` : ''}
   </div>`;
 }
 function friendTradesHTML(mid) {
@@ -582,7 +615,7 @@ function rulesHelp(open) {
 function personTile(k) {
   const p = personOf(k), sh = circle().shows[k] || {};
   const fav = sh.fav?.[0];
-  return `<button class="friend-tile" data-action="go" data-to="friend/${encodeURIComponent(k)}" style="--c:${p.color}">
+  return `<button class="friend-tile" data-action="go" data-to="friend/${encodeURIComponent(k)}" style="--c:${esc(p.color)}">
     <div class="ft-art">${fav && SQ[fav] ? squishySVG(fav) : `<span class="ft-emoji">${esc(p.emoji)}</span>`}</div>
     <b>${esc(p.emoji)} ${esc(p.name)}</b><small>${sh.n || 0} squishies</small></button>`;
 }
@@ -621,7 +654,7 @@ views.friend = (param) => {
   const by = {};
   for (const [, sid] of sh.items || []) by[sid] = (by[sid] || 0) + 1;
   const canTrade = !isMine(k) && p.trade !== 'off' && !friendBlock('trade');
-  return `<section class="friend-hero" style="--c:${p.color}"><div class="fh-av">${esc(p.emoji)}</div><div class="fh-name">${esc(p.name)}</div><div class="small">${esc(famEmoji(famOf(k)))} ${esc(famName(famOf(k)))}</div>
+  return `<section class="friend-hero" style="--c:${esc(p.color)}"><div class="fh-av">${esc(p.emoji)}</div><div class="fh-name">${esc(p.name)}</div><div class="small">${esc(famEmoji(famOf(k)))} ${esc(famName(famOf(k)))}</div>
       <div class="fh-stats"><span><b>${sh.n || 0}</b>squishies</span><span><b>${likes.length}</b>likes</span></div></section>
     <div class="btn-row">${!isMine(k) ? `<button class="btn secondary${likes.includes(me) ? ' liked' : ''}" data-action="fr-like" data-k="${esc(k)}">${likes.includes(me) ? '💖 Liked' : '🤍 Like'}</button>` : ''}${canTrade ? `<button class="btn" data-action="fr-trade" data-k="${esc(k)}">🔁 Trade</button>` : ''}</div>
     ${sh.fav?.length ? `<div class="section-title">⭐ Favorites</div><div class="sq-grid">${sh.fav.filter((s) => SQ[s]).map((s) => sqTile(s, '', 'data-action="noop"')).join('')}</div>` : ''}
@@ -697,6 +730,7 @@ Object.assign(actions, {
   'fr-invite': () => inviteSheet(),
   'fr-invite-setup': () => {
     const p = readPendingCircle(); if (!p) return;
+    if (!confirm(`Heads up: this keeps ALL of your family’s synced data (budget, binder, calendar…) in ${p.f || 'the inviting family'}’s Firebase project “${p.c?.projectId || ''}”. Whoever owns that project can see it. Only continue if you fully trust them.`)) return;
     Sync.cfg = { ...(Sync.cfg || {}), config: p.c }; saveCfg(); startSync();
     toast(`Now create your account with ${p.e || 'your email'}`);
     go('settings');
@@ -755,7 +789,7 @@ inboxItems = function () {
   if (!d || !me) return items;
   const myKey = pkey(me), f = famId();
   const unread = d.chat.filter((m) => m.at > (seen().fchat || 0) && m.from !== myKey && !mutedHere(m.from));
-  if (unread.length && !(isKidId(me) && !kidRule(me).on)) items.unshift({ n: unread.length, icon: '👯', title: `${unread.length} new in Friends chat`, sub: `${pName(unread.at(-1).from)}: ${unread.at(-1).text}`, to: 'fchat' });
+  if (unread.length && !(isKidId(me) && !kidRule(me).on)) items.unshift({ n: unread.length, icon: '👯', title: `${unread.length} new in Friends chat`, sub: `${pName(unread.at(-1).from)}: ${isKidId(me) && unsafeText(unread.at(-1).text) ? '🛡️ hidden' : unread.at(-1).text}`, to: 'fchat' });
   for (const t of friendTradeInbox(me)) items.unshift({ n: 1, icon: '🔁', title: `${pName(t.from)} wants to trade squishies`, sub: famName(famOf(t.from)), to: 'friends' });
   if (!kidHere() && !isKidId(me)) for (const t of d.trades.filter((t) => t.need?.[f] && !t.ok?.[f] && ['offered', 'accepted'].includes(t.status))) items.unshift({ n: 1, icon: '🛡️', title: `OK a squishy trade? ${pName(isMine(t.from) ? t.from : t.to)} ⇄ ${pName(isMine(t.from) ? t.to : t.from)}`, sub: 'Tap to allow or not', to: 'friends' });
   return items;
@@ -780,7 +814,8 @@ afterRender = function () {
 };
 // Keep the circle connection in step with family sync (it can come online after the first render).
 setInterval(() => { if (state.friends.circleId && !Circle.unsub && syncReady()) ensureCircle(); }, 2000);
-if (location.hash.startsWith('#join-circle=')) setTimeout(catchInvite);
+// Wait until every script (sync.js decodes the link) has loaded
+if (location.hash.startsWith('#join-circle=')) { if (document.readyState === 'complete') setTimeout(catchInvite); else window.addEventListener('load', () => setTimeout(catchInvite)); }
 
 // Kid home: a Friends tile when they're allowed.
 const _kidViewF = views.kid;

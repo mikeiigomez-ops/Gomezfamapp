@@ -109,6 +109,7 @@ const FURN_SVG = {
   rug: () => `<svg viewBox="0 0 100 40" class="h-svg"><ellipse cx="50" cy="20" rx="49" ry="19" fill="#ff8fab"/><ellipse cx="50" cy="20" rx="40" ry="14" fill="#ffd6e5"/><ellipse cx="50" cy="20" rx="28" ry="9" fill="#ff8fab"/><ellipse cx="50" cy="20" rx="16" ry="5" fill="#fff0f6"/></svg>`,
   shelf: () => `<svg viewBox="0 0 100 30" class="h-svg"><rect x="2" y="18" width="96" height="7" rx="3" fill="#b98558"/><path d="M14 25 L18 30 M86 25 L82 30" stroke="#8a5a34" stroke-width="4"/><rect x="12" y="4" width="6" height="14" fill="#4dabf7"/><rect x="19" y="2" width="6" height="16" fill="#ff6b6b"/><rect x="26" y="6" width="5" height="12" fill="#ffd43b"/><circle cx="72" cy="11" r="7" fill="#69db7c"/></svg>`,
 };
+const safeCol = (c, d) => (/^#[0-9a-fA-F]{3,8}$/.test(c || '') ? c : d);
 function itemHTML(it, room, opts = {}) {
   let f = FURN[it.f], content, z, layer, cls = '';
   if (it.f === 'sq') {
@@ -125,7 +126,7 @@ function itemHTML(it, room, opts = {}) {
   }
   const zi = layer * 1000 + Math.round(it.y * 5) + (it.zb ? 500 : 0);
   const wander = f?.pet ? `;--wd:${7 + (hashStr(it.id) % 6)}s;--wdl:-${(hashStr(it.id) % 5) / 2}s` : '';
-  return `<div class="hi${cls}${opts.sel === it.id ? ' sel' : ''}${opts.newId === it.id ? ' dropin' : ''}" data-hi="${it.id}" style="left:${it.x}%;top:${it.y}%;--z:${z};--s:${it.s || 1};--fx:${it.flip ? -1 : 1};z-index:${zi}${wander}"><span class="hii">${content}</span></div>`;
+  return `<div class="hi${cls}${opts.sel === it.id ? ' sel' : ''}${opts.newId === it.id ? ' dropin' : ''}" data-hi="${it.id}" style="left:${Number(it.x) || 0}%;top:${Number(it.y) || 0}%;--z:${z};--s:${Number(it.s) || 1};--fx:${it.flip ? -1 : 1};z-index:${zi}${wander}"><span class="hii">${content}</span></div>`;
 }
 function roomHTML(r, opts = {}) {
   const wall = WALLS[opts.wall || r.wall] || WALLS.cream, floor = FLOORS[opts.floor || r.floor] || FLOORS.wood;
@@ -146,9 +147,9 @@ function houseExterior(h, o = {}) {
   const roofD = mixHex(h.roof, '#000000', 0.18), sideD = mixHex(h.siding, '#000000', 0.1), win = o.night ? '#ffe066' : '#bfe3ff';
   return `<svg class="hx" viewBox="0 0 120 112">
     <rect x="80" y="14" width="11" height="24" rx="2" fill="${roofD}"/>${o.smoke ? '<g class="smoke"><circle cx="85" cy="9" r="4" fill="#fff" opacity=".7"/><circle cx="89" cy="2" r="3" fill="#fff" opacity=".5"/></g>' : ''}
-    <path d="M4 54 L60 12 L116 54 Z" fill="${h.roof}"/><path d="M14 48 L106 48 M24 40 L96 40 M35 32 L85 32 M46 24 L74 24" stroke="${roofD}" stroke-width="1.6" opacity=".55"/>
+    <path d="M4 54 L60 12 L116 54 Z" fill="${safeCol(h.roof, '#e8590c')}"/><path d="M14 48 L106 48 M24 40 L96 40 M35 32 L85 32 M46 24 L74 24" stroke="${roofD}" stroke-width="1.6" opacity=".55"/>
     <circle cx="60" cy="36" r="6" fill="${win}" stroke="#fff" stroke-width="2"/>
-    <rect x="16" y="52" width="88" height="54" rx="3" fill="${h.siding}"/><path d="M16 64 H104 M16 76 H104 M16 88 H104" stroke="${sideD}" stroke-width="1" opacity=".6"/>
+    <rect x="16" y="52" width="88" height="54" rx="3" fill="${safeCol(h.siding, '#fff3bf')}"/><path d="M16 64 H104 M16 76 H104 M16 88 H104" stroke="${sideD}" stroke-width="1" opacity=".6"/>
     <rect x="12" y="50" width="96" height="5" rx="2.5" fill="${roofD}"/>
     <rect x="51" y="74" width="18" height="32" rx="9" fill="${roofD}"/><circle cx="65" cy="91" r="1.7" fill="#ffd43b"/>
     ${[22, 80].map((x) => `<rect x="${x}" y="62" width="18" height="16" rx="3" fill="${win}" stroke="#fff" stroke-width="2"/><path d="M${x + 9} 62 V78 M${x} 70 H${x + 18}" stroke="#fff" stroke-width="1.4"/><rect x="${x - 2}" y="78" width="22" height="5" rx="2" fill="#8a5a34"/><circle cx="${x + 3}" cy="77" r="2.4" fill="#ff6b9d"/><circle cx="${x + 9}" cy="76.5" r="2.4" fill="#ffd43b"/><circle cx="${x + 15}" cy="77" r="2.4" fill="#ff8787"/>`).join('')}
@@ -161,7 +162,7 @@ function houseExterior(h, o = {}) {
    ========================================================= */
 function dollhouse(h, mid, visitor, o = {}) {
   const av = o.avatar ? `<div class="dh-avatar" data-action="${o.avatarAction || 'av-wave'}" data-to="${o.avatarTo || ''}">${avatarSVG(o.avatar, { cls: 'idle' })}${o.bubble ? `<span class="av-bubble">${esc(o.bubble)}</span>` : ''}</div>` : '';
-  return `<div class="dollhouse" style="--roof:${h.roof};--siding:${h.siding}">
+  return `<div class="dollhouse" style="--roof:${safeCol(h.roof, '#e8590c')};--siding:${safeCol(h.siding, '#fff3bf')}">
     <div class="dh-chimney"><span class="dh-smoke"></span><span class="dh-smoke s2"></span></div>
     <div class="dh-roof"><span class="dh-sign">${esc(h.name)}</span></div>
     <div class="dh-body">${h.rooms.map((r) => `<button class="dh-room" ${o.roomAction ? o.roomAction(r) : `data-action="go" data-to="room/${r.id}"`}>${roomHTML(r, { mini: true, avatars: o.roomAvatars ? o.roomAvatars(r) : [] })}<span class="dh-label">${ROOM_TYPES[r.type]?.[0] || '🏠'} ${esc(r.name)}</span></button>`).join('')}

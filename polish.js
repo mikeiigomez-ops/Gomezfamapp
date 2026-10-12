@@ -94,7 +94,7 @@ function sqGetMore(me) {
   return `${season ? `<div class="season-banner s-${season[0]}"><span>${season[1].emoji}</span><div><b>${season[1].name} season!</b><small>Limited squishies — only for a little while</small></div></div>` : ''}
     <div class="dust-card"><span class="dc-ic">💫</span><div class="dc-main"><b>Star Dust</b><div class="dc-bar"><i style="width:${Math.min(100, (dust / DUST_GOAL) * 100)}%"></i></div><small>${simpleMe() ? `Extra squishies → 💫 → free box!` : `Doubles turn into Star Dust. ${DUST_GOAL} = a free Rare+ box!`}</small></div>${dust >= DUST_GOAL ? '<button class="b2-buy free" data-action="sq-open" data-box="dust">Open!</button>' : `<span class="dc-n">${dust}/${DUST_GOAL}</span>`}</div>
     <div class="box-list">${live.map(card).join('')}</div>
-    <div class="section-title">🛍️ Today’s shop<span class="small shop-timer" style="text-transform:none">New in ${untilMidnight()}</span></div>
+    <div class="section-title">🛍️ Today’s shop<span class="small" style="text-transform:none">New ones every day</span></div>
     <div class="sq-grid shop">${shopToday().map((s) => sqTile(s.id, `<span class="price">${GEM} ${RARITY[s.r].price}</span>${ownsSid(me, s.id) ? '<i class="have">✓ Have it</i>' : ''}<i class="rar-gem rg-${s.r}"></i>`, `data-action="sq-buy" data-sid="${s.id}"`)).join('')}</div>
     <p class="small muted" style="margin:10px 4px">👑 Ultimates can’t be bought — earn them in Unlocks!</p>`;
 }

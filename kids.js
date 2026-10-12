@@ -27,7 +27,8 @@ function kidLevel(id) {
 }
 function choreCount(id) { let n = 0; for (const c of state.chores) for (const l of c.log || []) if (l.memberId === id) n++; return n; }
 function badgesFor(id) {
-  const streak = choreStreak(id), saved = jarTotal(id, 'save');
+  const streak = choreStreak(id), mm = typeof moneyMode === 'function' ? moneyMode(id) : 'jars';
+  const saved = mm === 'jars' ? jarTotal(id, 'save') : jarTotal(id, 'save') + jarTotal(id, 'spend') + jarTotal(id, 'give');
   const morning = state.routines.filter((r) => r.memberId === id && r.part === 'morning').reduce((a, r) => a + Object.keys(r.done || {}).filter((d) => routineComplete(r, d)).length, 0);
   const lastWeek = weekStart(addDays(weekStart(today()), -1));
   const wk = {}; for (const c of state.chores) for (const l of c.log || []) if (l.memberId && l.date >= lastWeek && l.date < weekStart(today())) wk[l.memberId] = (wk[l.memberId] || 0) + (Number(c.points) || 1);
@@ -47,7 +48,7 @@ function badgesFor(id) {
     ['🎟️', 'Treat yourself', 'Redeem a reward', (state.redemptions || []).some((r) => r.memberId === id && r.status === 'approved' && r.rewardId !== 'cash')],
     ['🏆', 'Champion', 'Most points last week', champ],
     ['💯', 'Century', 'Earn 100 points', pointsEarned(id) >= 100],
-  ].map(([emoji, name, how, got]) => ({ emoji, name, how, got }));
+  ].filter(([e]) => !(mm === 'none' && ['🐷', '💰', '💝'].includes(e)) && !(mm === 'one' && e === '💝')).map(([emoji, name, how, got]) => ({ emoji, name, how, got }));
 }
 const LEVEL_SEEN_KEY = 'gomezfam:levels';
 function checkLevelUp(id) {
@@ -299,7 +300,7 @@ views.kid = () => {
     </section>
     ${rs.length ? `<div class="section-title">My routines</div>${rs.map((r) => routineCard(r, true)).join('')}` : ''}
     <div class="section-title">My chores</div>
-    <div class="card flush">${todo.map(kidChoreRow).join('') || '<div class="empty">🎉 All done! Nice work!</div>'}${done.map(kidChoreRow).join('')}</div>
+    <div class="card flush">${todo.map(kidChoreRow).join('') || (myChores.length ? '<div class="empty">🎉 All done! Nice work!</div>' : '<div class="empty">🧹 No chores yet — ask a grown-up to add some!</div>')}${done.map(kidChoreRow).join('')}</div>
     ${evs.length ? `<div class="section-title">Today</div><div class="card flush">${evs.map((e) => `<div class="row"><div class="time-col">${e.time ? fmtTime(e.time) : 'All day'}</div><div class="grow"><div class="title">${esc(e.title)}</div></div></div>`).join('')}</div>` : ''}
     ${poll && typeof pollCard === 'function' ? `<div class="section-title">Family vote</div>${pollCard(poll)}` : ''}
     <div class="kid-tiles">
@@ -396,14 +397,19 @@ views.chores = () => {
       ${(state.redemptions || []).filter((r) => r.memberId === id && r.status === 'pending').map((r) => `<div class="card small">⏳ Waiting for a grown-up: ${esc(state.rewards.find((x) => x.id === r.rewardId)?.name || 'reward')}</div>`).join('')}`;
   }
   const mine = state.chores.filter((c) => c.memberId === id || !c.memberId);
-  return tabs + `<div class="card flush">${mine.filter((c) => !choreDone(c)).map(kidChoreRow).join('') || '<div class="empty">🎉 All done!</div>'}${mine.filter((c) => choreDone(c)).map(kidChoreRow).join('')}</div>`;
+  return tabs + `<div class="card flush">${mine.filter((c) => !choreDone(c)).map(kidChoreRow).join('') || (mine.length ? '<div class="empty">🎉 All done!</div>' : '<div class="empty">🧹 No chores yet — ask a grown-up to add some!</div>')}${mine.filter((c) => choreDone(c)).map(kidChoreRow).join('')}</div>`;
 };
 
 async function kidPinHash(pin) { return sha('kid:' + pin); }
 function parentPinCheck(onOk) {
   const lock = lockCfg();
-  const hasKidPin = !!localStorage.getItem(KID_PIN_KEY);
-  if (!lock?.pin && !hasKidPin) { onOk(); return; }
+  const kidPin = localStorage.getItem(KID_PIN_KEY) || state.settings.kidPin || '';
+  const hasKidPin = !!kidPin;
+  if (!lock?.pin && !hasKidPin) {
+    // A kid's own device never leaves Kid Mode without a grown-up PIN
+    if (typeof Sync !== 'undefined' && Sync.cfg?.kid) { toast('Ask a grown-up 🙂 (they set the Kid Mode PIN in their app)'); return; }
+    onOk(); return;
+  }
   let buf = '';
   const el = document.createElement('div');
   el.className = 'lock';
@@ -425,14 +431,14 @@ function parentPinCheck(onOk) {
     buf = k === 'del' ? buf.slice(0, -1) : (buf + k).slice(0, 4);
     el.querySelectorAll('.pin-dots i').forEach((d, i) => d.classList.toggle('on', i < buf.length));
     if (buf.length === 4) {
-      const ok = (lock?.pin && (await sha(buf)) === lock.pin) || (hasKidPin && (await kidPinHash(buf)) === localStorage.getItem(KID_PIN_KEY));
+      const ok = (lock?.pin && (await sha(buf)) === lock.pin) || (hasKidPin && (await kidPinHash(buf)) === kidPin);
       if (ok) { done(); onOk(); } else { buf = ''; const dots = el.querySelector('.pin-dots'); dots.classList.remove('shake'); void dots.offsetWidth; dots.classList.add('shake'); setTimeout(() => el.querySelectorAll('.pin-dots i').forEach((d) => d.classList.remove('on')), 300); }
     }
   }, true);
   document.body.appendChild(el);
 }
 function enterKidMode(id) {
-  const start = () => { if (!state.settings.kidMode) state.settings.meBeforeKid = state.settings.me || ''; state.settings.kidMode = id; state.settings.me = id; save(); applyKidChrome(); go('kid'); render(); toast(`🧒 Kid Mode on for ${member(id).name}`); };
+  const start = () => { if (!state.settings.kidPin && localStorage.getItem(KID_PIN_KEY)) state.settings.kidPin = localStorage.getItem(KID_PIN_KEY); if (!state.settings.kidMode) state.settings.meBeforeKid = state.settings.me || ''; state.settings.kidMode = id; state.settings.me = id; save(); applyKidChrome(); go('kid'); render(); toast(`🧒 Kid Mode on for ${member(id).name}`); };
   if (lockCfg()?.pin || localStorage.getItem(KID_PIN_KEY)) { start(); return; }
   openSheet({
     title: 'Parent PIN',
@@ -444,7 +450,7 @@ function enterKidMode(id) {
     ],
     onSave(v) {
       if (!/^\d{4}$/.test(v.pin)) { toast('PIN must be 4 digits'); return false; }
-      kidPinHash(v.pin).then((h) => { localStorage.setItem(KID_PIN_KEY, h); start(); });
+      kidPinHash(v.pin).then((h) => { localStorage.setItem(KID_PIN_KEY, h); state.settings.kidPin = h; start(); });
     },
   });
 }
@@ -470,6 +476,7 @@ async function kidDeviceSheet(k) {
     openSheet({ title: `${k.name}'s device`, saveLabel: 'OK', values: {}, fields: [{ type: 'html', html: `<p>Kid devices join through <b>Family sync</b>. Turn it on first in <b>Settings → Family sync</b>, then come back here.</p><p class="small muted">No sync? You can still use <b>Kid Mode</b> on this phone.</p>` }], onSave() {} });
     return;
   }
+  if (!localStorage.getItem(KID_PIN_KEY) && !state.settings.kidPin && !lockCfg()?.pin) { toast('First pick a parent PIN: start Kid Mode once on this phone'); return; }
   const parent = Sync.user.email;
   let acct = state.kidAccounts[k.id];
   if (!acct) {
@@ -489,13 +496,13 @@ async function kidDeviceSheet(k) {
       acct.email = v.email.toLowerCase();
       state.kidAccounts[k.id] = acct;
       const { updateDoc, arrayUnion } = Sync.fb.fs;
-      updateDoc(Sync.ref, { emails: arrayUnion(acct.email) }).catch(syncError);
+      updateDoc(Sync.ref, { emails: arrayUnion(acct.email), kids: arrayUnion(acct.email) }).catch(syncError);
       setTimeout(() => showKidCode(k, acct));
     },
   });
 }
 function kidCode(k, acct) {
-  return KID_PREFIX + b64url(JSON.stringify({ c: Sync.cfg.config, f: Sync.cfg.familyId, e: acct.email, p: acct.pw, m: k.id, n: k.name }));
+  return KID_PREFIX + b64url(JSON.stringify({ c: Sync.cfg.config, f: Sync.cfg.familyId, e: acct.email, p: acct.pw, m: k.id, n: k.name, h: localStorage.getItem(KID_PIN_KEY) || state.settings.kidPin || '' }));
 }
 async function showKidCode(k, acct) {
   const code = kidCode(k, acct);
@@ -526,6 +533,7 @@ function kidJoin(o) {
   if (hasOwnData() && !confirm(`Set this device up for ${o.n}? Its current data will be replaced with your family's.`)) return;
   Sync.cfg = { config: o.c, familyId: o.f, joining: true, kid: { email: o.e, pw: o.p } };
   saveCfg();
+  if (o.h) { localStorage.setItem(KID_PIN_KEY, o.h); state.settings.kidPin = o.h; }
   writeJSON(BASE_KEY, null); Sync.base = null;
   state.settings.kidMode = o.m; state.settings.me = o.m;
   if (!state.members.some((x) => x.id === o.m)) state.members.push({ id: o.m, name: o.n, emoji: '🧒', color: COLORS[2], kid: true });
@@ -577,15 +585,36 @@ async function startScan() {
 /* =========================================================
    Actions & hooks
    ========================================================= */
-const _toggleChore = actions['toggle-chore'];
+const _toggleChore = actions['toggle-chore'], _rewardRedeem = actions['reward-redeem'];
 Object.assign(actions, {
   // In Kid Mode, "Anyone" chores are credited to the kid without asking who did it.
+  // A kid can only un-tick their own check-off (never a sibling's), and not once those points are spent.
   'toggle-chore': (el) => {
     const c = findIn(state.chores, el.dataset.id);
-    if (!inKidMode() || choreDone(c)) return _toggleChore(el);
-    (c.log ||= []).push({ date: today(), memberId: kidModeId() });
-    toast(`⭐ +${c.points || 1} point${(c.points || 1) > 1 ? 's' : ''}!`);
+    if (!inKidMode()) return _toggleChore(el);
+    const me = kidModeId(), t = today(), pts = Number(c.points) || 1;
+    if (choreDone(c)) {
+      const from = c.freq === 'daily' ? t : c.freq === 'weekly' ? weekStart(t) : '0000';
+      const mine = (c.log || []).filter((l) => l.date >= from && l.memberId === me);
+      if (!mine.length) { const by = (c.log || []).filter((l) => l.date >= from).at(-1)?.memberId; toast(`${by && state.members.some((m) => m.id === by) ? member(by).name : 'Someone'} already did this one 🙌`); return; }
+      if (pointsBalance(me) - mine.length * pts < 0) { toast('Those points are already used for a reward — ask a grown-up'); return; }
+      c.log = c.log.filter((l) => !(l.date >= from && l.memberId === me));
+      save(); render(); return;
+    }
+    (c.log ||= []).push({ id: `cl-${t}-${me}`, date: t, memberId: me });
+    toast(`⭐ +${pts} point${pts > 1 ? 's' : ''}!`);
     save(); render();
+  },
+  // In Kid Mode you can only spend your own points
+  'reward-redeem': (el) => {
+    if (!inKidMode()) return _rewardRedeem(el);
+    const id = kidModeId(), r = findIn(state.rewards, el.dataset.id), bal = pointsBalance(id);
+    if (!r) return;
+    if (bal < r.cost) { toast(`${r.cost - bal} more points to go! 💪`); return; }
+    if ((state.redemptions || []).some((x) => x.memberId === id && x.rewardId === r.id && x.status === 'pending')) { toast('Already asked — waiting for a grown-up'); return; }
+    openSheet({ title: `${r.emoji || '🎁'} ${r.name}`, saveLabel: `Use ${r.cost} points`, values: {},
+      fields: [{ type: 'html', html: `<p>You have <b>${bal}</b> points. After this you’ll have <b>${bal - r.cost}</b>.</p><p class="small muted">A grown-up will say OK.</p>` }],
+      onSave() { (state.redemptions ||= []).push({ id: uid(), rewardId: r.id, memberId: id, cost: r.cost, at: Date.now(), status: 'pending' }); toast('🎟️ Asked! Waiting for a grown-up'); } });
   },
   'routine-new': () => routineForm(null),
   'routine-edit': (el) => routineForm(findIn(state.routines, el.dataset.id)),
@@ -617,7 +646,7 @@ Object.assign(actions, {
         const tot = (v.save || 0) + (v.spend || 0) + (v.give || 0);
         if (v.amount && tot !== 100) { toast(`The split adds up to ${tot}% — make it 100%`); return false; }
         pg.allowance = v.amount ? { amount: v.amount, day: Number(v.day), split: { save: v.save || 0, spend: v.spend || 0, give: v.give || 0 } } : null;
-        if (!pg.lastPaid) pg.lastPaid = today();
+        if (!pg.lastPaid) pg.lastPaid = addDays(today(), -1);
         toast(v.amount ? `Allowance set — paid automatically every ${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][Number(v.day)]}` : 'Allowance off');
       },
     });

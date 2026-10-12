@@ -778,12 +778,19 @@ Object.assign(actions, {
    🛍️ Store mode — big, one-handed checklist for the actual trip
    ========================================================= */
 TITLES.store = 'Store Mode';
-let wakeLock = null;
+let wakeLock = null, wakeWant = false, wakePending = false;
 async function setWakeLock(on) {
+  wakeWant = on;
+  if (wakePending) return; // a request is in flight; it checks wakeWant when it lands
   try {
-    if (on && !wakeLock && navigator.wakeLock) { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener?.('release', () => { wakeLock = null; }); }
-    else if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
-  } catch { wakeLock = null; }
+    if (on && !wakeLock && navigator.wakeLock) {
+      wakePending = true;
+      const l = await navigator.wakeLock.request('screen');
+      wakePending = false;
+      if (!wakeWant) { l.release(); return; }
+      wakeLock = l; l.addEventListener?.('release', () => { if (wakeLock === l) wakeLock = null; });
+    } else if (!on && wakeLock) { const l = wakeLock; wakeLock = null; await l.release(); }
+  } catch { wakePending = false; wakeLock = null; }
 }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && currentRoute().name === 'store') setWakeLock(true); });
 
