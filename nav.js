@@ -41,7 +41,8 @@ const CHIP_BADGE = {
   upkeep: () => state.maintenance.filter((u) => upkeepStatus(u).key === 'overdue').length,
   board: () => { const me = actor(); return me ? state.board.filter((b) => b.type === 'poll' && !b.closed && !b.votes?.[me]).length : 0; },
 };
-const subnavEl = $('#subnav');
+// (Created here too, so a cached older page can never leave the chip row missing)
+const subnavEl = $('#subnav') || (() => { const n = document.createElement('nav'); n.className = 'subnav'; n.id = 'subnav'; n.hidden = true; $('#view').before(n); return n; })();
 function paintNav() {
   const { name } = currentRoute();
   const kid = typeof inKidMode === 'function' && inKidMode();
@@ -77,15 +78,18 @@ const _afterRenderNav = afterRender;
 // Before the pager measures the screen: the chip row takes space from it
 afterRender = function () { paintNav(); _afterRenderNav(); };
 
-Object.assign(actions, {
-  // A tab returns to the section you last used in it; from a detail screen it goes back to that section
-  'hub': (el) => {
-    const h = HUB[el.dataset.hub]; if (!h) return;
-    const cur = currentRoute().name;
-    if (hubOf(cur) === h.id && (cur === h.to || isChip(cur))) { viewEl.scrollTo({ top: 0 }); return; }
-    go(navLast[h.id] || h.to);
-  },
-});
+// Tabs are plain links (data-to) so they always work; this makes them smarter: a tab returns to the
+// section you last used in it, and from a detail screen it goes back to that section.
+function hubTap(el) {
+  const h = HUB[el.dataset.hub]; if (!h) return false;
+  const cur = currentRoute().name;
+  if (hubOf(cur) === h.id && (cur === h.to || isChip(cur))) { viewEl.scrollTo({ top: 0 }); return true; }
+  go(navLast[h.id] || h.to);
+  return true;
+}
+const _goNav = actions.go;
+actions.go = (el, e) => { if (el.dataset?.hub && el.closest?.('.tabbar') && hubTap(el)) return; _goNav(el, e); };
+actions.hub = (el) => { if (!hubTap(el)) go('home'); };
 
 /* Inbox: the family feed and monthly recap live here now (they used to hide in More) */
 const _inboxNav = views.inbox;
