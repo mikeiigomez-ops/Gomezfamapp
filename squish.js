@@ -58,66 +58,147 @@ function mixHex(a, b, t) {
   const [x, y] = [p(a), p(b)];
   return '#' + x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, '0')).join('');
 }
+/* House "Clay" style: every part is lit from the top-left (a radial gradient from a lighter tint to a slightly
+   darker shade), the body gets a colored rim, one shared light field + glossy highlight clipped to its outline,
+   and a soft contact shadow. fx fills (galaxy, holo, gold …) are layered under the same light. */
+const SQ_INK = '#3a2b3d', SQ_BLUSH = '#ff8fab', SQ_SHADE = '#2a1830';
+const sqLum = (h) => { const [r, g, b] = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)); return 0.299 * r + 0.587 * g + 0.114 * b; };
+const sqClayGrad = (id, c) => `<radialGradient id="${id}" cx=".32" cy=".26" r=".9"><stop offset="0" stop-color="${mixHex(c, '#ffffff', 0.42)}"/><stop offset=".55" stop-color="${c}"/><stop offset="1" stop-color="${mixHex(c, SQ_SHADE, 0.2)}"/></radialGradient>`;
+const sqStops = (list) => list.map(([o, c, a]) => `<stop offset="${o}" stop-color="${c}"${a != null ? ` stop-opacity="${a}"` : ''}/>`).join('');
+// 4-point twinkle centred on (x, y)
+const sqSpark = (x, y, r, fill, cls = '') => `<path${cls ? ` class="${cls}"` : ''} d="M${x} ${y - r}Q${x + r * 0.16} ${y - r * 0.16} ${x + r} ${y}Q${x + r * 0.16} ${y + r * 0.16} ${x} ${y + r}Q${x - r * 0.16} ${y + r * 0.16} ${x - r} ${y}Q${x - r * 0.16} ${y - r * 0.16} ${x} ${y - r}Z" fill="${fill}"/>`;
+// A star with soft, rounded points (so it can be clipped and rimmed like any other body)
+function sqStarPath(cx, cy, R, r, n = 5) {
+  const v = [...Array(n * 2)].map((_, i) => { const a = -Math.PI / 2 + (i * Math.PI) / n, d = i % 2 ? r : R; return [cx + d * Math.cos(a), cy + d * Math.sin(a)]; });
+  const f = (x) => x.toFixed(1), lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+  return v.map((p, i) => { const t = i % 2 ? 0.2 : 0.3, A = lerp(p, v[(i + v.length - 1) % v.length], t), B = lerp(p, v[(i + 1) % v.length], t); return `${i ? 'L' : 'M'}${f(A[0])} ${f(A[1])}Q${f(p[0])} ${f(p[1])} ${f(B[0])} ${f(B[1])}`; }).join('') + 'Z';
+}
+const SQ_SHAPE_RE = /<(path|ellipse|circle|rect|polygon)\b[^>]*>/g;
+// Copy of the filled shapes in `str` as bare geometry (for the rim and the light clip)
+function sqBare(str, keep) {
+  return (str.match(SQ_SHAPE_RE) || []).filter(keep).map((e) => {
+    const sw = +(e.match(/stroke-width="([\d.]+)"/) || [])[1] || 0;
+    return e.replace(/ (fill|stroke|stroke-width|opacity|stroke-linejoin|stroke-linecap|class)="[^"]*"/g, '').replace(/\/?>$/, sw ? ` stroke-width="${sw}"/>` : '/>');
+  }).join('');
+}
+const SQ_FX_RIM = { galaxy: '#2a1f5c', gold: '#d0960f', rainbow: '#c39ae0', fire: '#d8452a' };
+
 function squishySVG(sid, opts = {}) {
   const s = SQ[sid];
   if (!s) return '';
   if (s.kind === 'niddo' && typeof niddoSVG === 'function') return niddoSVG(s, opts);
   const g = 'sq' + (++svgSeq);
-  const ink = '#3a2b3d', blush = '#ff8fab';
+  const ink = SQ_INK, blush = SQ_BLUSH;
   const light = mixHex(s.c1, '#ffffff', 0.55), dark = mixHex(s.c1, '#000000', 0.12);
+  const darkBody = s.fx === 'galaxy' || sqLum(s.c1) < 95;
+  // Per-color clay gradients, made on demand: C('#ffad33') → url(#…)
+  let cdefs = '', cn = 0;
+  const cmap = {};
+  const C = (c) => cmap[c] || (cdefs += sqClayGrad(`${g}c${cn}`, c), (cmap[c] = `url(#${g}c${cn++})`));
+  const st = sqStops;
   const fills = {
-    rainbow: `<linearGradient id="${g}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff9a9e"/><stop offset=".25" stop-color="#fecf7a"/><stop offset=".5" stop-color="#a8e6a1"/><stop offset=".75" stop-color="#8ec5ff"/><stop offset="1" stop-color="#c7a4ff"/></linearGradient>`,
-    galaxy: `<radialGradient id="${g}" cx=".35" cy=".3" r=".9"><stop offset="0" stop-color="${mixHex(s.c1, '#ffffff', 0.35)}"/><stop offset=".6" stop-color="${s.c1}"/><stop offset="1" stop-color="#140f33"/></radialGradient>`,
-    gold: `<linearGradient id="${g}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff3b0"/><stop offset=".45" stop-color="${s.c1}"/><stop offset="1" stop-color="#d4890b"/></linearGradient>`,
-    holo: `<linearGradient id="${g}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${light}"/><stop offset=".35" stop-color="#ffe3f6"/><stop offset=".65" stop-color="#d9f3ff"/><stop offset="1" stop-color="${s.c1}"/></linearGradient>`,
-    fire: `<linearGradient id="${g}" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#ff3d2e"/><stop offset=".6" stop-color="${s.c1}"/><stop offset="1" stop-color="#ffc94d"/></linearGradient>`,
-    glow: `<radialGradient id="${g}" cx=".5" cy=".4" r=".8"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="${s.c1}"/></radialGradient>`,
-    diamond: `<linearGradient id="${g}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".3" stop-color="#c9f6ff"/><stop offset=".55" stop-color="${s.c1}"/><stop offset=".75" stop-color="#e8d9ff"/><stop offset="1" stop-color="#8fd8ff"/></linearGradient>`,
+    rainbow: `<linearGradient id="${g}" x1="0" y1="0" x2="1" y2="1">${st([[0, '#ff9ab8'], [0.2, '#ffbe76'], [0.4, '#ffe873'], [0.6, '#8fe3a4'], [0.8, '#86c8ff'], [1, '#b99cff']])}</linearGradient>`,
+    galaxy: `<radialGradient id="${g}" cx=".34" cy=".28" r=".85">${st([[0, mixHex(s.c1, '#9a86f0', 0.45)], [0.5, s.c1], [1, '#100a28']])}</radialGradient>`,
+    gold: `<linearGradient id="${g}" x1="0" y1="0" x2=".8" y2="1">${st([[0, '#fff8cc'], [0.28, mixHex(s.c1, '#ffe27a', 0.4)], [0.5, '#eaa810'], [0.66, '#ffe58a'], [1, '#c07806']])}</linearGradient>`,
+    holo: `<linearGradient id="${g}" x1="0" y1="0" x2="1" y2="1">${st([[0, mixHex(s.c1, '#ffffff', 0.6)], [0.3, '#ffd9f3'], [0.52, '#d3f4ff'], [0.74, '#e4d9ff'], [1, s.c1]])}</linearGradient>`,
+    fire: `<linearGradient id="${g}" x1=".2" y1="1" x2=".5" y2="0">${st([[0, '#e8261f'], [0.45, s.c1], [0.8, '#ffad33'], [1, '#ffe58a']])}</linearGradient>`,
+    glow: `<radialGradient id="${g}" cx=".45" cy=".38" r=".75">${st([[0, '#ffffff'], [0.45, mixHex(s.c1, '#ffffff', 0.5)], [1, s.c1]])}</radialGradient>`,
+    diamond: `<linearGradient id="${g}" x1="0" y1="0" x2="1" y2="1">${st([[0, '#ffffff'], [0.24, '#c9f6ff'], [0.45, s.c1], [0.62, '#f0e6ff'], [0.82, '#9fdcff'], [1, '#e9fbff']])}</linearGradient>`,
   };
-  const aura = s.r === 'U' ? `<radialGradient id="${g}a"><stop offset=".45" stop-color="#fff6b0" stop-opacity=".95"/><stop offset=".75" stop-color="${s.c2}" stop-opacity=".45"/><stop offset="1" stop-color="${s.c2}" stop-opacity="0"/></radialGradient>` : '';
-  const defs = `<defs>${aura}${fills[s.fx] || `<radialGradient id="${g}" cx=".35" cy=".3" r=".85"><stop offset="0" stop-color="${light}"/><stop offset=".7" stop-color="${s.c1}"/><stop offset="1" stop-color="${dark}"/></radialGradient>`}</defs>`;
-  const F = `url(#${g})`, A = s.c2;
-  let back = '', body = '', front = '', fy = 62, art = {}; // face y
+  const fxOn = !!fills[s.fx];
+  const F = `url(#${g})`, A = s.c2, B = C(A);
+  const rim = SQ_FX_RIM[s.fx] || (s.fx ? mixHex(s.c1, '#8a78c0', 0.35) : mixHex(s.c1, SQ_SHADE, sqLum(s.c1) > 225 ? 0.17 : 0.24));
+  let back = '', body = '', front = '', fy = 64, art = {}, bb = null; // face y; bb = round body geometry
   const ear = (pts, fill) => `<path d="${pts}" fill="${fill}" stroke="${fill}" stroke-width="5" stroke-linejoin="round"/>`;
-  const round = (rx = 36, ry = 32, cy = 60) => `<ellipse cx="50" cy="${cy}" rx="${rx}" ry="${ry}" fill="${F}"/>`;
+  const round = (rx = 36, ry = 32, cy = 60) => { bb = [50, cy, rx, ry]; return `<ellipse cx="50" cy="${cy}" rx="${rx}" ry="${ry}" fill="${F}"/>`; };
+  const inner = mixHex(blush, '#ffffff', 0.25);
   switch (s.sp) {
-    case 'cat': back = ear('M20 46 L25 16 L44 34Z', F) + ear('M80 46 L75 16 L56 34Z', F) + ear('M25 38 L27 24 L36 33Z', blush) + ear('M75 38 L73 24 L64 33Z', blush); body = round(); break;
-    case 'bunny': back = `<ellipse cx="36" cy="24" rx="9" ry="22" fill="${F}" transform="rotate(-12 36 24)"/><ellipse cx="64" cy="24" rx="9" ry="22" fill="${F}" transform="rotate(12 64 24)"/><ellipse cx="36" cy="26" rx="4" ry="14" fill="${A}" transform="rotate(-12 36 26)"/><ellipse cx="64" cy="26" rx="4" ry="14" fill="${A}" transform="rotate(12 64 26)"/>`; body = round(35, 31, 62); fy = 64; break;
-    case 'bear': back = `<circle cx="24" cy="36" r="11" fill="${F}"/><circle cx="76" cy="36" r="11" fill="${F}"/><circle cx="24" cy="36" r="5.5" fill="${A}"/><circle cx="76" cy="36" r="5.5" fill="${A}"/>`; body = round(); front = `<ellipse cx="50" cy="70" rx="12" ry="8" fill="${A}"/>`; break;
-    case 'frog': back = `<circle cx="32" cy="36" r="13" fill="${F}"/><circle cx="68" cy="36" r="13" fill="${F}"/>`; body = round(38, 30, 62); front = `<ellipse cx="50" cy="78" rx="18" ry="8" fill="${A}" opacity=".8"/>`; fy = 0; break;
-    case 'penguin': body = `<ellipse cx="50" cy="58" rx="32" ry="36" fill="${F}"/>`; front = `<ellipse cx="50" cy="66" rx="22" ry="25" fill="${A}"/><ellipse cx="38" cy="93" rx="7" ry="3.5" fill="#ffad33"/><ellipse cx="62" cy="93" rx="7" ry="3.5" fill="#ffad33"/><path d="M47 66 L53 66 L50 70Z" fill="#ffad33"/>`; fy = 58; break;
-    case 'fox': back = ear('M18 48 L20 12 L44 32Z', F) + ear('M82 48 L80 12 L56 32Z', F) + ear('M21 22 L20 13 L28 19Z', A) + ear('M79 22 L80 13 L72 19Z', A); body = round(); front = `<path d="M18 66 Q30 84 50 80 Q70 84 82 66 Q76 92 50 92 Q24 92 18 66Z" fill="${A}"/>`; break;
-    case 'dumpling': body = `<path d="M12 70 Q12 40 50 34 Q88 40 88 70 Q88 88 50 88 Q12 88 12 70Z" fill="${F}"/>`; front = [38, 46, 54, 62].map((x, i) => `<path d="M${x} 36 Q${x + (i < 2 ? -3 : 3)} 44 ${x + (i < 2 ? -1 : 1)} 50" stroke="${A}" stroke-width="2.2" fill="none" stroke-linecap="round"/>`).join(''); fy = 68; break;
-    case 'peach': back = `<path d="M50 30 Q60 14 74 20 Q64 32 50 30Z" fill="${A}"/>`; body = `<path d="M50 30 C18 26 8 62 22 78 C34 92 66 92 78 78 C92 62 82 26 50 30Z" fill="${F}"/>`; front = `<path d="M50 32 Q42 48 46 62" stroke="${dark}" stroke-width="2" fill="none" opacity=".35" stroke-linecap="round"/>`; fy = 66; break;
-    case 'berry': body = `<path d="M50 90 C26 82 12 62 15 46 C18 33 32 30 50 32 C68 30 82 33 85 46 C88 62 74 82 50 90Z" fill="${F}"/>`; back = ear('M30 34 L40 20 L50 30 L60 20 L70 34Z', A); front = [[28, 50], [72, 50], [36, 76], [64, 76], [50, 82], [24, 62], [76, 62]].map(([x, y]) => `<ellipse cx="${x}" cy="${y}" rx="1.6" ry="2.4" fill="#fff4b0"/>`).join(''); fy = 56; break;
-    case 'cupcake': body = `<path d="M18 64 Q16 40 50 32 Q84 40 82 64Z" fill="${F}"/><path d="M24 62 L76 62 L69 92 L31 92Z" fill="${A}"/>`; front = [36, 44, 52, 60, 68].map((x) => `<path d="M${x} 64 L${x - 1 + (x - 50) * 0.1} 90" stroke="#fff" stroke-width="1.6" opacity=".55"/>`).join('') + `<circle cx="50" cy="28" r="6" fill="#ff4d6d"/><path d="M50 22 Q54 14 60 14" stroke="#5cbf5a" stroke-width="2" fill="none"/>`; fy = 50; break;
-    case 'mochi': body = `<path d="M10 74 Q10 40 50 38 Q90 40 90 74 Q90 88 50 88 Q10 88 10 74Z" fill="${F}"/>`; front = `<ellipse cx="50" cy="44" rx="16" ry="4" fill="#ffffff" opacity=".45"/>`; fy = 66; break;
-    case 'mushroom': body = `<rect x="28" y="48" width="44" height="44" rx="18" fill="${F}"/>`; back = ''; front = `<path d="M10 56 Q10 16 50 16 Q90 16 90 56 Q70 50 50 50 Q30 50 10 56Z" fill="${A}"/><circle cx="32" cy="32" r="6" fill="#fff" opacity=".9"/><circle cx="58" cy="26" r="4.5" fill="#fff" opacity=".9"/><circle cx="72" cy="40" r="5" fill="#fff" opacity=".9"/>`; fy = 70; break;
-    case 'cloud': body = `<g fill="${F}"><circle cx="30" cy="62" r="20"/><circle cx="52" cy="50" r="25"/><circle cx="72" cy="62" r="18"/><rect x="22" y="60" width="58" height="26" rx="13"/></g>`; fy = 64; break;
-    case 'star': { const pts = [...Array(10)].map((_, i) => { const a = -Math.PI / 2 + (i * Math.PI) / 5, r = i % 2 ? 19 : 40; return `${(50 + r * Math.cos(a)).toFixed(1)},${(56 + r * Math.sin(a)).toFixed(1)}`; }).join(' '); body = `<polygon points="${pts}" fill="${F}" stroke="${F}" stroke-width="9" stroke-linejoin="round"/>`; fy = 58; break; }
-    case 'axolotl': back = [-1, 1].map((d) => [0, 1, 2].map((k) => `<ellipse cx="${50 + d * 40}" cy="${44 + k * 9}" rx="9" ry="3.6" fill="${A}" transform="rotate(${d * (k - 1) * 22} ${50 + d * 40} ${44 + k * 9})"/>`).join('')).join(''); body = round(34, 30, 60); break;
-    case 'unicorn': back = `<path d="M44 32 L50 4 L56 32Z" fill="#ffd84d"/><path d="M46 24 L54 22 M47 16 L53 15" stroke="#e8a900" stroke-width="1.6"/>` + ear('M24 40 L28 22 L38 32Z', F) + ear('M76 40 L72 22 L62 32Z', F); body = round(); front = `<g fill="${A}"><circle cx="70" cy="34" r="7"/><circle cx="80" cy="44" r="6"/><circle cx="84" cy="56" r="5"/></g>`; break;
-    case 'dragon': back = `<path d="M20 54 Q2 34 6 22 Q16 34 28 40Z" fill="${A}"/><path d="M80 54 Q98 34 94 22 Q84 34 72 40Z" fill="${A}"/>` + ear('M34 34 L32 18 L42 30Z', A) + ear('M66 34 L68 18 L58 30Z', A); body = round(); front = `<ellipse cx="50" cy="76" rx="14" ry="9" fill="${A}" opacity=".7"/>`; break;
-    default: if (EXTRA_ART[s.sp]) { art = EXTRA_ART[s.sp]({ F, A, s, light, dark, round, ear, blush, ink }); ({ back = '', body = '', front = '', fy = 62 } = art); } break;
-    case 'whale': back = `<path d="M84 60 Q98 46 96 38 Q90 50 82 50 Q88 40 82 34 Q80 50 74 56Z" fill="${F}"/><path d="M44 22 Q42 12 36 10 M50 22 L50 8 M56 22 Q58 12 64 10" stroke="#8ec5ff" stroke-width="3" stroke-linecap="round" fill="none"/>`; body = `<ellipse cx="46" cy="60" rx="40" ry="32" fill="${F}"/>`; front = `<path d="M10 66 Q46 92 84 66 Q78 90 46 92 Q14 90 10 66Z" fill="${A}"/>`; fy = 58; break;
+    case 'cat': back = ear('M19 50 L23 17 L45 34Z', F) + ear('M81 50 L77 17 L55 34Z', F) + ear('M25 40 L26.5 25 L37 33Z', inner) + ear('M75 40 L73.5 25 L63 33Z', inner); body = round(37, 32, 61); front = `<path d="M17 66 L8 64 M17 70 L9 72 M83 66 L92 64 M83 70 L91 72" stroke="${mixHex(s.c1, SQ_SHADE, 0.35)}" stroke-width="1.3" stroke-linecap="round" opacity=".45"/>`; break;
+    case 'bunny': back = `<ellipse cx="36" cy="24" rx="9.5" ry="22" fill="${F}" transform="rotate(-12 36 24)"/><ellipse cx="64" cy="24" rx="9.5" ry="22" fill="${F}" transform="rotate(12 64 24)"/><ellipse cx="36" cy="27" rx="4.5" ry="14" fill="${B}" transform="rotate(-12 36 27)"/><ellipse cx="64" cy="27" rx="4.5" ry="14" fill="${B}" transform="rotate(12 64 27)"/>`; body = round(36, 31, 62); fy = 66; break;
+    case 'bear': back = `<circle cx="24" cy="36" r="11.5" fill="${F}"/><circle cx="76" cy="36" r="11.5" fill="${F}"/><circle cx="24.5" cy="36.5" r="6" fill="${B}"/><circle cx="75.5" cy="36.5" r="6" fill="${B}"/>`; body = round(37, 32, 61); front = `<ellipse cx="50" cy="72" rx="11" ry="7.5" fill="${B}"/><ellipse cx="50" cy="69.5" rx="3.2" ry="2.3" fill="${ink}"/>`; art = { mouthY: 74.5 }; fy = 63; break;
+    case 'frog': back = `<circle cx="31" cy="37" r="14" fill="${F}"/><circle cx="69" cy="37" r="14" fill="${F}"/>`; body = round(39, 30, 63); front = `<ellipse cx="50" cy="79" rx="19" ry="8" fill="${B}" opacity=".85"/>`; art = { eyesY: 37, ex: 19, mouthY: 64, eyeK: 1.05, gloss: [30, 48, 9, 5] }; break;
+    case 'penguin': body = `<ellipse cx="50" cy="58" rx="33" ry="36" fill="${F}"/>`; bb = [50, 58, 33, 36]; back = `<ellipse cx="17" cy="64" rx="6" ry="13" fill="${F}" transform="rotate(18 17 64)"/><ellipse cx="83" cy="64" rx="6" ry="13" fill="${F}" transform="rotate(-18 83 64)"/>`; front = `<path d="M50 38 C66 38 73 52 73 66 C73 82 63 91 50 91 C37 91 27 82 27 66 C27 52 34 38 50 38Z" fill="${B}"/><ellipse cx="38" cy="93" rx="7.5" ry="3.8" fill="${C('#ffad33')}"/><ellipse cx="62" cy="93" rx="7.5" ry="3.8" fill="${C('#ffad33')}"/><path d="M45.5 66 Q50 63.5 54.5 66 Q50 71.5 45.5 66Z" fill="${C('#ffad33')}"/>`; art = { eyesY: 59, mouthY: 70, noMouth: true }; break;
+    case 'fox': back = ear('M17 50 L20 13 L45 33Z', F) + ear('M83 50 L80 13 L55 33Z', F) + ear('M23 36 L23.5 21 L35 31Z', B) + ear('M77 36 L76.5 21 L65 31Z', B); body = round(37, 32, 61); front = `<path d="M15 64 Q30 82 50 79 Q70 82 85 64 Q80 92 50 92 Q20 92 15 64Z" fill="${B}"/><ellipse cx="50" cy="72" rx="3" ry="2.2" fill="${ink}"/>`; art = { mouthY: 76 }; break;
+    case 'dumpling': body = `<path d="M11 71 Q11 40 50 33 Q89 40 89 71 Q89 89 50 89 Q11 89 11 71Z" fill="${F}"/>`; front = [36, 44, 50, 56, 64].map((x, i) => `<path d="M${x} 35 Q${x + (i - 2) * 2.2} 43 ${x + (i - 2) * 0.8} 50" stroke="${mixHex(A, SQ_SHADE, 0.15)}" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".8"/>`).join('') + `<circle cx="50" cy="33" r="3.2" fill="${B}"/>`; art = { gloss: [28, 52, 10, 5] }; fy = 70; break;
+    case 'peach': back = `<path d="M50 31 Q58 13 76 18 Q66 33 50 31Z" fill="${B}"/><path d="M55 27 Q64 21 71 20" stroke="${mixHex(A, SQ_SHADE, 0.35)}" stroke-width="1.4" fill="none" opacity=".6"/>`; body = `<path d="M50 30 C17 25 7 62 21 79 C34 93 66 93 79 79 C93 62 83 25 50 30Z" fill="${F}"/>`; front = `<path d="M50 32 Q41 48 46 62" stroke="${mixHex(s.c1, SQ_SHADE, 0.3)}" stroke-width="2.2" fill="none" opacity=".35" stroke-linecap="round"/>`; art = { gloss: [30, 46, 9, 6] }; fy = 69; break;
+    case 'berry': body = `<path d="M50 91 C25 83 11 62 14 46 C17 32 32 29 50 31 C68 29 83 32 86 46 C89 62 75 83 50 91Z" fill="${F}"/>`; back = ear('M28 35 L39 19 L50 29 L61 19 L72 35Z', B); front = [[27, 49], [73, 49], [35, 77], [65, 77], [50, 84], [23, 62], [77, 62]].map(([x, y]) => `<ellipse cx="${x}" cy="${y}" rx="1.6" ry="2.4" fill="#fff4b0" opacity=".9"/>`).join(''); art = { gloss: [30, 42, 8, 5] }; fy = 58; break;
+    case 'cupcake': body = `<path d="M17 65 Q15 39 50 31 Q85 39 83 65 Q74 61 66 65 Q58 60 50 65 Q42 60 34 65 Q26 61 17 65Z" fill="${F}"/><path d="M23 63 L77 63 L70 93 L30 93Z" fill="${B}"/>`; front = [36, 44, 52, 60, 68].map((x) => `<path d="M${x} 66 L${(x - 1 + (x - 50) * 0.1).toFixed(1)} 91" stroke="#fff" stroke-width="1.8" opacity=".5" stroke-linecap="round"/>`).join('') + `<circle cx="50" cy="26" r="6.5" fill="${C('#ff4d6d')}"/><path d="M50 20 Q53 13 60 12" stroke="#5cbf5a" stroke-width="2" fill="none" stroke-linecap="round"/><circle cx="48" cy="24" r="1.8" fill="#fff" opacity=".7"/>`; art = { eyesY: 48, ex: 11, mouthY: 55, gloss: [30, 44, 8, 4] }; break;
+    case 'mochi': body = `<path d="M9 75 Q9 40 50 38 Q91 40 91 75 Q91 89 50 89 Q9 89 9 75Z" fill="${F}"/>`; front = `<ellipse cx="50" cy="44.5" rx="17" ry="3.5" fill="#ffffff" opacity=".35"/>`; art = { gloss: [26, 54, 11, 5.5], top: 40 }; fy = 70; break;
+    case 'mushroom': body = `<path d="M30 52 L70 52 Q74 70 72 82 Q70 93 50 93 Q30 93 28 82 Q26 70 30 52Z" fill="${F}"/>`; front = `<path d="M8 57 Q8 15 50 15 Q92 15 92 57 Q90 62 80 59 Q66 54 50 54 Q34 54 20 59 Q10 62 8 57Z" fill="${B}"/><ellipse cx="30" cy="34" rx="6.5" ry="6" fill="#fff" opacity=".92"/><circle cx="57" cy="25" r="4.5" fill="#fff" opacity=".92"/><ellipse cx="73" cy="41" rx="5.5" ry="5" fill="#fff" opacity=".92"/><circle cx="46" cy="44" r="3" fill="#fff" opacity=".92"/><ellipse cx="26" cy="26" rx="6" ry="3" fill="#fff" opacity=".5" transform="rotate(-30 26 26)"/>`; art = { eyesY: 70, ex: 10, mouthY: 78, gloss: [37, 64, 4, 3] }; break;
+    case 'cloud': body = `<g fill="${F}"><circle cx="29" cy="63" r="20"/><circle cx="52" cy="50" r="25"/><circle cx="73" cy="62" r="18"/><rect x="18" y="60" width="66" height="27" rx="13.5"/></g>`; art = { gloss: [42, 36, 9, 5] }; fy = 67; break;
+    case 'star': body = `<path d="${sqStarPath(50, 57, 43, 21)}" fill="${F}"/>`; art = { gloss: [42, 34, 5, 7], ex: 10 }; fy = 61; break;
+    case 'axolotl': back = [-1, 1].map((d) => [0, 1, 2].map((k) => `<ellipse cx="${50 + d * 40}" cy="${45 + k * 9}" rx="10" ry="4" fill="${B}" transform="rotate(${d * (k - 1) * 24} ${50 + d * 40} ${45 + k * 9})"/>`).join('')).join(''); body = round(35, 30, 61); art = { ex: 13 }; break;
+    case 'unicorn': {
+      const m = [A, mixHex(A, '#b9a3ff', 0.55), mixHex(A, '#9fe3ff', 0.55)];
+      back = `<path d="M44 34 L50 3 L56 34Z" fill="${C('#ffd84d')}" stroke="${C('#ffd84d')}" stroke-width="2" stroke-linejoin="round"/><path d="M46.5 25 L53.5 22.5 M47.5 16 L52.5 14" stroke="#e8a900" stroke-width="1.8" stroke-linecap="round"/>` + ear('M23 42 L26 21 L39 33Z', F) + ear('M77 42 L74 21 L61 33Z', F) + ear('M27 36 L28 26 L34 32Z', inner) + ear('M73 36 L72 26 L66 32Z', inner);
+      body = round(37, 32, 61);
+      front = `<circle cx="40" cy="32" r="7" fill="${C(m[0])}"/><circle cx="31" cy="36" r="5.5" fill="${C(m[1])}"/><circle cx="72" cy="33" r="7.5" fill="${C(m[0])}"/><circle cx="82" cy="43" r="6.5" fill="${C(m[1])}"/><circle cx="86" cy="55" r="5.5" fill="${C(m[2])}"/><circle cx="85" cy="66" r="4.5" fill="${C(m[0])}"/>`;
+      art = { gloss: [30, 46, 9, 5] }; break;
+    }
+    case 'dragon': back = `<path d="M20 55 Q1 35 5 21 Q15 33 21 30 Q22 38 29 41Z" fill="${B}" stroke="${B}" stroke-width="2" stroke-linejoin="round"/><path d="M80 55 Q99 35 95 21 Q85 33 79 30 Q78 38 71 41Z" fill="${B}" stroke="${B}" stroke-width="2" stroke-linejoin="round"/>` + ear('M33 35 L31 17 L43 30Z', B) + ear('M67 35 L69 17 L57 30Z', B) + `<path d="M43 30 L46 25 L50 29 L54 25 L57 30" fill="${B}"/>`; body = round(37, 32, 61); front = `<ellipse cx="50" cy="78" rx="15" ry="9" fill="${B}" opacity=".75"/><circle cx="46" cy="72" r="1.2" fill="${mixHex(s.c1, SQ_SHADE, 0.5)}"/><circle cx="54" cy="72" r="1.2" fill="${mixHex(s.c1, SQ_SHADE, 0.5)}"/>`; break;
+    default: if (EXTRA_ART[s.sp]) { art = EXTRA_ART[s.sp]({ F, A, B, C, s, light, dark, round, ear, blush, ink, inner }); ({ back = '', body = '', front = '', fy = 64 } = art); } break;
+    case 'whale': back = `<path d="M84 60 Q99 46 97 36 Q90 49 82 50 Q89 40 82 33 Q79 50 73 56Z" fill="${F}"/><path d="M44 22 Q42 13 36 10 M50 22 L50 8 M56 22 Q58 13 64 10" stroke="#8ec5ff" stroke-width="3.2" stroke-linecap="round" fill="none"/><circle cx="36" cy="9" r="2.4" fill="#bfe1ff"/><circle cx="64" cy="9" r="2.4" fill="#bfe1ff"/><circle cx="50" cy="6" r="2.6" fill="#bfe1ff"/>`; body = `<ellipse cx="46" cy="60" rx="40" ry="32" fill="${F}"/>`; bb = [46, 60, 40, 32]; front = `<path d="M8 66 Q46 93 84 66 Q78 91 46 92 Q12 91 8 66Z" fill="${B}"/><path d="M26 82 L28 88 M36 85 L37 91 M46 86 L46 92 M56 85 L55 91 M66 82 L64 88" stroke="#fff" stroke-width="1.4" opacity=".45" stroke-linecap="round"/>`; art = { gloss: [26, 42, 10, 6] }; fy = 60; break;
   }
-  const fx = fy || 36; // frog: eyes sit in the bumps
-  const eyesY = art.eyesY ?? (s.sp === 'frog' ? 36 : fy - 2);
-  const ex = art.ex ?? (s.sp === 'frog' ? 18 : 11);
+  const k = art.eyeK || 1;
+  const ex = art.ex ?? 12.5;
+  const eyesY = art.eyesY ?? fy - 2;
   const eyeL = 50 - ex, eyeR = 50 + ex;
-  const mouthY = art.mouthY ?? (s.sp === 'frog' ? 64 : fy + 6);
-  const eyeInk = art.eyeInk || (s.fx === 'galaxy' ? '#ffffff' : ink);
-  const face = `<g class="f-open"><ellipse cx="${eyeL}" cy="${eyesY}" rx="3.6" ry="4.4" fill="${eyeInk}"/><ellipse cx="${eyeR}" cy="${eyesY}" rx="3.6" ry="4.4" fill="${eyeInk}"/>${s.fx === 'galaxy' ? '' : `<circle cx="${eyeL + 1.2}" cy="${eyesY - 1.6}" r="1.3" fill="#fff"/><circle cx="${eyeR + 1.2}" cy="${eyesY - 1.6}" r="1.3" fill="#fff"/>`}</g>
-    <g class="f-joy"><path d="M${eyeL - 4} ${eyesY + 1} Q${eyeL} ${eyesY - 5} ${eyeL + 4} ${eyesY + 1}" stroke="${eyeInk}" stroke-width="2.4" fill="none" stroke-linecap="round"/><path d="M${eyeR - 4} ${eyesY + 1} Q${eyeR} ${eyesY - 5} ${eyeR + 4} ${eyesY + 1}" stroke="${eyeInk}" stroke-width="2.4" fill="none" stroke-linecap="round"/></g>
-    <ellipse cx="${eyeL - 7}" cy="${mouthY - 1}" rx="5" ry="3" fill="${blush}" opacity=".55"/><ellipse cx="${eyeR + 7}" cy="${mouthY - 1}" rx="5" ry="3" fill="${blush}" opacity=".55"/>
-    ${art.noMouth ? '' : `<path d="M${50 - 4.5} ${mouthY} Q${50 - 2.2} ${mouthY + 3.4} 50 ${mouthY} Q${50 + 2.2} ${mouthY + 3.4} ${50 + 4.5} ${mouthY}" stroke="${eyeInk}" stroke-width="1.8" fill="none" stroke-linecap="round"/>`}`;
-  const sparkles = s.fx === 'galaxy' ? [[30, 50], [66, 44], [40, 78], [72, 72], [56, 60], [24, 68]].map(([x, y], i) => `<circle cx="${x}" cy="${y}" r="${i % 2 ? 0.9 : 1.4}" fill="#fff" opacity=".85"/>`).join('')
-    : ['L', 'M', 'U'].includes(s.r) || s.fx === 'gold' || opts.shiny ? `<path class="spk" d="M82 18 L84 24 L90 26 L84 28 L82 34 L80 28 L74 26 L80 24Z" fill="#fff6c2"/><path class="spk s2" d="M16 26 L17.5 30 L21.5 31.5 L17.5 33 L16 37 L14.5 33 L10.5 31.5 L14.5 30Z" fill="#fff6c2"/>` : '';
-  const shine = `<ellipse cx="34" cy="${Math.max(34, fy - 16)}" rx="9" ry="5" fill="#fff" opacity=".35" transform="rotate(-25 34 ${Math.max(34, fy - 16)})"/>`;
-  void fx;
+  const mouthY = art.mouthY ?? eyesY + 7;
+  const eyeInk = art.eyeInk || ink;
+  const ringy = art.eyeRim || darkBody;
+  const ring = ringy ? ` stroke="#fff" stroke-opacity=".7" stroke-width="1.1"` : '';
+  const eye = (x) => `<ellipse cx="${x}" cy="${eyesY}" rx="${(4.3 * k).toFixed(2)}" ry="${(5.2 * k).toFixed(2)}" fill="${eyeInk}"${ring}/><circle cx="${(x + 1.5 * k).toFixed(2)}" cy="${(eyesY - 2 * k).toFixed(2)}" r="${(1.75 * k).toFixed(2)}" fill="#fff"/><circle cx="${(x - 1.4 * k).toFixed(2)}" cy="${(eyesY + 2.2 * k).toFixed(2)}" r="${(0.8 * k).toFixed(2)}" fill="#fff" opacity=".75"/>`;
+  const joy = (x) => `<path d="M${x - 4.4} ${eyesY + 1.2} Q${x} ${eyesY - 5} ${x + 4.4} ${eyesY + 1.2}" stroke="${ringy ? '#fff' : eyeInk}" stroke-width="2.5" fill="none" stroke-linecap="round"/>`;
+  const mouthC = darkBody ? '#ffffff' : ink;
+  const face = `<ellipse cx="${eyeL - 6}" cy="${eyesY + 6}" rx="5.4" ry="3.1" fill="${blush}" opacity=".6"/><ellipse cx="${eyeR + 6}" cy="${eyesY + 6}" rx="5.4" ry="3.1" fill="${blush}" opacity=".6"/>`
+    + `<g class="f-open">${eye(eyeL)}${eye(eyeR)}</g><g class="f-joy" display="none">${joy(eyeL)}${joy(eyeR)}</g>`
+    + (art.noMouth ? '' : `<path d="M46 ${mouthY} Q48 ${mouthY + 3} 50 ${mouthY} Q52 ${mouthY + 3} 54 ${mouthY}" stroke="${mouthC}" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`);
+
+  // Light: one shared light field + gloss, clipped to the body's outline
+  const bodyShapes = sqBare(body, (e) => !/fill="none"/.test(e));
+  const rimEls = bodyShapes + sqBare(back, (e) => e.includes(`fill="${F}"`));
+  const gl = art.gloss || (bb ? [bb[0] - bb[2] * 0.46, bb[1] - bb[3] * 0.5, bb[2] * 0.3, bb[3] * 0.18] : [34, Math.max(30, fy - 20), 9, 5]);
+  const r1 = (n) => +n.toFixed(1);
+  const glossEl = `<ellipse cx="${r1(gl[0])}" cy="${r1(gl[1])}" rx="${r1(gl[2])}" ry="${r1(gl[3])}" fill="#fff" opacity="${fxOn && s.fx !== 'galaxy' ? 0.7 : 0.6}" transform="rotate(-28 ${r1(gl[0])} ${r1(gl[1])})"/><circle cx="${r1(gl[0] + gl[2] * 1.15)}" cy="${r1(gl[1] + gl[3] * 1.3)}" r="${r1(Math.max(1.4, gl[3] * 0.32))}" fill="#fff" opacity=".7"/>`;
+  const shadeK = fxOn ? 1 : 0.7;
+  const hash = [...s.id].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 9973, 7);
+  const prng = (i) => ((hash * (i + 3) * 7919) % 1000) / 1000;
+  let fxIn = '', fxBack = '', ndef = '';
+  if (s.fx === 'galaxy') {
+    ndef = `<radialGradient id="${g}n">${st([[0, A, 0.55], [1, A, 0]])}</radialGradient>`;
+    fxIn = `<ellipse cx="36" cy="72" rx="26" ry="13" fill="url(#${g}n)" transform="rotate(-20 36 72)"/><ellipse cx="68" cy="50" rx="20" ry="11" fill="url(#${g}n)" transform="rotate(25 68 50)" opacity=".7"/>`
+      + [...Array(9)].map((_, i) => `<circle cx="${(18 + prng(i) * 64).toFixed(1)}" cy="${(36 + prng(i + 11) * 52).toFixed(1)}" r="${i % 3 ? 0.8 : 1.3}" fill="${i % 4 ? '#fff' : '#ffe58a'}" opacity=".9"/>`).join('') + sqSpark(70, 74, 3.2, '#fff');
+  } else if (s.fx === 'holo') {
+    fxIn = `<path d="M-4 84 L58 14 L72 14 L10 84Z" fill="#fff" opacity=".3"/><path d="M18 96 L80 26 L85 26 L23 96Z" fill="#fff" opacity=".35"/><path d="M40 98 L100 30 L100 44 L52 98Z" fill="#ffd1f0" opacity=".25"/>`;
+  } else if (s.fx === 'gold') {
+    fxIn = `<path d="M0 78 L56 18 L68 18 L12 78Z" fill="#fffbe0" opacity=".4"/><path d="M22 92 L84 26 L88 26 L26 92Z" fill="#fff" opacity=".5"/>`;
+  } else if (s.fx === 'rainbow') {
+    fxIn = `<path d="M-2 80 L58 16 L70 16 L10 80Z" fill="#fff" opacity=".25"/>`;
+  } else if (s.fx === 'diamond') {
+    fxIn = `<path d="M50 24 L74 50 L50 76 L26 50Z" fill="#fff" opacity=".22"/><path d="M50 24 L74 50 L50 50Z M26 50 L50 76 L50 50Z" fill="#fff" opacity=".22"/><path d="M14 40 L38 18 L44 18 L18 46Z" fill="#fff" opacity=".45"/>` + sqSpark(64, 66, 3.4, '#fff') + sqSpark(36, 76, 2.2, '#fff');
+  } else if (s.fx === 'fire') {
+    ndef = `<radialGradient id="${g}n">${st([[0, '#fff3a0', 0.85], [0.6, '#ffc94d', 0.35], [1, '#ffc94d', 0]])}</radialGradient>`;
+    fxIn = `<ellipse cx="50" cy="88" rx="34" ry="20" fill="url(#${g}n)"/>`;
+    fxBack = [[16, 46, 2.2], [84, 40, 1.8], [24, 22, 1.4], [78, 18, 2], [90, 62, 1.3]].map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${r}" fill="${r > 1.6 ? '#ffb238' : '#ff6a2b'}" opacity=".85"/>`).join('');
+  } else if (s.fx === 'glow') {
+    ndef = `<radialGradient id="${g}n">${st([[0.5, s.c1, 0.6], [1, s.c1, 0]])}</radialGradient>`;
+    fxBack = `<circle cx="50" cy="56" r="49" fill="url(#${g}n)"/>`;
+  }
+  const sheen = opts.shiny ? `<path d="M-6 70 L50 10 L62 10 L6 70Z" fill="#fff" opacity=".4"/><path d="M8 84 L66 22 L70 22 L12 84Z" fill="#fffbd6" opacity=".55"/>` : '';
+  const lightDef = `<radialGradient id="${g}o" gradientUnits="userSpaceOnUse" cx="52" cy="60" r="46" fx="34" fy="38">${st([[0, '#fff', 0.3 * shadeK], [0.34, '#fff', 0], [0.7, SQ_SHADE, 0], [1, SQ_SHADE, 0.34 * shadeK]])}</radialGradient>`;
+  const shadowDef = `<radialGradient id="${g}s">${st([[0, SQ_SHADE, 0.3], [1, SQ_SHADE, 0]])}</radialGradient>`;
+  const auraC = sqLum(A) < 110 ? s.c1 : A;
+  const aura = s.r === 'U' ? `<radialGradient id="${g}a">${st([[0.42, '#fff6b0', 0.95], [0.74, auraC, 0.45], [1, auraC, 0]])}</radialGradient>` : '';
+  const acc = s.acc && ACCESSORIES[s.acc] ? ACCESSORIES[s.acc](art.top ?? 28, s, g, C) : '';
+  const defs = `<defs>${aura}${fills[s.fx] || sqClayGrad(g, s.c1)}${lightDef}${shadowDef}${ndef}${cdefs}<clipPath id="${g}k">${bodyShapes}</clipPath></defs>`;
+  const wrap = s.acc === 'mummy' ? acc : ''; // bandages wrap the body, so they sit under the light
+  const lit = `<g clip-path="url(#${g}k)">${fxIn}${art.inner || ''}${wrap}<rect x="0" y="0" width="100" height="100" fill="url(#${g}o)"/>${sheen}${glossEl}</g>`;
+  const rimEl = rimEls ? `<g fill="${rim}" stroke="${rim}" stroke-width="2.2" stroke-linejoin="round">${rimEls.replace(/stroke-width="([\d.]+)"/g, (m, w) => `stroke-width="${+w + 2.2}"`)}</g>` : '';
+
+  const rare = ['L', 'M', 'U'].includes(s.r) || s.fx === 'gold' || opts.shiny;
+  const sparkles = rare ? sqSpark(84, 22, 7, '#fff6c2', 'spk') + sqSpark(15, 32, 4.6, '#fff6c2', 'spk s2') + (opts.shiny ? sqSpark(86, 80, 3.6, '#ffffff', 'spk s2') : '') : '';
   const auraEl = aura ? `<circle class="aura" cx="50" cy="56" r="50" fill="url(#${g}a)"/>` : '';
-  const acc = s.acc && ACCESSORIES[s.acc] ? ACCESSORIES[s.acc](art.top ?? 28, s, g) : '';
-  return `<svg class="sq-svg${opts.cls ? ' ' + opts.cls : ''}${opts.shiny ? ' is-shiny' : ''}" viewBox="0 0 100 100" role="img" aria-label="${esc(s.name)}">${defs}${auraEl}<ellipse cx="50" cy="95" rx="30" ry="3.5" fill="#000" opacity=".1"/>${back}${body}${shine}${front}${art.over || ''}${face}${acc}${sparkles}</svg>`;
+  return `<svg class="sq-svg${opts.cls ? ' ' + opts.cls : ''}${opts.shiny ? ' is-shiny' : ''}" viewBox="0 0 100 100" role="img" aria-label="${esc(s.name)}">${defs}${auraEl}${fxBack}<ellipse cx="50" cy="94.5" rx="32" ry="5" fill="url(#${g}s)"/>${rimEl}${back}${body}${lit}${front}${art.over || ''}${face}${wrap ? '' : acc}${sparkles}</svg>`;
 }
 const rarityDots = (r) => `<span class="rdots" title="Trade value">${'◆'.repeat(Math.max(1, ALL_TIERS.indexOf(r) + 1))}</span>`;
 const rarityPill = (r) => `<span class="rar rar-${r}">${RARITY[r].name}</span>`;
