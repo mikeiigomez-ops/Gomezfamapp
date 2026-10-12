@@ -217,7 +217,7 @@ const regionAt = (x, y) => { const cx = Math.floor(x / RW), cy = Math.floor(y / 
 function wMe() {
   const me = actor();
   if (!me) return null;
-  if (!state.world || typeof state.world !== 'object') state.world = {};
+  if (!state.world || typeof state.world !== 'object' || Array.isArray(state.world)) state.world = {};
   let p = state.world[me]; if (!p || typeof p !== 'object' || Array.isArray(p)) p = state.world[me] = {};
   if (!p.ch) {
     const [sx, sy] = WREG[0].start;
@@ -225,7 +225,7 @@ function wMe() {
   }
   // Repair old or damaged progress so the game can always continue
   for (const k of ['flags', 'items', 'visited', 'guide', 'sides']) if (!p[k] || typeof p[k] !== 'object') p[k] = {};
-  if (!Array.isArray(p.done)) p.done = Object.values(p.done || {}).map(Number).filter((n) => n >= 1 && n <= 8);
+  if (!Array.isArray(p.done) || p.done.some((n) => typeof n !== 'number')) p.done = [...new Set(Object.values(p.done || {}).map(Number))].filter((n) => n >= 1 && n <= 8);
   if (typeof p.ch !== 'number' || !(p.ch >= 1 && p.ch <= 9)) p.ch = Math.min(9, Math.max(1, Math.floor(Number(p.ch)) || 1));
   if (typeof p.step !== 'number' || !(p.step >= 0)) p.step = Math.max(0, Math.floor(Number(p.step)) || 0);
   if (p.ch <= 8 && p.step >= STORY[p.ch].length) p.step = STORY[p.ch].length - 1; // story got shorter in an update: replay its last step
@@ -623,17 +623,18 @@ function arrive(dir) {
   const it = itemAt(x, y, p);
   if (it && it.group !== 'escapee') pickItem(it, p);
   for (const z of w.objs) if (z.type === 'zone' && x >= z.x && y >= z.y && x < z.x + z.w && y < z.y + z.h) { const st = curStep(p); if (st && st.reach === z.id) advance(p); }
-  if (typeof liveSend === 'function' && Date.now() - (WG.liveT || 0) > (typeof Live !== 'undefined' && Live.fallback ? 3000 : 1000)) { WG.liveT = Date.now(); liveSend(); } else if (typeof livePush === 'function') livePush();
+  if (typeof liveSend === 'function' && Date.now() - (WG.liveT || 0) > (typeof Live !== 'undefined' && Live.fallback ? 3000 : 1000)) { WG.liveT = Date.now(); clearTimeout(Live.timer); liveSend(); } else if (typeof livePush === 'function') livePush();
   if (Date.now() - WG.saveT > 3000) { WG.saveT = Date.now(); savePos(); }
   // Wild encounters in tall grass
   const canEnc = (p.bubbles || 0) > 0 || !!curStep(p)?.catch;
   if (canEnc && w.at(x, y) === T.TALL && !WG.path.length && WG.steps - WG.lastEnc > 2 && Math.random() < 0.13) { WG.lastEnc = WG.steps; WG.hold = null; WG.queue = null; WG.path = []; setTimeout(() => encounter(wildSid(r), {}), 120); }
   else if (canEnc && w.at(x, y) === T.TALL && WG.path.length && WG.steps - WG.lastEnc > 3 && Math.random() < 0.08) { WG.lastEnc = WG.steps; WG.path = []; WG.pendingTalk = null; setTimeout(() => encounter(wildSid(r), {}), 120); }
 }
+const wposMap = () => { const w = state.settings.wpos; return w && typeof w === 'object' && !Array.isArray(w) ? w : (state.settings.wpos = {}); };
 function savePos() {
   const me = actor(); if (!me || !WG.pos || WG.posFor !== me) return;
   // Where you're standing is kept per phone (settings.wpos never syncs), so walking never rewrites the family document.
-  (state.settings.wpos ||= {})[me] = { x: WG.pos.x, y: WG.pos.y, d: WG.pos.d };
+  wposMap()[me] = { x: WG.pos.x, y: WG.pos.y, d: WG.pos.d };
   try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch {}
 }
 window.addEventListener('pagehide', () => { if (WG.layer && !WG.layer.hidden) savePos(); });
@@ -1265,9 +1266,9 @@ function mount() {
   if (!me) { L.hidden = true; document.body.classList.remove('world-mode'); return; }
   const p = wMe();
   if (!WG.pos || WG.posFor !== me) {
-    if (WG.pos && WG.posFor && isMember(WG.posFor)) (state.settings.wpos ||= {})[WG.posFor] = { x: WG.pos.x, y: WG.pos.y, d: WG.pos.d }; // switched person: remember where the last one stood
+    if (WG.pos && WG.posFor && isMember(WG.posFor)) wposMap()[WG.posFor] = { x: WG.pos.x, y: WG.pos.y, d: WG.pos.d }; // switched person: remember where the last one stood
     WG.posFor = me; WG.others = {}; WG.move = null; WG.path = []; WG.pendingTalk = null; WG.hold = null;
-    const sp = state.settings.wpos?.[me], ok = (v, max) => Number.isInteger(v) && v >= 0 && v < max, sx0 = ok(sp?.x, MW) && ok(sp?.y, MH) ? sp.x : p.x, sy0 = ok(sp?.x, MW) && ok(sp?.y, MH) ? sp.y : p.y;
+    const sp = wposMap()[me], ok = (v, max) => Number.isInteger(v) && v >= 0 && v < max, sx0 = ok(sp?.x, MW) && ok(sp?.y, MH) ? sp.x : p.x, sy0 = ok(sp?.x, MW) && ok(sp?.y, MH) ? sp.y : p.y;
     WG.pos = { x: sx0, y: sy0, fx: sx0, fy: sy0, d: sp?.d || p.d || 'down' };
     const bx = WG.pos.x, by = WG.pos.y;
     if (blockedAt(bx, by, p)) { let f = null; for (let rr = 1; rr < 8 && !f; rr++) for (let dy = -rr; dy <= rr && !f; dy++) for (let dx = -rr; dx <= rr; dx++) if (!blockedAt(bx + dx, by + dy, p)) { f = [bx + dx, by + dy]; break; } const [sx, sy] = f || WREG[0].start; Object.assign(WG.pos, { x: sx, y: sy, fx: sx, fy: sy }); }

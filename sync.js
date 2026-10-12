@@ -34,18 +34,30 @@ const isIdList = (v) => Array.isArray(v) && v.every((x) => isObj(x) && typeof x.
 
 // merge3, plus Squishvale story progress kept whole: if one person plays on two devices at once,
 // the further-along chapter/step wins as a unit (never a mix of both), and bubbles add up.
-function mergeState(base, local, remote) {
+function mergeState(base, local, remote) { return dedupeGems(mergeWorld(base, local, remote)); }
+// A one-time gem reward (keyed) earned on two phones before they synced counts once.
+function dedupeGems(out) {
+  const G = out && out.gems && out.gems.log;
+  if (!Array.isArray(G)) return out;
+  const seen = new Set(), log = G.filter((l) => { if (!isObj(l) || !l.key) return true; const k = l.who + '|' + l.key; if (seen.has(k)) return false; seen.add(k); return true; });
+  return log.length === G.length ? out : { ...out, gems: { ...out.gems, log } };
+}
+function mergeWorld(base, local, remote) {
   const out = merge3(base, local, remote);
   const W = out && out.world, LW = local && local.world, RW_ = remote && remote.world, BW = (base && base.world) || {};
   if (!isObj(W) || !isObj(LW) || !isObj(RW_)) return out;
   for (const id of Object.keys(W)) {
     const l = LW[id], r = RW_[id], b = BW[id];
-    if (!isObj(l) || !isObj(r) || same(l, b) || same(r, b) || W[id] === l || W[id] === r) continue;
+    if (!isObj(l) || !isObj(r) || same(l, r) || same(l, b) || same(r, b) || W[id] === l || W[id] === r) continue; // same(l, r): the server already has this phone's write
     const rank = (q) => (Number(q.ch) || 0) * 1000 + (Number(q.step) || 0);
     const win = rank(l) >= rank(r) ? l : r, m = W[id];
     for (const k of ['ch', 'step', 'cnt', 'items']) if (k in win) m[k] = JSON.parse(JSON.stringify(win[k]));
     if (Array.isArray(l.done) && Array.isArray(r.done)) m.done = [...new Set([...l.done, ...r.done])].sort((a, c) => a - c);
-    if (isObj(b) && [l.bubbles, r.bubbles, b.bubbles].every((n) => typeof n === 'number') && l.bDay === r.bDay) m.bubbles = Math.max(0, l.bubbles + r.bubbles - b.bubbles);
+    if (isObj(b) && [l.bubbles, r.bubbles, b.bubbles].every((n) => typeof n === 'number') && l.bDay === r.bDay) {
+      // +5 rewards both devices granted for the same thing (same chapter star, same new day) count once
+      const bd = Array.isArray(b.done) ? b.done : [], twice = (Array.isArray(l.done) && Array.isArray(r.done) ? l.done.filter((c) => r.done.includes(c) && !bd.includes(c)).length : 0) + (l.bDay !== b.bDay ? 1 : 0);
+      m.bubbles = Math.max(0, l.bubbles + r.bubbles - b.bubbles - 5 * twice);
+    }
   }
   return out;
 }
