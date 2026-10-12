@@ -109,6 +109,16 @@ const FURN_SVG = {
   rug: () => `<svg viewBox="0 0 100 40" class="h-svg"><ellipse cx="50" cy="20" rx="49" ry="19" fill="#ff8fab"/><ellipse cx="50" cy="20" rx="40" ry="14" fill="#ffd6e5"/><ellipse cx="50" cy="20" rx="28" ry="9" fill="#ff8fab"/><ellipse cx="50" cy="20" rx="16" ry="5" fill="#fff0f6"/></svg>`,
   shelf: () => `<svg viewBox="0 0 100 30" class="h-svg"><rect x="2" y="18" width="96" height="7" rx="3" fill="#b98558"/><path d="M14 25 L18 30 M86 25 L82 30" stroke="#8a5a34" stroke-width="4"/><rect x="12" y="4" width="6" height="14" fill="#4dabf7"/><rect x="19" y="2" width="6" height="16" fill="#ff6b6b"/><rect x="26" y="6" width="5" height="12" fill="#ffd43b"/><circle cx="72" cy="11" r="7" fill="#69db7c"/></svg>`,
 };
+// Clay drawings (art-house.js) replace the emoji when they exist: furn_<id> (+ _night when lit), hcat_<cat>, room_<type>.
+// Wide flat pieces (rug, shelf) are cropped so they keep the long, low box their old SVGs had.
+const FURN_CROP = { rug: '0 36 128 56', shelf: '0 26 128 70' };
+function furnArt(id, night) {
+  if (typeof artSVG !== 'function') return '';
+  const k = 'furn_' + id, lit = night && ART[k + '_night'], s = lit ? artSVG(k + '_night', { shadow: false }) : artSVG(k);
+  return s && FURN_CROP[id] ? s.replace('class="art-svg"', 'class="art-svg art-wide"').replace('viewBox="0 0 128 128"', `viewBox="${FURN_CROP[id]}"`) : s;
+}
+const artOr = (id, e) => (typeof artSVG === 'function' && artSVG(id)) || e;
+const roomIcon = (type) => artOr('room_' + type, ROOM_TYPES[type]?.[0] || '🏠');
 const safeCol = (c, d) => (/^#[0-9a-fA-F]{3,8}$/.test(c || '') ? c : d);
 function itemHTML(it, room, opts = {}) {
   let f = FURN[it.f], content, z, layer, cls = '';
@@ -117,9 +127,10 @@ function itemHTML(it, room, opts = {}) {
     content = squishySVG(it.sid); z = 12 * (SQ[it.sid].kind === 'niddo' ? 0.85 : 1); layer = 2; cls = ' sqd';
   } else {
     if (!f) return '';
-    content = f.svg ? FURN_SVG[f.svg]() : esc(f.e);
+    const art = furnArt(f.id, opts.night ?? room?.night);
+    content = art || (f.svg ? FURN_SVG[f.svg]() : esc(f.e));
     z = f.z; layer = f.layer ?? (f.place === 'wall' ? 1 : 2);
-    if (f.svg) cls += ' svgi';
+    if (f.svg) cls += ' svgi'; else if (art) cls += ' arti';
     if (f.pet) cls += ' pet';
     if (f.glow) cls += ' glowy';
     if (f.layer === 0) cls += ' flat';
@@ -139,7 +150,7 @@ function roomHTML(r, opts = {}) {
     <div class="rm-ceil"></div>
     <div class="rm-floor"><div class="rm-floor-in" style="background:${floor[2]}"></div></div>
     <div class="rm-trim"></div><div class="rm-light"></div>
-    ${r.items.map((it) => itemHTML(it, r, opts)).join('')}${opts.ghost ? itemHTML({ ...opts.ghost, id: 'try' }, r, { ...opts, sel: 'try' }).replace('class="hi', 'class="hi ghost') : ''}${avs}
+    ${r.items.map((it) => itemHTML(it, r, { ...opts, night })).join('')}${opts.ghost ? itemHTML({ ...opts.ghost, id: 'try' }, r, { ...opts, night, sel: 'try' }).replace('class="hi', 'class="hi ghost') : ''}${avs}
     ${night ? '<div class="room-dark"></div>' : ''}<div class="rm-vignette"></div>
   </div>`;
 }
@@ -165,7 +176,7 @@ function dollhouse(h, mid, visitor, o = {}) {
   return `<div class="dollhouse" style="--roof:${safeCol(h.roof, '#e8590c')};--siding:${safeCol(h.siding, '#fff3bf')}">
     <div class="dh-chimney"><span class="dh-smoke"></span><span class="dh-smoke s2"></span></div>
     <div class="dh-roof"><span class="dh-sign">${esc(h.name)}</span></div>
-    <div class="dh-body">${h.rooms.map((r) => `<button class="dh-room" ${o.roomAction ? o.roomAction(r) : `data-action="go" data-to="room/${r.id}"`}>${roomHTML(r, { mini: true, avatars: o.roomAvatars ? o.roomAvatars(r) : [] })}<span class="dh-label">${ROOM_TYPES[r.type]?.[0] || '🏠'} ${esc(r.name)}</span></button>`).join('')}
+    <div class="dh-body">${h.rooms.map((r) => `<button class="dh-room" ${o.roomAction ? o.roomAction(r) : `data-action="go" data-to="room/${r.id}"`}>${roomHTML(r, { mini: true, avatars: o.roomAvatars ? o.roomAvatars(r) : [] })}<span class="dh-label">${roomIcon(r.type)} ${esc(r.name)}</span></button>`).join('')}
       ${!visitor && h.rooms.length < MAX_ROOMS ? `<button class="dh-add" data-action="h-add-room"><span>＋</span>Add a room</button>` : ''}</div>
     <div class="dh-ground"><span class="dh-bush"></span><span class="dh-path"></span><span class="dh-bush r"></span></div>
     ${av}
@@ -218,7 +229,7 @@ views.room = (roomId) => {
   const bar = tr || trySurf
     ? `<div class="hsel-bar try"><span class="try-label">Try it: <b>${esc(tryName)}</b></span><button class="try-no" data-action="h-try-cancel" aria-label="No thanks">✕</button><button class="try-yes" data-action="h-try-keep">Keep it · ${GEM} ${tryPrice}</button></div>`
     : `<div class="hsel-bar${sel ? '' : ' empty'}">${sel ? `<b>${esc(selName)}</b><button data-action="h-flip" aria-label="Flip">↔️</button><button data-action="h-size" data-d="-1" aria-label="Smaller">➖</button><button data-action="h-size" data-d="1" aria-label="Bigger">➕</button><button data-action="h-front" aria-label="Bring forward">⬆️</button><button data-action="h-store" aria-label="Put away">📦</button>` : `<span class="small muted">Tap an item below to try it</span>`}<button class="undo" data-action="h-undo" ${undoN ? '' : 'disabled'} aria-label="Undo">↩️</button><button class="done" data-action="h-edit" data-id="">Done</button></div>`;
-  return `${edit ? '' : `<div class="room-tabs" data-keep="rtabs">${h.rooms.map((x) => `<button class="${x.id === r.id ? 'on' : ''}" data-action="go" data-to="room/${x.id}"><span>${ROOM_TYPES[x.type]?.[0] || '🏠'}</span>${esc(x.name)}</button>`).join('')}${owner && h.rooms.length < MAX_ROOMS ? '<button class="add" data-action="h-add-room">＋</button>' : ''}</div>`}
+  return `${edit ? '' : `<div class="room-tabs" data-keep="rtabs">${h.rooms.map((x) => `<button class="${x.id === r.id ? 'on' : ''}" data-action="go" data-to="room/${x.id}"><span>${roomIcon(x.type)}</span>${esc(x.name)}</button>`).join('')}${owner && h.rooms.length < MAX_ROOMS ? '<button class="add" data-action="h-add-room">＋</button>' : ''}</div>`}
     <div class="room-stage${edit ? ' editing' : ''}">
       ${roomHTML(r, opts)}
       <button class="rs-btn rs-home" data-action="go" data-to="house/${mid}" aria-label="Whole house">🏡</button>
@@ -232,7 +243,7 @@ views.room = (roomId) => {
 };
 function shopTray(mid, h, r) {
   const cat = ui.hCat || 'furniture';
-  const chips = `<div class="h-cats" data-keep="hcats">${H_CATS.map(([k, e, l]) => `<button class="${cat === k ? 'on' : ''}" data-action="h-cat" data-c="${k}"><span>${e}</span>${l}</button>`).join('')}</div>`;
+  const chips = `<div class="h-cats" data-keep="hcats">${H_CATS.map(([k, e, l]) => `<button class="${cat === k ? 'on' : ''}" data-action="h-cat" data-c="${k}"><span>${artOr('hcat_' + k, e)}</span>${l}</button>`).join('')}</div>`;
   let grid;
   if (cat === 'walls' || cat === 'floors') {
     const src = cat === 'walls' ? WALLS : FLOORS, have = cat === 'walls' ? h.walls : h.floors, cur = cat === 'walls' ? r.wall : r.floor;
@@ -243,7 +254,7 @@ function shopTray(mid, h, r) {
   } else {
     grid = Object.values(FURN).filter((f) => f.cat === cat).map((f) => {
       const inv = h.inv[f.id] || 0, locked = f.unlock && !isUnlocked(f, mid);
-      return `<button class="h-card${locked ? ' locked' : ''}" data-action="h-pick" data-f="${f.id}"><span class="h-ic">${f.svg ? FURN_SVG[f.svg]() : f.e}</span><span>${esc(f.name)}</span><small>${locked ? '🔒 Earn it' : inv ? `×${inv} to place` : f.price ? `${GEM} ${f.price}` : 'Free'}</small></button>`;
+      return `<button class="h-card${locked ? ' locked' : ''}" data-action="h-pick" data-f="${f.id}"><span class="h-ic">${furnArt(f.id) || (f.svg ? FURN_SVG[f.svg]() : f.e)}</span><span>${esc(f.name)}</span><small>${locked ? '🔒 Earn it' : inv ? `×${inv} to place` : f.price ? `${GEM} ${f.price}` : 'Free'}</small></button>`;
     }).join('');
   }
   return `<div class="h-tray">${chips}<div class="h-grid" data-pages="hgrid-${cat}">${grid}</div></div>`;
@@ -526,7 +537,7 @@ Object.assign(actions, {
     return;
     openSheet({
       title: `Buy ${f.name}?`, saveLabel: `${GEM} ${f.price}`, values: {},
-      fields: [{ type: 'html', html: `<div class="buy-preview"><span style="font-size:64px">${f.svg ? '' : f.e}</span>${f.svg ? `<div style="width:110px">${FURN_SVG[f.svg]()}</div>` : ''}<div><b>${esc(f.name)}</b><div class="small muted">You have ${gemBalance(found.mid)} ${GEM}${owned(h, f.id) ? ` · you own ${owned(h, f.id)}` : ''}</div></div></div>` }],
+      fields: [{ type: 'html', html: `<div class="buy-preview">${furnArt(f.id) ? `<div style="width:96px">${furnArt(f.id)}</div>` : `<span style="font-size:64px">${f.svg ? '' : f.e}</span>${f.svg ? `<div style="width:110px">${FURN_SVG[f.svg]()}</div>` : ''}`}<div><b>${esc(f.name)}</b><div class="small muted">You have ${gemBalance(found.mid)} ${GEM}${owned(h, f.id) ? ` · you own ${owned(h, f.id)}` : ''}</div></div></div>` }],
       onSave() {
         if (!spendGems(found.mid, f.price, `Bought a ${f.name} for my house`, 'house')) return false;
         pushUndo(found.r);
