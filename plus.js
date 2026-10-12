@@ -152,20 +152,17 @@ function syncPresence() {
    3 · Cash-flow forecast (30 days)
    ========================================================= */
 function forecastSeries(days = 30) {
-  const bal0 = state.settings.balance;
-  if (bal0 == null) return null;
+  const start = balanceNow();
+  if (start == null) return null;
   const t = today();
-  const sm = budgetSummary(monthKey(t));
   const dim = (ym) => new Date(+ym.slice(0, 4), +ym.slice(5), 0).getDate();
-  const leftDays = dim(monthKey(t)) - parse(t).getDate() + 1;
-  const dailyNow = Math.max(0, sm.left) / leftDays;
-  const totalLimit = sum(state.budget.categories, (c) => c.limit);
+  const daily = { [monthKey(t)]: flexLeft(monthKey(t)) / (dim(monthKey(t)) - parse(t).getDate() + 1) };
   const pts = [];
-  let bal = bal0;
+  let bal = start - sum(overdueBills(t), (x) => x.amount); // overdue bills still have to go out
   for (let i = 0; i <= days; i++) {
-    const d = addDays(t, i);
+    const d = addDays(t, i), ym = monthKey(d);
     for (const x of recurringBetween(d, d)) if (!isPaid(x.b, x.date)) bal += x.b.type === 'income' ? x.amount : -x.amount;
-    bal -= monthKey(d) === monthKey(t) ? dailyNow : totalLimit / dim(monthKey(d));
+    bal -= (daily[ym] ??= flexLeft(ym) / dim(ym)); // everyday spending, not counting budget a bill already uses
     pts.push({ d, v: bal });
   }
   return pts;
@@ -567,8 +564,8 @@ function handleDeepLink() {
   const m = location.hash.match(/^#(go&)?add=([^&]*)(&go)?/);
   if (!m) return false;
   if ($('#lock')) { pendingDeepLink = location.hash; history.replaceState(null, '', location.pathname + '#home'); return true; } // finish after unlocking
-  if (typeof inKidMode === 'function' && inKidMode()) { history.replaceState(null, '', location.pathname + '#kid'); toast('Ask a grown-up 🙂'); return true; }
-  const text = decodeURIComponent(m[2].replace(/\+/g, ' ')).trim();
+  if (state.settings.kidMode && state.members.some((x) => x.id === state.settings.kidMode)) { history.replaceState(null, '', location.pathname + '#kid'); render(); return true; } // works even before kids.js loads
+  let text; try { text = decodeURIComponent(m[2].replace(/\+/g, ' ')).trim(); } catch { text = m[2].replace(/\+/g, ' ').trim(); }
   history.replaceState(null, '', location.pathname + '#home');
   render();
   if (!text) { setTimeout(() => openMagicWith('')); return true; }
@@ -754,7 +751,12 @@ afterRender = function () {
 // Heads-up when the forecast dips low.
 const _homeInsights = homeInsights;
 homeInsights = function () {
-  const html = _homeInsights();
+  let html = _homeInsights();
+  const s = safeToSpend();
+  if (s) {
+    const c = `<button class="insight ${s.safe < 0 ? 'bad' : s.stale > 7 ? 'warn' : 'good'}" data-action="${s.stale > 7 ? 'edit-balance' : 'go'}" data-to="budget" data-btab="bills"><span class="ii">💳</span><b>${money(s.safe, { maximumFractionDigits: 0 })} safe to spend</b><small>${s.stale > 7 ? `Balance is ${s.stale} days old — tap to update` : `until payday ${dueLabel(s.pay.date)} · about ${money(Math.max(0, s.perDay), { maximumFractionDigits: 0 })}/day`}</small></button>`;
+    html = html ? html.replace('<div class="insights">', '<div class="insights">' + c) : `<div class="insights">${c}</div>`;
+  }
   const pts = forecastSeries();
   if (!pts) return html;
   const low = pts.reduce((a, b) => (b.v < a.v ? b : a));

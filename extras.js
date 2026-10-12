@@ -35,12 +35,13 @@ function goalPlan(g) {
   const saved = goalSaved(g), target = Number(g.target) || 0;
   const left = Math.max(0, target - saved);
   const pct = target ? Math.min(1, saved / target) : 0;
-  let perMonth = null, months = null;
+  let perMonth = null, months = null, late = false;
   if (g.deadline && left > 0) {
-    months = Math.max(1, Math.ceil(daysBetween(today(), g.deadline) / 30.44));
-    perMonth = left / months;
+    const days = daysBetween(today(), g.deadline);
+    if (days < 0) late = true; // the date has passed: no "$X/mo to finish by <past month>"
+    else { months = Math.max(1, Math.ceil(days / 30.44)); perMonth = left / months; }
   }
-  return { saved, target, left, pct, perMonth, months };
+  return { saved, target, left, pct, perMonth, months, late };
 }
 function ring(pct, size = 64, stroke = 7, cls = '') {
   const r = (size - stroke) / 2, C = 2 * Math.PI * r;
@@ -61,7 +62,7 @@ views.goals = () => {
           <div style="flex:1;min-width:0">
             <div style="font-weight:700;font-size:17px">${esc(g.name)}</div>
             <div class="small"><b>${money(pl.saved, { maximumFractionDigits: 0 })}</b> <span class="muted">of ${money(pl.target, { maximumFractionDigits: 0 })} · ${Math.round(pl.pct * 100)}%</span></div>
-            <div class="small muted">${done ? '🎉 Goal reached!' : pl.perMonth != null ? `Save ${money(pl.perMonth, { maximumFractionDigits: 0 })}/mo to finish by ${fmtDate(g.deadline, { month: 'short', year: 'numeric' })}` : `${money(pl.left, { maximumFractionDigits: 0 })} to go`}</div>
+            <div class="small muted">${done ? '🎉 Goal reached!' : pl.late ? `⏰ Target date passed · ${money(pl.left, { maximumFractionDigits: 0 })} to go` : pl.perMonth != null ? `Save ${money(pl.perMonth, { maximumFractionDigits: 0 })}/mo to finish by ${fmtDate(g.deadline, { month: 'short', year: 'numeric' })}` : `${money(pl.left, { maximumFractionDigits: 0 })} to go`}</div>
           </div>
         </button>
         ${done ? '' : `<button class="btn secondary block" style="margin-top:12px" data-action="goal-add" data-id="${g.id}">＋ Add money</button>`}
@@ -304,7 +305,7 @@ function upkeepForm(u) {
    ========================================================= */
 views.search = () => `
   <div class="quick-add" style="margin-bottom:6px">
-    <input type="search" id="searchInput" data-input="search" placeholder="Search everything…" value="${esc(ui.searchQ || '')}" autocomplete="off" enterkeyhint="search">
+    <input type="search" id="searchInput" aria-label="Search" data-input="search" placeholder="Search everything…" value="${esc(ui.searchQ || '')}" autocomplete="off" enterkeyhint="search">
   </div>
   <div id="searchResults">${searchResults(ui.searchQ || '')}</div>
 `;
@@ -689,9 +690,9 @@ function parseMagic(raw) {
   let m = text.match(/^chore[:\s]+(.+)$/i);
   if (m) return { kind: 'chore', title: m[1].trim(), label: '🧹 New chore', detail: m[1].trim() };
   // Money: "$45 costco", "costco 45.20", "paid 30 for pizza", "income 500 side job"
-  m = text.match(/\$\s?(\d+(?:[.,]\d{1,2})?)/) || text.match(/(?:^|\s)(\d+\.\d{2})(?:\s|$)/) || (/^(spent|paid|income|got paid|earned)\b/i.test(text) && text.match(/(?:^|\s)(\d+(?:\.\d{1,2})?)(?:\s|$)/));
+  m = text.match(/\$\s?(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d+(?:[.,]\d{1,2})?)/) || text.match(/(?:^|\s)(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?)(?:\s|$)/) || text.match(/(?:^|\s)(\d+\.\d{2})(?:\s|$)/) || (/^(spent|paid|income|got paid|earned)\b/i.test(text) && text.match(/(?:^|\s)(\d+(?:\.\d{1,2})?)(?:\s|$)/));
   if (m) {
-    const amount = parseFloat(m[1].replace(',', '.'));
+    const amount = /,\d{3}/.test(m[1]) ? parseFloat(m[1].replace(/,/g, '')) : parseFloat(m[1].replace(',', '.'));
     const income = /\b(income|paycheck|got paid|earned|refund|deposit|sold)\b/i.test(text);
     let note = text.replace(m[0], ' ').replace(/^\s*(spent|paid|income|got paid|earned)\b/i, ' ').replace(/\b(for|on|at)\s*$/i, '').replace(/^\s*(for|on|at)\b/i, '').replace(/\s+/g, ' ').trim();
     const when = parseWhen(note);
@@ -1046,14 +1047,14 @@ function homeInsights() {
   const sm = budgetSummary(ym);
   if (sm.limit) {
     const expected = sm.limit * (day / daysInMonth);
-    if (sm.left <= 0) out.push({ p: 0, tone: 'bad', icon: '🚨', title: `Over budget by ${money(-sm.left, { maximumFractionDigits: 0 })}`, sub: `${left} days left in ${fmtDate(t, { month: 'long' })}`, act: 'data-action="go" data-to="budget"' });
+    if (sm.left < 0) out.push({ p: 0, tone: 'bad', icon: '🚨', title: `Over budget by ${money(-sm.left, { maximumFractionDigits: 0 })}`, sub: `${left} days left in ${fmtDate(t, { month: 'long' })}`, act: 'data-action="go" data-to="budget"' });
     else out.push({ p: sm.spent > expected * 1.1 ? 1 : 5, tone: sm.spent > expected * 1.1 ? 'warn' : 'good', icon: sm.spent > expected * 1.1 ? '🐢' : '✅', title: `${money(sm.left / left, { maximumFractionDigits: 0 })}/day to stay on budget`, sub: sm.spent > expected * 1.1 ? `Spending is ${Math.round((sm.spent / expected - 1) * 100)}% ahead of pace` : 'You’re on track this month', act: 'data-action="go" data-to="budget" data-btab="trends"' });
   }
   // Categories running hot
   for (const c of state.budget.categories) {
     if (!c.limit) continue;
     const spent = spentIn(ym, c.id), f = spent / c.limit;
-    if (f >= 1) out.push({ p: 1, tone: 'bad', icon: c.emoji, title: `${c.name} is over by ${money(spent - c.limit, { maximumFractionDigits: 0 })}`, sub: `${money(spent, { maximumFractionDigits: 0 })} of ${money(c.limit, { maximumFractionDigits: 0 })}`, act: 'data-action="go" data-to="budget" data-btab="trends"' });
+    if (spent - c.limit >= 0.005) out.push({ p: 1, tone: 'bad', icon: c.emoji, title: `${c.name} is over by ${money(spent - c.limit, { maximumFractionDigits: 0 })}`, sub: `${money(spent, { maximumFractionDigits: 0 })} of ${money(c.limit, { maximumFractionDigits: 0 })}`, act: 'data-action="go" data-to="budget" data-btab="trends"' });
     else if (f >= 0.85 && left > 3) out.push({ p: 2, tone: 'warn', icon: c.emoji, title: `${c.name}: ${Math.round(f * 100)}% used`, sub: `${money(c.limit - spent, { maximumFractionDigits: 0 })} left for ${left} days`, act: 'data-action="go" data-to="budget" data-btab="trends"' });
   }
   // Birthdays without a gift
@@ -1071,7 +1072,8 @@ function homeInsights() {
   // Goal behind
   for (const g of state.goals) {
     const pl = goalPlan(g);
-    if (pl.pct < 1 && pl.perMonth && pl.months <= 2) out.push({ p: 3, tone: '', icon: g.emoji || '🎯', title: `${g.name}: ${money(pl.left, { maximumFractionDigits: 0 })} to go`, sub: `${pl.months} month${pl.months > 1 ? 's' : ''} left · ${money(pl.perMonth, { maximumFractionDigits: 0 })}/mo`, act: `data-action="go" data-to="goal/${g.id}"` });
+    if (pl.late) out.push({ p: 3, tone: 'warn', icon: g.emoji || '🎯', title: `${g.name}: target date passed`, sub: `${money(pl.left, { maximumFractionDigits: 0 })} to go · pick a new date`, act: `data-action="go" data-to="goal/${g.id}"` });
+    else if (pl.pct < 1 && pl.perMonth && pl.months <= 2) out.push({ p: 3, tone: '', icon: g.emoji || '🎯', title: `${g.name}: ${money(pl.left, { maximumFractionDigits: 0 })} to go`, sub: `${pl.months} month${pl.months > 1 ? 's' : ''} left · ${money(pl.perMonth, { maximumFractionDigits: 0 })}/mo`, act: `data-action="go" data-to="goal/${g.id}"` });
   }
   if (!out.length) return '';
   out.sort((a, b) => a.p - b.p);

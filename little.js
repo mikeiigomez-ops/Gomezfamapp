@@ -7,7 +7,7 @@ Object.assign(TITLES, { treats: 'Treats' });
 const isSimple = (id) => !!state.members.find((m) => m.id === id)?.simple;
 const moneyMode = (id) => { const m = state.members.find((x) => x.id === id); return m?.money || (m?.simple ? 'one' : 'jars'); };
 const simpleKid = () => { const id = kidModeId(); return id && isSimple(id) ? id : ''; };
-const piggyTotal = (id) => jarTotal(id, 'save') + jarTotal(id, 'spend') + jarTotal(id, 'give');
+const piggyTotal = (id) => Math.round((jarTotal(id, 'save') + jarTotal(id, 'spend') + jarTotal(id, 'give')) * 100) / 100;
 const readAloudOn = (id) => state.members.find((m) => m.id === id)?.readAloud !== false;
 
 /* ---------- Read aloud ---------- */
@@ -247,7 +247,7 @@ Object.assign(actions, {
       title: `💵 ${member(id).name}'s allowance`,
       values: { amount: a.amount, day: a.day },
       fields: [{ row: [{ name: 'amount', label: 'Every week', type: 'money', placeholder: '0 = none' }, { name: 'day', label: 'Paid on', type: 'select', options: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((d, i) => ({ value: i, label: d })) }] }],
-      onSave(v) { pg.allowance = v.amount ? { amount: v.amount, day: Number(v.day), split: { save: 0, spend: 100, give: 0 } } : null; if (!pg.lastPaid) pg.lastPaid = addDays(today(), -1); toast(v.amount ? 'Allowance set — goes into the piggy bank' : 'Allowance off'); },
+      onSave(v) { const wasOn = !!pg.allowance?.amount; pg.allowance = v.amount ? { amount: v.amount, day: Number(v.day), split: { save: 0, spend: 100, give: 0 } } : null; if (!pg.lastPaid || !wasOn) pg.lastPaid = addDays(today(), -1); toast(v.amount ? 'Allowance set — goes into the piggy bank' : 'Allowance off'); },
     });
   },
   'piggy-add': (el) => (moneyMode(el.dataset.id) === 'jars' ? _pAdd(el) : onePiggyMoney(el.dataset.id, 1)),

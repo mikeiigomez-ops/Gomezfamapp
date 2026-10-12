@@ -57,7 +57,7 @@ const spendable = (id) => (typeof jarTotal === 'function' ? jarTotal(id, 'spend'
 function exchangeSheet(id) {
   const cfg = gemsCfg(), have = spendable(id);
   if (have < 1) { toast(`No spending money in the piggy bank yet 🐷`); return; }
-  const max = Math.min(cfg.maxExchange, Math.floor(have));
+  const max = Math.floor(Math.min(cfg.maxExchange, have)); // a 2.5 max made [...Array(2.5)] throw
   openSheet({
     title: `🐷 → ${GEM} Trade money for Gems`,
     saveLabel: cfg.approve && kidHere() ? 'Ask a grown-up' : 'Trade',
@@ -162,7 +162,7 @@ function giveGemsSheet(id) {
     saveLabel: 'Give',
     values: { n: '10', note: '' },
     fields: [
-      { name: 'n', label: 'Gems (use − to take away)', type: 'number', required: true },
+      { name: 'n', label: 'Gems (use − to take away)', type: 'number', required: true, signed: true },
       { name: 'note', label: 'Why?', placeholder: 'e.g. Great report card! 📚' },
     ],
     onSave(v) {

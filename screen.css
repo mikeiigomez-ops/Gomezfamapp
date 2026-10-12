@@ -43,7 +43,7 @@ body.store-mode main#view, body.house-editing main#view { padding-bottom: calc(v
   display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 4px; border-radius: 24px;
   background: var(--surface); box-shadow: 0 6px 22px rgba(40, 30, 20, .16), inset 0 0 0 1px var(--hair, rgba(0, 0, 0, .05));
 }
-.pg-ctl button { width: 52px; height: 42px; border-radius: 21px; font: 800 30px/1 var(--font-display, system-ui); color: var(--accent); padding-bottom: 3px; }
+.pg-ctl button { width: 52px; height: 42px; border-radius: 21px; font: 800 30px/1 var(--font-display, system-ui); color: var(--accent-ink, var(--accent)); padding-bottom: 3px; }
 .pg-ctl button:active:not([disabled]) { background: var(--accent-soft); transform: scale(.94); }
 .pg-ctl button[disabled] { opacity: .22; }
 .pg-dots { display: flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 700; color: var(--muted); }
@@ -64,23 +64,23 @@ body.store-mode main#view, body.house-editing main#view { padding-bottom: calc(v
 .pg-region { position: relative; overflow: hidden !important; padding-bottom: 50px !important; }
 .pg-mini { position: absolute; left: 0; right: 0; bottom: 4px; display: flex; align-items: center; justify-content: center; gap: 12px; }
 .pg-mini span { display: flex; gap: 6px; }
-.pg-mini button { width: 48px; height: 40px; border-radius: 20px; background: var(--surface-2); font: 800 26px/1 var(--font-display, system-ui); color: var(--accent); padding-bottom: 3px; }
+.pg-mini button { width: 48px; height: 40px; border-radius: 20px; background: var(--surface-2); font: 800 26px/1 var(--font-display, system-ui); color: var(--accent-ink, var(--accent)); padding-bottom: 3px; }
 .pg-mini button[disabled] { opacity: .25; }
 
 /* ---------- Launcher tiles (Home, More, Kid home) ---------- */
 .launch { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .launch.big { grid-template-columns: repeat(2, 1fr); gap: 14px; }
-.tile {
+.launch .tile {
   position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-width: 0;
   aspect-ratio: 1 / .84; padding: 6px; border-radius: 22px; text-align: center; color: var(--text);
   background: color-mix(in srgb, var(--t) 12%, var(--surface)); box-shadow: var(--shadow);
   transition: transform .15s var(--spring, ease);
 }
-.tile:active { transform: scale(.94); }
+.launch .tile:active { transform: scale(.94); }
 .tile-e { display: grid; place-items: center; width: 50px; height: 50px; margin-bottom: 1px; border-radius: 16px; font-size: 30px; line-height: 1; background: color-mix(in srgb, var(--t) 24%, var(--surface)); }
-.tile b { max-width: 100%; font-size: 14.5px; font-weight: 800; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tile small { max-width: 100%; font-size: 12px; font-weight: 650; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tile.alert small { color: var(--bad); }
+.launch .tile b { max-width: 100%; font-size: 14.5px; font-weight: 800; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.launch .tile small { max-width: 100%; font-size: 12px; font-weight: 650; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.launch .tile.alert small { color: var(--bad); }
 .tile-badge { position: absolute; top: 8px; right: 8px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; display: grid; place-items: center; background: #ef4444; color: #fff; font-size: 12px; font-weight: 900; box-shadow: 0 2px 6px rgba(239, 68, 68, .4); }
 .launch.big .tile { aspect-ratio: 1 / .78; border-radius: 28px; }
 .launch.big .tile-e { width: 66px; height: 66px; font-size: 42px; border-radius: 22px; }
@@ -153,8 +153,8 @@ body.house-editing .h-drawer-space { display: none; }
   .launch { grid-template-columns: repeat(4, 1fr); gap: 16px; }
   .launch.big { grid-template-columns: repeat(3, 1fr); gap: 18px; }
   .tile-e { width: 64px; height: 64px; font-size: 38px; }
-  .tile b { font-size: 16px; }
-  .tile small { font-size: 13px; }
+  .launch .tile b { font-size: 16px; }
+  .launch .tile small { font-size: 13px; }
   .launch.big .tile-e { width: 80px; height: 80px; font-size: 50px; }
   .launch.big .tile b { font-size: 19px; }
   .home-hi, .kid-hi2 { padding: 18px 22px; }
@@ -228,10 +228,10 @@ body.house-editing .h-drawer-space { display: none; }
   .kh-av { width: 50px; height: 50px; }
   .kh-greet { font-size: 18px; }
   .launch { gap: 8px; }
-  .tile { aspect-ratio: 1 / .74; border-radius: 18px; }
+  .launch .tile { aspect-ratio: 1 / .74; border-radius: 18px; }
   .tile-e { width: 40px; height: 40px; font-size: 24px; border-radius: 13px; }
-  .tile b { font-size: 13px; }
-  .tile small { font-size: 11px; }
+  .launch .tile b { font-size: 13px; }
+  .launch .tile small { font-size: 11px; }
   .launch.big .tile { aspect-ratio: 1 / .62; }
   .launch.big .tile-e { width: 46px; height: 46px; font-size: 30px; }
   .hero { padding-top: 14px; padding-bottom: 14px; }
@@ -250,3 +250,17 @@ body.house-editing .h-drawer-space { display: none; }
 .live-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 6px 12px; border-radius: 18px; background: var(--good-soft); color: var(--text); font-size: 13.5px; font-weight: 750; }
 .live-chip .live-dot { width: 9px; height: 9px; flex-basis: 9px; }
 .hav[data-av^="live-"] .hav-name { background: var(--good); color: #fff; }
+
+/* Phones held sideways: the month grid fits */
+@media (max-height: 500px) { .cal-day { aspect-ratio: auto; height: 30px; padding-top: 0; } .cal-day.today span { width: 24px; height: 24px; } .cal-grid .dow { padding: 0 0 2px; } }
+
+/* Accessibility layer for the screen frame */
+.pg-ctl { max-width: calc(100% - var(--rail, 0px) - 24px); }
+.pg-ctl button { height: 44px; }
+.pg-dots { min-width: 0; overflow: hidden; }
+.kh-lock { width: 44px; height: 44px; }
+.kh-level { min-height: 44px; display: inline-flex; align-items: center; }
+.kid-hi2 { background: linear-gradient(135deg, color-mix(in oklab, var(--c, #8b5cf6) 85%, black), color-mix(in oklab, color-mix(in oklab, var(--c, #8b5cf6) 70%, #ff9de2) 78%, black)); }
+.tile-badge { background: var(--bad); }
+body.paged .fab { bottom: calc(var(--tabbar-h) + var(--tab-gap) + 66px); }
+#view.pg-cols .card { -webkit-box-decoration-break: clone; box-decoration-break: clone; }

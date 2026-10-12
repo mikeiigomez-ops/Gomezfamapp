@@ -144,19 +144,24 @@ function routineForm(r, preset) {
    ========================================================= */
 const JARS = [['save', '🐷', 'Save'], ['spend', '🛍️', 'Spend'], ['give', '💝', 'Give']];
 const piggyOf = (id) => (state.piggy[id] ||= { log: [], allowance: null, goal: null, lastPaid: '' });
-const jarTotal = (id, jar) => sum((state.piggy[id]?.log || []).filter((x) => x.jar === jar), (x) => x.amount);
+const jarTotal = (id, jar) => Math.round(sum((state.piggy[id]?.log || []).filter((x) => x.jar === jar), (x) => x.amount) * 100) / 100; // 0.7 + 0.1 = 0.8, not 0.7999…
 function payAllowances() {
   const t = today();
   let n = 0;
   for (const k of kids()) {
     const pg = state.piggy[k.id];
     const a = pg?.allowance;
-    if (!a || !a.amount) continue;
+    if (!a || !a.amount) { if (pg) pg.lastPaid = t; continue; } // paused: no back pay when it's turned on again
     if (!pg.lastPaid) { pg.lastPaid = t; continue; }
     for (let d = addDays(pg.lastPaid, 1); d <= t; d = addDays(d, 1)) {
       if (parse(d).getDay() !== Number(a.day)) continue;
-      for (const [jar] of JARS) {
-        const amt = Math.round(a.amount * (a.split?.[jar] ?? (jar === 'spend' ? 100 : 0))) / 100;
+      const cents = Math.round(a.amount * 100);
+      const parts = JARS.map(([jar]) => [jar, Number(a.split?.[jar] ?? (jar === 'spend' ? 100 : 0))]).filter(([, pct]) => pct > 0);
+      let given = 0;
+      for (const [jar, pct] of parts) {
+        const c = jar === parts.at(-1)[0] ? cents - given : Math.round((cents * pct) / 100); // last jar gets the leftover cent
+        given += c;
+        const amt = c / 100;
         const id = `alw-${k.id}-${d}-${jar}`; // predictable id: two synced phones can't pay twice
         if (amt > 0 && !pg.log.some((x) => x.id === id)) { pg.log.push({ id, date: d, jar, amount: amt, note: 'Weekly allowance' }); n++; }
       }
@@ -645,8 +650,9 @@ Object.assign(actions, {
       onSave(v) {
         const tot = (v.save || 0) + (v.spend || 0) + (v.give || 0);
         if (v.amount && tot !== 100) { toast(`The split adds up to ${tot}% — make it 100%`); return false; }
+        const wasOn = !!pg.allowance?.amount;
         pg.allowance = v.amount ? { amount: v.amount, day: Number(v.day), split: { save: v.save || 0, spend: v.spend || 0, give: v.give || 0 } } : null;
-        if (!pg.lastPaid) pg.lastPaid = addDays(today(), -1);
+        if (!pg.lastPaid || !wasOn) pg.lastPaid = addDays(today(), -1); // (re)starting: pay from today on, no back pay
         toast(v.amount ? `Allowance set — paid automatically every ${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][Number(v.day)]}` : 'Allowance off');
       },
     });

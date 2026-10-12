@@ -48,7 +48,7 @@ views.board = () => {
   const items = [...state.board].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.at - a.at);
   const polls = items.filter((x) => x.type === 'poll'), notes = items.filter((x) => x.type !== 'poll');
   return `
-    <div class="btn-row" style="margin-top:0"><button class="btn" data-action="note-new">📝 Note</button><button class="btn secondary" data-action="poll-new">🗳️ Poll</button></div>
+    <div class="btn-row" style="margin-top:0"><button class="btn" data-action="note-new">📝 Note</button>${typeof inKidMode === 'function' && inKidMode() ? '' : '<button class="btn secondary" data-action="poll-new">🗳️ Poll</button>'}</div>
     ${polls.map(pollCard).join('')}
     ${notes.length ? `<div class="notes">${notes.map(noteCard).join('')}</div>` : (polls.length ? '' : `<div class="card empty"><span class="big">📌</span>The family fridge. Leave notes, reminders and little love letters — or start a vote.</div>`)}
   `;
@@ -163,7 +163,7 @@ function simulateDebts(debts, extra, strategy) {
       d.bal += i; d.interest += i; totalInterest += i;
       const pay = Math.min(d.bal, Number(d.min) || 0);
       d.bal -= pay;
-      if (d.bal <= 0.005 && !d.paidOff) d.paidOff = month;
+      if (d.bal <= 0.005 && !d.paidOff) { d.paidOff = month; pool += (Number(d.min) || 0) - pay; } // unused part of the last minimum rolls over now
     }
     for (const d of order()) {
       if (pool <= 0) break;
@@ -215,7 +215,7 @@ views.debts = () => {
     <div class="segmented"><button class="${strat === 'avalanche' ? 'active' : ''}" data-action="debt-strat" data-s="avalanche">🏔️ Avalanche</button><button class="${strat === 'snowball' ? 'active' : ''}" data-action="debt-strat" data-s="snowball">⛄ Snowball</button></div>
     ${a && sb && !a.stuck && !sb.stuck ? `<p class="small muted" style="margin:-6px 4px 12px">${strat === 'avalanche' ? 'Highest interest first — saves the most money' : 'Smallest balance first — quick wins keep you motivated'}. ${Math.abs(sb.interest - a.interest) < 1 ? 'Both cost the same here.' : `Avalanche saves ${money(sb.interest - a.interest, { maximumFractionDigits: 0 })} vs snowball.`}</p>` : ''}
     <div class="section-title">Payoff order<span class="small" style="text-transform:none">${money(totalBal, { maximumFractionDigits: 0 })} · ${money(totalMin, { maximumFractionDigits: 0 })}/mo min</span></div>
-    <div class="card flush">${(cur ? [...cur.debts].sort((x, y) => (x.paidOff || 999) - (y.paidOff || 999)) : debts).map((d, i) => `<button class="row tap" style="width:100%;text-align:left" data-action="debt-edit" data-id="${d.id}">
+    <div class="card flush">${(cur ? [...[...cur.debts].sort((x, y) => (x.paidOff || 999) - (y.paidOff || 999)), ...debts.filter((d) => !(d.balance > 0))] : debts).map((d, i) => `<button class="row tap" style="width:100%;text-align:left" data-action="debt-edit" data-id="${d.id}">
       <div class="avatar" style="font-weight:800">${i + 1}</div>
       <div class="grow"><div class="title">${esc(d.name)}</div><div class="sub">${money(d.balance || 0, { maximumFractionDigits: 0 })} · ${d.apr ?? '?'}% APR · ${money(d.min || 0, { maximumFractionDigits: 0 })}/mo</div></div>
       <span class="small" style="text-align:right">${d.paidOff ? `Paid off<br><b>${parse(addMonths(monthKey(today()), d.paidOff) + '-01').toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}</b>` : ''}</span></button>`).join('')}</div>
@@ -240,9 +240,9 @@ function debtForm(d) {
 /* =========================================================
    Subscription audit + bill price-change tracking
    ========================================================= */
-const SUB_RE = /netflix|hulu|disney|spotify|apple|youtube|prime|amazon prime|\bmax\b|hbo|paramount|peacock|openai|chatgpt|cricut|rocket money|planet fitness|gym|xbox|playstation|nintendo|audible|kindle|icloud|google|ring|cove|adobe|microsoft|dropbox|duolingo|calm|headspace|sirius|siriusxm|patreon|hiya/i;
+const SUB_RE = /netflix|hulu|disney|spotify|\bapple (one|music|tv|arcade)|youtube|\bprime\b|\bmax\b|hbo|paramount|peacock|openai|chatgpt|cricut|rocket money|planet fitness|\bgym\b|xbox|playstation|nintendo|audible|kindle|icloud|google (one|play|storage)|\bring\b|\bcove\b|adobe|microsoft|dropbox|duolingo|\bcalm\b|headspace|sirius|patreon|hiya/i;
 const STREAMING_RE = /netflix|hulu|disney|youtube|\bmax\b|hbo|paramount|peacock|apple tv|prime video|spotify|sirius/i;
-const isSub = (b) => b.type !== 'income' && (b.group === 'Subscriptions' || SUB_RE.test(b.name)) && !/mortgage|insurance|energy|electric|water|loan|credit|finance/i.test(b.name);
+const isSub = (b) => b.type !== 'income' && (b.group === 'Subscriptions' || SUB_RE.test(b.name)) && !/mortgage|insurance|energy|electric|water|loan|credit|finance|card|discover|visa|mastercard|amex|bank/i.test(b.name);
 views.subs = () => {
   const subs = state.budget.bills.filter(isSub).sort((a, b) => perMonth(b) - perMonth(a));
   if (!subs.length) return `<div class="card empty"><span class="big">🔁</span>No subscriptions yet. Add them under Budget → Recurring (group “Subscriptions”).</div>`;
@@ -255,7 +255,7 @@ views.subs = () => {
       ${flagged.length ? `<div class="allowance" style="margin-top:12px">✂️ Cancelling ${flagged.length} flagged would save <b>${money(sum(flagged, perMonth) * 12, { maximumFractionDigits: 0 })}/year</b></div>` : ''}
     </div>
     ${streaming.length >= 2 ? `<div class="insight warn" style="max-width:none;margin-bottom:12px"><span class="ii">📺</span><b>${streaming.length} streaming services · ${money(sum(streaming, perMonth))}/mo</b><small>${streaming.map((b) => b.name).join(', ')} — rotate them?</small></div>` : ''}
-    ${hikes.map((b) => { const h = b.priceHistory.at(-1); return `<div class="insight bad" style="max-width:none;margin-bottom:12px"><span class="ii">📈</span><b>${esc(b.name)} went up ${money(h.to - h.from)}</b><small>${money(h.from)} → ${money(h.to)} on ${fmtDate(h.date, { month: 'short', day: 'numeric' })} · ${money((h.to - h.from) * 12)}/yr more</small></div>`; }).join('')}
+    ${hikes.map((b) => { const h = b.priceHistory.at(-1), up = h.to > h.from, diff = Math.abs(h.to - h.from), yr = perMonth({ freq: b.freq, amount: diff }) * 12; return `<div class="insight ${up ? 'bad' : 'good'}" style="max-width:none;margin-bottom:12px"><span class="ii">${up ? '📈' : '📉'}</span><b>${esc(b.name)} went ${up ? 'up' : 'down'} ${money(diff)}</b><small>${money(h.from)} → ${money(h.to)} on ${fmtDate(h.date, { month: 'short', day: 'numeric' })} · ${money(yr)}/yr ${up ? 'more' : 'saved'}</small></div>`; }).join('')}
     <div class="section-title">All subscriptions</div>
     <div class="card flush">${subs.map((b) => `<div class="row">
       ${letterAvatar(b.name)}

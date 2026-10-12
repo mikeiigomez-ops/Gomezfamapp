@@ -26,7 +26,7 @@ const fmtTime = (t) => {
 const relDays = (n) => n === 0 ? 'Today' : n === 1 ? 'Tomorrow' : n === -1 ? 'Yesterday' : n > 0 ? `in ${n} days` : `${-n} days ago`;
 const money = (n, opts = {}) => {
   try {
-    return new Intl.NumberFormat(undefined, { style: 'currency', currency: state.settings.currency || 'USD', ...opts }).format(n || 0);
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency: state.settings.currency || 'USD', ...opts }).format(Math.round((Number(n) || 0) * 100) / 100 || 0); // never "-$0.00" from float dust
   } catch { return '$' + (n || 0).toFixed(2); }
 };
 const sum = (arr, f) => arr.reduce((a, x) => a + (Number(f(x)) || 0), 0);
@@ -351,7 +351,7 @@ function billOccurrences(b, from, to) {
     for (let d = addDays(b.anchor, Math.ceil(daysBetween(b.anchor, from) / step) * step); d <= to; d = addDays(d, step)) out.push(d);
   } else if (freq === 'yearly' && b.anchor) {
     for (let y = +from.slice(0, 4); y <= +to.slice(0, 4); y++) {
-      const d = `${y}-${b.anchor.slice(5)}`;
+      const d = dayInMonth(+b.anchor.slice(8, 10), `${y}-${b.anchor.slice(5, 7)}`); // Feb 29 → Feb 28 in non-leap years
       if (d >= from && d <= to) out.push(d);
     }
   }
@@ -361,6 +361,30 @@ const amountFor = (b, d) => b.amounts?.[d] ?? b.amount;
 const billOn = (b, s) => billOccurrences(b, s, s).length > 0;
 const isPaid = (b, d) => !!(b.paid && b.paid[d]);
 const nextBillDate = (b, from = today()) => billOccurrences(b, from, addDays(from, 400))[0];
+// Unpaid manual bills whose date has passed (since the bill was added, up to 60 days back).
+function overdueBills(t = today()) {
+  return recurringBetween(addDays(t, -60), addDays(t, -1), 'bill').filter(({ b, date }) => !b.autopay && !isPaid(b, date) && date >= (b.since || ''));
+}
+// Checking balance right now: the balance you entered plus what has moved since (paid/received recurring items and
+// everyday transactions dated after it). Unpaid bills are left out — they're still owed (see overdueBills).
+function balanceNow() {
+  const bal = state.settings.balance;
+  if (bal == null) return null;
+  const t = today(), bd = state.settings.balanceDate || t, at = state.settings.balanceAt || 0;
+  let v = Number(bal);
+  if (bd < t) for (const x of recurringBetween(addDays(bd, 1), t)) if (isPaid(x.b, x.date)) v += x.b.type === 'income' ? x.amount : -x.amount;
+  const billTx = new Set(state.budget.bills.flatMap((b) => Object.values(b.paid || {})));
+  for (const x of state.budget.transactions) {
+    if (billTx.has(x.id) || x.date > t) continue;
+    if (x.date > bd || (x.date === bd && at && (x.created || 0) > at)) v += x.type === 'income' ? Number(x.amount) : -Number(x.amount);
+  }
+  return Math.round(v * 100) / 100;
+}
+// Category budget still free for everyday spending in a month, after the bills that count against it.
+function flexLeft(ym) {
+  const due = recurringBetween(ym + '-01', dayInMonth(31, ym), 'bill').filter((x) => x.b.categoryId && !isPaid(x.b, x.date));
+  return sum(state.budget.categories, (c) => (c.limit ? Math.max(0, c.limit - spentIn(ym, c.id) - sum(due.filter((x) => x.b.categoryId === c.id), (x) => x.amount)) : 0));
+}
 // All occurrences in [from, to], optionally only 'bill' or 'income', sorted by date.
 function recurringBetween(from, to, type) {
   const out = [];
@@ -381,12 +405,19 @@ const nameColor = (str) => { let h = 0; for (const c of str) h = (h * 31 + c.cha
 const letterAvatar = (name) => `<div class="avatar" style="background:${nameColor(name)};color:#fff;font-weight:750;font-size:16px">${esc((String(name).match(/[A-Za-z0-9]/) || ['?'])[0].toUpperCase())}</div>`;
 const dueLabel = (date) => { const n = daysBetween(today(), date); return n < 0 ? `${-n} day${n < -1 ? 's' : ''} ago` : n === 0 ? 'today' : n === 1 ? 'tomorrow' : `in ${n} days`; };
 
+// A category's budget for a month. With rollover on, last month's unspent money (or overspending) carries in.
+function catLimit(c, ym) {
+  const base = Number(c.limit) || 0, prev = addMonths(ym, -1);
+  if (!c.rollover || !base || (c.rolloverFrom && prev < c.rolloverFrom)) return base;
+  return Math.max(0, Math.round((2 * base - spentIn(prev, c.id)) * 100) / 100);
+}
 function budgetSummary(ym) {
   const tx = monthTx(ym);
   const spent = sum(tx.filter((t) => t.type !== 'income'), (t) => t.amount);
   const income = sum(tx.filter((t) => t.type === 'income'), (t) => t.amount);
-  const limit = sum(state.budget.categories, (c) => c.limit);
-  return { tx, spent, income, limit, left: limit - spent };
+  const limit = sum(state.budget.categories, (c) => catLimit(c, ym));
+  const r = (n) => Math.round(n * 100) / 100; // no 0.1+0.2 drift ("-$0.00")
+  return { tx, spent: r(spent), income: r(income), limit, left: r(limit - spent) };
 }
 const levelCls = (frac) => (frac >= 1 ? 'bad' : frac >= 0.85 ? 'warn' : '');
 
@@ -476,7 +507,7 @@ views.home = () => {
   }
 
   // Unpaid bills from the last 3 days through the next 7, and the next payday
-  const billsDue = recurringBetween(addDays(t, -3), addDays(t, 7), 'bill').filter(({ b, date }) => !isPaid(b, date) && (date >= t || (!b.autopay && date >= (b.since || ''))));
+  const billsDue = [...overdueBills(t), ...recurringBetween(t, addDays(t, 7), 'bill').filter(({ b, date }) => !isPaid(b, date))];
   const payday = recurringBetween(t, addDays(t, 60), 'income')[0];
 
   // Birthdays within 45 days
@@ -617,13 +648,14 @@ views.budget = () => {
     const mFrom = ym + '-01', mTo = dayInMonth(31, ym);
     const incM = sum(recurringBetween(mFrom, mTo, 'income'), (x) => x.amount);
     const billM = sum(recurringBetween(mFrom, mTo, 'bill'), (x) => x.amount);
-    const leftover = incM - billM - s.limit;
+    const flexB = sum(state.budget.categories, (c) => Math.max(0, (c.limit || 0) - sum(recurringBetween(mFrom, mTo, 'bill').filter((x) => x.b.categoryId === c.id), (x) => x.amount)));
+    const leftover = incM - billM - flexB; // bills already inside a category budget aren't counted twice
     body = `
       ${state.budget.bills.length ? `<div class="card">
         <h3>${parse(mFrom).toLocaleDateString(undefined, { month: 'long' })} cash flow</h3>
         <div class="kv"><span class="muted">Expected income</span><b style="color:var(--good)">+${money(incM)}</b></div>
         <div class="kv"><span class="muted">Recurring bills</span><b>−${money(billM)}</b></div>
-        <div class="kv"><span class="muted">Spending budget</span><b>−${money(s.limit)}</b></div>
+        <div class="kv"><span class="muted">Everyday spending budget</span><b>−${money(flexB)}</b></div>
         <div class="kv" style="border-top:1px solid var(--line);margin-top:6px;padding-top:8px"><span>Left over</span><b style="color:${leftover < 0 ? 'var(--bad)' : 'var(--good)'}">${money(leftover)}</b></div>
       </div>` : ''}
       <div class="card">
@@ -642,12 +674,13 @@ views.budget = () => {
       <div class="card">
         ${state.budget.categories.map((c) => {
           const spent = sum(s.tx.filter((t) => t.type !== 'income' && t.categoryId === c.id), (t) => t.amount);
-          const f = c.limit ? spent / c.limit : 0;
+          const lim = catLimit(c, ym), f = lim ? spent / lim : 0;
           return `<button class="cat-row" style="display:block;width:100%;text-align:left" data-action="edit-category" data-id="${c.id}">
-            <div class="top"><span>${esc(c.emoji)} ${esc(c.name)}</span><span>${money(spent, { maximumFractionDigits: 0 })}${c.limit ? ` / ${money(c.limit, { maximumFractionDigits: 0 })}` : ''}</span></div>
-            ${c.limit ? `<div class="bar"><i class="${levelCls(f)}" style="width:${Math.min(100, f * 100)}%"></i></div>` : ''}
+            <div class="top"><span>${esc(c.emoji)} ${esc(c.name)}</span><span>${money(spent, { maximumFractionDigits: 0 })}${lim ? ` / ${money(lim, { maximumFractionDigits: 0 })}${lim !== c.limit ? ' ↻' : ''}` : ''}</span></div>
+            ${lim ? `<div class="bar"><i class="${levelCls(f)}" style="width:${Math.min(100, f * 100)}%"></i></div>` : ''}
           </button>`;
         }).join('') || '<div class="empty small">No categories yet.</div>'}
+        ${(() => { const ids = new Set(state.budget.categories.map((c) => c.id)); const other = sum(s.tx.filter((t) => t.type !== 'income' && !ids.has(t.categoryId)), (t) => t.amount); return other ? `<button class="cat-row" style="display:block;width:100%;text-align:left" data-action="budget-tab" data-tab="activity"><div class="top"><span>📦 Uncategorized</span><span>${money(other, { maximumFractionDigits: 0 })}</span></div></button>` : ''; })()}
       </div>`;
   } else if (tab === 'activity') {
     const byDate = {};
@@ -664,6 +697,7 @@ views.budget = () => {
         </button>`;
       }).join('')}</div>`).join('')
       : `<div class="card empty"><span class="big">🧾</span>No spending logged for ${fmtMonth(ym)}.<br>Tap + to add an expense.</div>`;
+    if (s.tx.length) body += `<div class="btn-row"><button class="btn secondary" data-action="export-csv">⬇️ Export ${fmtMonth(ym)} as CSV</button></div>`;
   } else if (tab === 'trends') {
     body = trendsView(ym);
   } else {
@@ -699,9 +733,53 @@ function recurRow({ b, date, amount }) {
   </div>`;
 }
 
+// Which paycheck pays which bills: each pay period's income minus the unpaid bills due before the next payday.
+function paycheckPlan(n = 3) {
+  const t = today(), pays = [];
+  for (const x of recurringBetween(t, addDays(t, 120), 'income')) {
+    const last = pays.at(-1);
+    if (last && last.date === x.date) last.amount += x.amount; else pays.push({ date: x.date, amount: x.amount });
+  }
+  return pays.slice(0, n).map((p, i) => {
+    const end = pays[i + 1] ? addDays(pays[i + 1].date, -1) : addDays(p.date, 13);
+    const bills = recurringBetween(p.date, end, 'bill').filter((x) => !isPaid(x.b, x.date));
+    const out = sum(bills, (x) => x.amount);
+    return { ...p, end, bills, out, left: p.amount - out };
+  });
+}
+function paycheckPlanCard() {
+  const plan = paycheckPlan();
+  if (plan.length < 2) return '';
+  return `<div class="card"><h3>💵 Paycheck plan</h3>
+    ${plan.map((p) => `<div class="kv"><span class="muted">${fmtDate(p.date, { month: 'short', day: 'numeric' })} pay · ${p.bills.length} bill${p.bills.length === 1 ? '' : 's'} through ${fmtDate(p.end, { month: 'short', day: 'numeric' })}</span><b style="color:${p.left < 0 ? 'var(--bad)' : 'var(--good)'}">${money(p.left, { maximumFractionDigits: 0 })} left</b></div>
+      <div class="bar" style="margin:2px 0 8px"><i class="${levelCls(p.amount ? p.out / p.amount : 1)}" style="width:${Math.min(100, p.amount ? (p.out / p.amount) * 100 : 100)}%"></i></div>`).join('')}
+    <div class="small muted">${plan.some((p) => p.left < 0) ? '⚠️ A paycheck doesn’t cover the bills due before the next one — move a due date or hold money back from the paycheck before it.' : 'Each paycheck covers the bills due before the next one.'}</div></div>`;
+}
+// Safe to spend until the next payday: estimated balance − overdue bills − bills due before payday.
+function safeToSpend() {
+  const bal = balanceNow(), t = today();
+  const pay = recurringBetween(t, addDays(t, 60), 'income')[0];
+  if (bal == null || !pay) return null;
+  const owed = sum([...overdueBills(t), ...recurringBetween(t, addDays(pay.date, -1), 'bill').filter((x) => !isPaid(x.b, x.date))], (x) => x.amount);
+  const safe = Math.round((bal - owed) * 100) / 100;
+  return { safe, pay, perDay: safe / Math.max(1, daysBetween(t, pay.date)), stale: daysBetween(state.settings.balanceDate || t, t) };
+}
+// Yearly bills: how much to set aside each month so they're not a surprise.
+function sinkingCard() {
+  const t = today();
+  const ys = state.budget.bills.filter((b) => b.type !== 'income' && b.freq === 'yearly' && b.anchor).map((b) => {
+    const d = nextBillDate(b), amt = amountFor(b, d), months = Math.max(1, Math.ceil(daysBetween(t, d) / 30.44));
+    return { b, d, amt, perMo: amt / months };
+  }).sort((x, y) => x.d.localeCompare(y.d));
+  if (!ys.length) return '';
+  return `<div class="card"><h3>🫙 Set aside for yearly bills</h3>
+    ${ys.map((x) => `<div class="kv"><span class="muted">${esc(x.b.name)} · ${money(x.amt, { maximumFractionDigits: 0 })} on ${fmtDate(x.d, { month: 'short', day: 'numeric' })}</span><b>${money(x.perMo, { maximumFractionDigits: 0 })}/mo</b></div>`).join('')}
+    <div class="kv" style="border-top:1px solid var(--line);margin-top:6px;padding-top:8px"><span>Set aside each month</span><b>${money(sum(ys, (x) => x.perMo), { maximumFractionDigits: 0 })}</b></div></div>`;
+}
 function recurringView() {
   const t = today();
   const sub = ui.recurTab || 'upcoming';
+  const overdue = overdueBills(t), odKey = new Set(overdue.map((x) => x.b.id + x.date));
   const toggle = `<div class="segmented" style="max-width:260px;margin:0 auto 14px">
     <button class="${sub === 'upcoming' ? 'active' : ''}" data-action="recur-tab" data-tab="upcoming">Upcoming</button>
     <button class="${sub === 'all' ? 'active' : ''}" data-action="recur-tab" data-tab="all">All</button></div>`;
@@ -730,6 +808,7 @@ function recurringView() {
         <div class="kv" style="border-top:1px solid var(--line);margin-top:6px;padding-top:8px"><span>Left after bills</span><b style="color:${incM - billM < 0 ? 'var(--bad)' : 'var(--good)'}">${money(incM - billM)}</b></div>
         ${incM ? `<div class="bar"><i class="${levelCls(billM / incM)}" style="width:${Math.min(100, (billM / incM) * 100)}%"></i></div><div class="small muted" style="margin-top:6px">Bills use ${Math.round((billM / incM) * 100)}% of income</div>` : ''}
       </div>
+      ${sinkingCard()}
       ${inc.length ? `<div class="section-title"><span>Income</span><span class="small" style="text-transform:none">+${money(incM, { maximumFractionDigits: 0 })}/mo</span></div><div class="card flush">${inc.map(row).join('')}</div>` : ''}
       ${order.map((g) => `<div class="section-title"><span>${esc(g)}</span><span class="small" style="text-transform:none">${money(sum(groups[g], perMonth), { maximumFractionDigits: 0 })}/mo</span></div>
         <div class="card flush">${groups[g].sort((a, b) => b.amount - a.amount).map(row).join('')}</div>`).join('')}
@@ -754,16 +833,16 @@ function recurringView() {
   const pay = recurringBetween(t, addDays(t, 60), 'income')[0];
   let payCard = '';
   if (pay) {
-    const before = recurringBetween(t, addDays(pay.date, -1), 'bill').filter((x) => !isPaid(x.b, x.date));
+    const before = [...overdue, ...recurringBetween(t, addDays(pay.date, -1), 'bill').filter((x) => !isPaid(x.b, x.date))];
     const owed = sum(before, (x) => x.amount);
-    const bal = state.settings.balance;
+    const bal = balanceNow();
     const safe = bal != null ? bal - owed : null;
     payCard = `<div class="card">
       <h3>Until payday</h3>
       <div class="kv"><span class="muted">💰 ${esc(pay.b.name)}</span><b style="color:var(--good)">${cap(dueLabel(pay.date))}</b></div>
-      <div class="kv"><span class="muted">Bills due before then (${before.length})</span><b>${money(owed)}</b></div>
+      <div class="kv"><span class="muted">Bills due before then (${before.length}${overdue.length ? `, ${overdue.length} overdue` : ''})</span><b>${money(owed)}</b></div>
       ${safe != null ? `
-        <div class="kv"><span class="muted">Checking balance</span><b>${money(bal)}</b></div>
+        <div class="kv"><span class="muted">Checking balance${(state.settings.balanceDate || t) < t ? ' (est. today)' : ''}</span><b>${money(bal)}</b></div>
         <div style="border-top:1px solid var(--line);margin-top:8px;padding-top:10px;display:flex;justify-content:space-between;align-items:end">
           <div><div class="stat-label">Safe to spend</div><div class="stat" style="color:${safe < 0 ? 'var(--bad)' : 'var(--good)'}">${money(safe)}</div></div>
           <button class="mini-btn" data-action="edit-balance">Update balance</button>
@@ -773,7 +852,7 @@ function recurringView() {
     </div>`;
   }
 
-  const recent = recurringBetween(addDays(t, -7), addDays(t, -1));
+  const recent = recurringBetween(addDays(t, -7), addDays(t, -1)).filter((x) => !odKey.has(x.b.id + x.date));
   const soon = recurringBetween(t, addDays(t, 7));
   const later = recurringBetween(addDays(t, 8), addDays(t, 30));
   const section = (title, list) => list.length ? `<div class="section-title"><span>${title}</span><span class="small" style="text-transform:none">${money(sum(list.filter((x) => x.b.type !== 'income'), (x) => x.amount))}</span></div><div class="card flush">${list.map(recurRow).join('')}</div>` : '';
@@ -783,7 +862,9 @@ function recurringView() {
       <p style="margin:0 0 10px">${charges.length ? `You have <b>${charges.length}</b> recurring charge${charges.length > 1 ? 's' : ''} for <b>${money(sum(charges, (x) => x.amount))}</b> in the next 7 days.` : 'No recurring charges in the next 7 days. 🎉'}</p>
       <div class="wk">${['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d) => `<div class="dow">${d}</div>`).join('')}${strip}</div>
     </div>
+    ${section('⚠️ Overdue', overdue)}
     ${payCard}
+    ${paycheckPlanCard()}
     ${typeof forecastCard === 'function' ? forecastCard() : ''}
     ${section('Coming soon', soon)}
     ${section('Coming later', later)}
@@ -913,7 +994,7 @@ views.shop = () => {
 
     body = `
       <form class="quick-add" data-submit="shop-add">
-        <input type="text" name="newItem" placeholder="Add an item…" enterkeyhint="done" autocomplete="off" list="stapleNames">
+        <input type="text" name="newItem" aria-label="Add an item" placeholder="Add an item…" enterkeyhint="done" autocomplete="off" list="stapleNames">
         <button class="btn" type="submit" aria-label="Add">${ICON.plus}</button>
       </form>
       <datalist id="stapleNames">${state.shop.staples.map((s) => `<option value="${esc(s.name)}">`).join('')}</datalist>
@@ -1166,7 +1247,7 @@ const PROJECT_TEMPLATES = {
     items: [['Storage bins', 8, 12], ['Shelving unit', 2, 80], ['Wall hooks', 1, 25], ['Trash bags (box)', 1, 15], ['Labels', 1, 8]] },
 };
 
-const itemTotal = (i) => (Number(i.cost) || 0) * (Number(i.qty) || 1);
+const itemTotal = (i) => Math.round((Number(i.cost) || 0) * (i.qty === 0 || i.qty === '0' ? 0 : Number(i.qty) || 1) * 100) / 100;
 function projectStats(pr) {
   const est = sum(pr.items, itemTotal);
   const spent = sum(pr.items.filter((i) => i.bought), itemTotal);
@@ -1431,7 +1512,8 @@ function render() {
     const tab = name === 'person' ? 'gifts' : name;
     $('#title').textContent = title;
     $('#backBtn').hidden = TABS.includes(name) || name === 'kid';
-    document.querySelectorAll('.tabbar [data-tab]').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+    document.querySelectorAll('.tabbar [data-tab]').forEach((b) => { b.classList.toggle('active', b.dataset.tab === tab); b.toggleAttribute('aria-current', b.dataset.tab === tab); });
+    viewEl.querySelectorAll('.segmented button, .sq-tabs3 button').forEach((b) => b.setAttribute('aria-pressed', b.classList.contains('active')));
     if (ui.pop) {
       const sel = `[data-action="${ui.pop.a}"]${ui.pop.id ? `[data-id="${ui.pop.id}"]` : ''}${ui.pop.date ? `[data-date="${ui.pop.date}"]` : ''}`;
       viewEl.querySelector(sel)?.classList.add('pop');
@@ -1513,7 +1595,7 @@ function fieldHTML(f, v) {
       break;
     case 'money':
     case 'number':
-      input = `<input id="${id}" name="${f.name}" type="text" inputmode="${f.type === 'money' ? 'decimal' : 'numeric'}" value="${val === null ? '' : esc(val)}" placeholder="${esc(f.placeholder || '')}" ${req}>`;
+      input = `<input id="${id}" name="${f.name}" type="text" inputmode="${f.signed ? 'text' : f.type === 'money' ? 'decimal' : 'numeric'}" value="${val === null ? '' : esc(val)}" placeholder="${esc(f.placeholder || '')}" ${req}>`;
       break;
     default:
       input = `<input id="${id}" name="${f.name}" type="${f.type || 'text'}" value="${esc(val)}" placeholder="${esc(f.placeholder || '')}" ${f.list ? `list="${f.list}"` : ''} ${req} autocapitalize="${['url', 'email', 'password'].includes(f.type) ? 'off' : 'sentences'}"${f.type === 'email' ? ' autocomplete="email"' : f.type === 'password' ? ' autocomplete="current-password"' : ''}>`;
@@ -1536,12 +1618,17 @@ function openSheet(cfg) {
   $('#sheet').hidden = false;
   form.scrollTop = 0;
   document.body.style.overflow = 'hidden';
+  // A real modal: focus moves in, the page behind is inert, and focus comes back on close
+  cfg.returnTo = document.activeElement; $('#app').inert = true;
+  setTimeout(() => { if (sheetCfg === cfg) (form.querySelector('input:not([type=hidden]),select,textarea') || $('#sheetSave'))?.focus({ preventScroll: true }); }, 50);
 }
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#sheet').hidden) closeSheet(); });
 function closeSheet() {
   $('#sheet').hidden = true;
   $('#sheetBackdrop').hidden = true;
   document.body.style.overflow = '';
-  document.activeElement?.blur?.();
+  $('#app').inert = false;
+  const back = sheetCfg?.returnTo; if (back && document.contains(back)) back.focus?.({ preventScroll: true }); else document.activeElement?.blur?.();
   sheetCfg = null;
   if (typeof syncAfterSheet === 'function') setTimeout(syncAfterSheet);
 }
@@ -1554,8 +1641,10 @@ function submitSheet() {
     if (!el) continue;
     if (f.type === 'checkbox') out[f.name] = el.checked;
     else if (f.type === 'money' || f.type === 'number') {
-      const n = parseFloat(String(el.value).replace(/[^0-9.\-]/g, ''));
-      out[f.name] = Number.isFinite(n) ? n : null;
+      let s = String(el.value).replace(/[^0-9.,\-]/g, '');
+      s = /,\d{1,2}$/.test(s) && !/\.\d{1,2}$/.test(s) ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, ''); // "12,50" → 12.50, "1,234.56" → 1234.56
+      const n = parseFloat(s);
+      out[f.name] = !Number.isFinite(n) ? null : f.type === 'money' ? Math.round(n * 100) / 100 : n;
     } else out[f.name] = (el.value ?? '').trim();
     if (f.required && (out[f.name] === '' || out[f.name] === null)) {
       toast(`${f.label} is required`);
@@ -1613,9 +1702,11 @@ function categoryForm(c) {
         { name: 'name', label: 'Name', required: true, placeholder: 'e.g. Pets' },
       ] },
       { name: 'limit', label: 'Monthly budget', type: 'money', placeholder: '0 = no limit' },
+      { name: 'rollover', label: 'Roll over what’s left', type: 'checkbox', hint: 'Unspent money (or overspending) carries into next month' },
     ],
     onSave(v) {
       v.limit = v.limit || 0;
+      if (v.rollover && !c?.rollover) v.rolloverFrom = monthKey(today()); // carry starts from this month's leftovers
       if (isNew) state.budget.categories.push({ id: uid(), ...v });
       else Object.assign(c, v);
     },
@@ -1652,7 +1743,19 @@ function billForm(b) {
       rest.anchor = next;
       rest.dueDay = parse(next).getDate();
       if (isNew) state.budget.bills.push({ id: uid(), paid: {}, since: today(), ...rest });
-      else Object.assign(b, rest);
+      else {
+        // Moving a due date: a new-schedule date that's already passed was settled by the old date in the same
+        // period (paid → don't autopay/log it again; unpaid → it stays overdue).
+        const win = [addDays(today(), -60), today()];
+        const prev = billOccurrences(b, addDays(today(), -120), today()).map((d) => [d, b.paid?.[d]]);
+        Object.assign(b, rest);
+        b.paid ||= {};
+        const samePeriod = (od, d) => (b.freq === 'monthly' ? monthKey(od) === monthKey(d) : Math.abs(daysBetween(od, d)) < (FREQ_STEP[b.freq] || 366));
+        for (const d of billOccurrences(b, ...win)) {
+          if (d in b.paid || prev.some(([od]) => od === d)) continue;
+          if (prev.some(([od, p]) => p && samePeriod(od, d))) b.paid[d] = 'moved';
+        }
+      }
     },
     onDelete: isNew ? null : () => withUndo(`${b.name} deleted`, () => {
       state.budget.bills = state.budget.bills.filter((x) => x.id !== b.id);
@@ -1836,6 +1939,8 @@ function eventForm(ev, date) {
       { name: 'notes', label: 'Notes', type: 'textarea' },
     ],
     onSave(v) {
+      if (v.until && v.until < v.date) { toast('“Repeat until” is before the start date'); return false; }
+      if (v.time && v.endTime && v.endTime <= v.time) { toast('The end time is before the start'); return false; }
       if (isNew) state.events.push({ id: uid(), ...v });
       else Object.assign(ev, v);
       ui.calSel = v.date; ui.calMonth = monthKey(v.date);
@@ -2037,6 +2142,10 @@ function materialForm(p, i) {
       v.qty = v.qty || 1;
       Object.assign(i, v);
       if (v.have && !i.bought) { i.bought = true; i.cost = i.cost || 0; }
+      // Keep the budget entry in step with the new price/qty (or drop it if you already had it)
+      const tx = i.txId && state.budget.transactions.find((t) => t.id === i.txId);
+      if (tx && (i.have || !itemTotal(i))) { state.budget.transactions = state.budget.transactions.filter((t) => t !== tx); delete i.txId; }
+      else if (tx) { tx.amount = itemTotal(i); tx.note = `${i.name} (${p.name})`; }
     },
     onDelete: () => withUndo(`${i.name} removed`, () => {
       if (i.txId) state.budget.transactions = state.budget.transactions.filter((t) => t.id !== i.txId);
@@ -2143,6 +2252,15 @@ const actions = {
   // Budget
   'budget-month': (el) => { ui.budgetMonth = addMonths(ui.budgetMonth, +el.dataset.n); render(); },
   'budget-tab': (el) => { ui.budgetTab = el.dataset.tab; render(); },
+  'export-csv': () => {
+    const ym = ui.budgetMonth;
+    const cell = (v) => { const s = String(v ?? ''); return `"${(/^[=+\-@\t\r]/.test(s) ? "'" + s : s).replace(/"/g, '""')}"`; }; // no spreadsheet formula injection
+    const rows = [['Date', 'Type', 'Amount', 'Category', 'Description', 'Who'], ...monthTx(ym).sort((a, b) => a.date.localeCompare(b.date)).map((t) => [t.date, t.type, ((t.type === 'income' ? 1 : -1) * t.amount).toFixed(2), t.type === 'income' ? 'Income' : category(t.categoryId).name, t.note || '', t.memberId ? member(t.memberId).name : ''])];
+    const csv = '\ufeff' + rows.map((r, i) => r.map((v, j) => (i && j === 2 ? v : cell(v))).join(',')).join('\r\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = `gomez-budget-${ym}.csv`; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  },
   'trend-month': (el) => { ui.trendSel = el.dataset.ym; render(); },
   'add-tx': () => txForm(null),
   'edit-tx': (el) => txForm(findIn(state.budget.transactions, el.dataset.id)),
@@ -2160,7 +2278,7 @@ const actions = {
       { name: 'balance', label: 'Current balance', type: 'money', placeholder: '0.00' },
       { type: 'html', html: '<p class="small muted" style="margin:0 4px">Used to work out what\'s safe to spend before your next paycheck. Leave blank to hide.</p>' },
     ],
-    onSave(v) { state.settings.balance = v.balance; state.settings.balanceDate = today(); },
+    onSave(v) { state.settings.balance = v.balance; state.settings.balanceDate = today(); state.settings.balanceAt = Date.now(); },
   }),
 
   // Shopping

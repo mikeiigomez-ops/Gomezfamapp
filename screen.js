@@ -134,7 +134,7 @@ function paginate() {
   const n = pg.page[key];
   ctl.hidden = false;
   ctl.innerHTML = `<button data-action="pg" data-d="-1" aria-label="Previous page" ${n === 0 ? 'disabled' : ''}>‹</button>
-    <span class="pg-dots" aria-label="Page ${n + 1} of ${total}">${total <= 8 ? [...Array(total)].map((_, i) => `<i class="${i === n ? 'on' : ''}"></i>`).join('') : `<b>${n + 1}</b> of ${total}`}</span>
+    <span class="pg-dots" role="status" aria-label="Page ${n + 1} of ${total}">${total <= 8 ? [...Array(total)].map((_, i) => `<i class="${i === n ? 'on' : ''}"></i>`).join('') : `<b>${n + 1}</b> of ${total}`}</span>
     <button data-action="pg" data-d="1" aria-label="Next page" ${n === total - 1 ? 'disabled' : ''}>›</button>`;
   ctl.dataset.total = total;
 }
@@ -310,7 +310,7 @@ views.home = () => {
   const left = sumry.limit ? sumry.limit - sumry.spent : null;
   const dinner = state.meals[t]?.dinner;
   const choresDue = state.chores.filter((c) => !choreDone(c)).length;
-  const billsDue = recurringBetween(t, addDays(t, 7), 'bill').filter(({ b, date }) => !isPaid(b, date)).length;
+  const billsDue = overdueBills(t).length + recurringBetween(t, addDays(t, 7), 'bill').filter(({ b, date }) => !isPaid(b, date)).length;
   const unread = state.chat.filter((m) => m.at > (seen().chat || 0) && m.who !== me).length;
   const turns = typeof myTurnGames === 'function' ? myTurnGames().length : 0;
   const listN = state.shop.list.filter((i) => !i.done).length;
@@ -422,7 +422,7 @@ views.kid = () => {
   ].filter(Boolean);
   return `${syncWait ? `<div class="card install-tip"><b>⏳ Almost ready!</b><div class="small" style="margin-top:4px">${Sync.status === 'unverified' ? `Ask a grown-up to tap the approval link sent to their email (${esc(Sync.cfg.kid.email)}).` : 'Connecting to your family…'}</div>${Sync.status === 'unverified' ? '<button class="btn block" style="margin-top:10px" data-action="sync-verified">A grown-up approved it</button>' : ''}</div>` : ''}
     <section class="kid-hi2" style="--c:${m.color}">
-      <button class="kh-av" data-action="go" data-to="avatar">${typeof avatarSVG === 'function' ? avatarSVG(avatarOf(id), { head: true }) : esc(m.emoji)}</button>
+      <button class="kh-av" data-action="go" data-to="avatar" aria-label="Change my look">${typeof avatarSVG === 'function' ? avatarSVG(avatarOf(id), { head: true }) : esc(m.emoji)}</button>
       <div class="kh-main"><div class="kh-greet">Hi, ${esc(m.name)}! 👋</div>
         <button class="kh-level" data-action="go" data-to="badges"><span>Level ${L.lvl}</span><i><b style="width:${L.pct * 100}%"></b></i></button>
         ${evs.length ? `<div class="kh-today">📅 ${esc(evs[0].title)}${evs[0].time ? ` · ${fmtTime(evs[0].time)}` : ''}</div>` : ''}</div>
@@ -461,7 +461,7 @@ function simpleLauncher(id) {
   ].filter(Boolean);
   return `${syncWait ? `<div class="card install-tip"><b>⏳ Almost ready!</b><div class="small" style="margin-top:4px">Ask a grown-up to check their email.</div>${Sync.status === 'unverified' ? '<button class="btn block" style="margin-top:10px" data-action="sync-verified">A grown-up did it</button>' : ''}</div>` : ''}
     <section class="kid-hi2 little" style="--c:${m.color}">
-      <button class="kh-av" data-action="go" data-to="avatar">${typeof avatarSVG === 'function' ? avatarSVG(avatarOf(id), { head: true }) : esc(m.emoji)}</button>
+      <button class="kh-av" data-action="go" data-to="avatar" aria-label="Change my look">${typeof avatarSVG === 'function' ? avatarSVG(avatarOf(id), { head: true }) : esc(m.emoji)}</button>
       <div class="kh-main"><div class="kh-greet">Hi, ${esc(m.name)}! ${sayBtn(id, `Hi ${m.name}! You have ${stars} stars. Tap a picture to play.`)}</div>
         <button class="kh-stars" data-action="go" data-to="treats">⭐ <b>${stars}</b> stars</button></div>
       <button class="kh-lock" data-action="kid-exit" aria-label="Grown-ups">🔒</button>
