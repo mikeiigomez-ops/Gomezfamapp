@@ -1005,7 +1005,7 @@ function draw() {
   }
   for (const r of WG.roamers) if (r.on && inView(r.fx, r.fy)) sprites.push({ y: r.fy + 0.9, f: () => drawSquishy(g, r.sid, (r.fx - cam.x) * s, (r.fy - cam.y) * s, s, 0.95, now + r.ph, r.shiny) });
   for (const [id, o] of Object.entries(WG.others)) if (inView(o.fx, o.fy)) sprites.push({ y: o.fy + 0.95, f: () => drawPerson(g, avatarOf(id), o.fx, o.fy, o.d, s, cam, o.walk, member(id)?.name, o.e && Date.now() - o.et < 3500 ? o.e : '', true) });
-  sprites.push({ y: py + 0.95, f: () => drawPerson(g, avatarOf(actor()), px, py, WG.pos.d, s, cam, !!WG.move, '', WG.emote && Date.now() - WG.emote.at < 3500 ? WG.emote.e : '') });
+  sprites.push({ y: py + 0.95, f: () => drawPerson(g, avatarOf(actor()), px, py, WG.pos.d, s, cam, !!WG.move || !!WG.walking, '', WG.emote && Date.now() - WG.emote.at < 3500 ? WG.emote.e : '') });
   sprites.sort((a, b) => a.y - b.y).forEach((sp) => sp.f());
   // Particles: snow, fireflies, sparkles
   if (R.key === 'frost' || R.key === 'hollow' || R.key === 'peaks') {
@@ -1053,7 +1053,7 @@ function drawGuide(g, p, cam, s, now) {
 }
 function drawPerson(g, a, x, y, d, s, cam, walking, name, emote, other) {
   const im = avImg(a); const H = s * 1.75, W = (H * 100) / 158, now = performance.now() / 1000;
-  const bob = walking ? Math.abs(Math.sin(now * 12)) * s * 0.08 : Math.sin(now * 2) * s * 0.015;
+  const bob = walking ? Math.abs(Math.sin(now * 9)) * s * 0.07 : Math.sin(now * 2) * s * 0.015;
   const X = (x - cam.x + 0.5) * s, Y = (y - cam.y + 1) * s - s * 0.08;
   flatShadow(g, X, Y - s * 0.02, s * 0.32, s * 0.1, 0.22);
   if (im) { g.save(); g.translate(X, Y - bob); if (d === 'left') g.scale(-1, 1); g.drawImage(im, -W / 2, -H, W, H); g.restore(); }
@@ -1145,7 +1145,7 @@ function tryStep(dir) {
   WG.pos.d = dir;
   const [dx, dy] = DIRS[dir], nx = WG.pos.x + dx, ny = WG.pos.y + dy;
   if (blockedAt(nx, ny, p)) { worldBump(nx, ny, p); return false; }
-  WG.move = { fx: WG.pos.x, fy: WG.pos.y, tx: nx, ty: ny, t: 0, dur: getWorld().at(nx, ny) === T.ICE ? 0.08 : 0.17, dir };
+  WG.move = { fx: WG.pos.fx ?? WG.pos.x, fy: WG.pos.fy ?? WG.pos.y, tx: nx, ty: ny, t: 0, dur: getWorld().at(nx, ny) === T.ICE ? 0.12 : 1 / WALK, dir };
   WG.pos.x = nx; WG.pos.y = ny;
   return true;
 }
@@ -1158,7 +1158,7 @@ function tryDiagonal(dir, p) {
   const icy = w.at(x, y) === T.ICE || w.at(x + dx, y + dy) === T.ICE || w.at(x + dx, y) === T.ICE || w.at(x, y + dy) === T.ICE;
   if (!icy && hOk && vOk && !blockedAt(x + dx, y + dy, p)) {
     WG.pos.d = h; // sprites face left/right
-    WG.move = { fx: x, fy: y, tx: x + dx, ty: y + dy, t: 0, dur: 0.17 * 1.35, dir };
+    WG.move = { fx: WG.pos.fx ?? x, fy: WG.pos.fy ?? y, tx: x + dx, ty: y + dy, t: 0, dur: Math.SQRT2 / WALK, dir };
     WG.pos.x = x + dx; WG.pos.y = y + dy;
     return true;
   }
@@ -1200,7 +1200,7 @@ function update(dt) {
     carry = Math.min(0.05, m.t - m.dur);
     if (WG.move) { WG.move.t = carry; return; } // still sliding on ice
   }
-  WG.pos.fx = WG.pos.x; WG.pos.fy = WG.pos.y;
+  WG.walking = false;
   if (WG.busy) return;
   if (WG.path.length) { const d = WG.path.shift(); if (!tryStep(d)) { WG.path = []; WG.pendingTalk = null; } else WG.move.t = carry; return; }
   if (WG.pendingTalk) {
@@ -1210,8 +1210,46 @@ function update(dt) {
     if (o.sid && o.on !== undefined) { if (o.on) encounter(o.sid, { roamer: o, shiny: o.shiny }); } else interact(o);
     return;
   }
-  if (WG.queue) { const q = WG.queue; WG.queue = null; if (tryStep(q)) { WG.move.t = carry; return; } }
-  if (WG.hold && performance.now() - (WG.holdAt || 0) > 230 && tryStep(WG.hold)) WG.move.t = carry; // a quick tap = one step
+  if (WG.hold) analogStep(dt, p);
+}
+/* Analog walking: you go exactly the way the stick points, as fast as you push it, and slide along walls.
+   The world is still a grid underneath (quests, items, grass, the ice puzzle all work per tile):
+   your tile is wherever your feet are, and stepping onto a new one counts as arriving there. */
+const WALK = 3.3;   // tiles per second at full tilt (about a brisk kid's walk)
+const BODY = 0.3;   // half the width of your feet, in tiles
+const cardinal = (vx, vy) => (Math.abs(vx) > Math.abs(vy) ? (vx > 0 ? 'right' : 'left') : vy > 0 ? 'down' : 'up');
+function boxTiles(cx, cy) { const out = new Set(); for (const ox of [-BODY, BODY]) for (const oy of [-BODY, BODY]) out.add(Math.round(cx + ox) + ',' + Math.round(cy + oy)); return out; }
+// Only tiles you'd newly step into can stop you, so you can always walk out of a spot
+function boxFree(nx, ny, ox, oy, p) {
+  const was = boxTiles(ox, oy);
+  for (const k of boxTiles(nx, ny)) { if (was.has(k)) continue; const [x, y] = k.split(',').map(Number); if (blockedAt(x, y, p)) return false; }
+  return true;
+}
+function analogStep(dt, p) {
+  const v = WG.hold, w = getWorld();
+  // The Slippy Slopes stay a grid puzzle: on the ice you push off in one of the four straight directions
+  if (w.at(WG.pos.x, WG.pos.y) === T.ICE) { tryStep(cardinal(v.x, v.y)); return; }
+  const fx = WG.pos.fx, fy = WG.pos.fy, sp = WALK * v.m * Math.min(dt, 0.05);
+  let nx = fx, ny = fy;
+  const axis = (dx, dy, along) => {
+    // Try the move; if a wall's in the way, ease toward the open lane next to it (doors and paths are one tile wide)
+    if (boxFree(nx + dx, ny + dy, nx, ny, p)) { nx += dx; ny += dy; return; }
+    const sgn = Math.sign(dx || dy), lane = along ? Math.round(ny) : Math.round(nx);
+    const ahead = along ? [Math.round(nx + sgn * (BODY + 0.5)), lane] : [lane, Math.round(ny + sgn * (BODY + 0.5))];
+    const off = along ? ny - lane : nx - lane, main = along ? Math.abs(v.x) : Math.abs(v.y);
+    if (!blockedAt(ahead[0], ahead[1], p) && Math.abs(off) > 0.001) {
+      const step = Math.min(Math.abs(off), Math.abs(dx || dy)) * -Math.sign(off);
+      if (along && boxFree(nx, ny + step, nx, ny, p)) ny += step; else if (!along && boxFree(nx + step, ny, nx, ny, p)) nx += step;
+    } else if (main > 0.6 && blockedAt(ahead[0], ahead[1], p)) worldBump(ahead[0], ahead[1], p); // walked into someone or something
+  };
+  if (Math.abs(v.x) > 0.01) axis(v.x * sp, 0, true);
+  if (Math.abs(v.y) > 0.01) axis(0, v.y * sp, false);
+  if (WG.busy || WG.move) return; // bumping started a chat or an encounter
+  WG.pos.d = cardinal(v.x, v.y);
+  WG.walking = Math.abs(nx - fx) + Math.abs(ny - fy) > 1e-4;
+  WG.pos.fx = nx; WG.pos.fy = ny;
+  const tx = Math.round(nx), ty = Math.round(ny);
+  if (tx !== WG.pos.x || ty !== WG.pos.y) { WG.pos.x = tx; WG.pos.y = ty; arrive(cardinal(v.x, v.y)); }
 }
 function faceTo(x, y) { const dx = x - WG.pos.x, dy = y - WG.pos.y; WG.pos.d = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : dy > 0 ? 'down' : 'up'; }
 function arrive(dir) {
@@ -1805,32 +1843,25 @@ function arrowUpdate() {
   el.hidden = dist < 2;
   el.style.transform = `rotate(${Math.atan2(dy, dx) + Math.PI / 2}rad)`;
 }
-// Thumb stick: press anywhere on it and drag. The way you push decides the direction; a quick flick = one step.
+// Thumb stick: press anywhere on it and drag. Any angle works, and the further you push, the faster you walk.
 function stickInit(el) {
   const knob = el.querySelector('.wh-knob');
-  let id = null, cx = 0, cy = 0, rad = 1, dir = null;
+  let id = null, cx = 0, cy = 0, rad = 1;
   const setKnob = (x, y) => { knob.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`; };
   const move = (e) => {
     const dx = e.clientX - cx, dy = e.clientY - cy, dist = Math.hypot(dx, dy), max = rad * 0.55, k = dist > max ? max / dist : 1;
     setKnob(dx * k, dy * k);
-    let d = null;
-    if (dist > rad * 0.2) {
-      // 8 directions: each gets a 45° slice; stay in the current one until you're clearly past its edge (no flicker)
-      const ang = Math.atan2(dy, dx), SECT = ['right', 'downright', 'down', 'downleft', 'left', 'upleft', 'up', 'upright'];
-      d = SECT[((Math.round(ang / (Math.PI / 4)) % 8) + 8) % 8];
-      if (dir && d !== dir) { const i = SECT.indexOf(dir), diff = Math.abs(((ang - i * Math.PI / 4) + 3 * Math.PI) % (2 * Math.PI) - Math.PI); if (diff < Math.PI / 8 + 0.14) d = dir; }
-      WG.lastAxis = Math.abs(dy) > Math.abs(dx) ? 'v' : 'h';
-    }
-    el.classList.toggle('on', !!d);
-    if (d === dir) return;
-    const first = !dir; dir = d;
-    if (!d) { WG.hold = null; return; }
-    WG.path = []; WG.pendingTalk = null; WG.hold = d; WG.holdAt = first ? performance.now() : 0;
-    if (!tryStep(d) && WG.move) WG.queue = d; // mid-step: take this step as soon as the current one ends
+    const push = Math.min(1, dist / max), dead = 0.18;
+    el.classList.toggle('on', push > dead);
+    if (push <= dead) { WG.hold = null; return; }
+    // Gentle near the middle for careful steps, full speed near the edge
+    const m = 0.28 + 0.72 * Math.min(1, (push - dead) / (0.85 - dead));
+    if (!WG.hold) { WG.path = []; WG.pendingTalk = null; }
+    WG.hold = { x: dx / dist, y: dy / dist, m };
   };
   const end = (e) => {
     if (e.pointerId !== id) return;
-    id = null; dir = null; el.classList.remove('on', 'held'); knob.style.transition = 'transform .15s'; setKnob(0, 0);
+    id = null; el.classList.remove('on', 'held'); knob.style.transition = 'transform .15s'; setKnob(0, 0);
     WG.hold = null;
   };
   el.addEventListener('pointerdown', (e) => {
@@ -1911,13 +1942,13 @@ function worldLive() {
 const WKEYS = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', w: 'up', s: 'down', a: 'left', d: 'right' };
 WG.keys = new Set();
 function keyDir() {
-  const K = WG.keys, v = K.has('up') && !K.has('down') ? 'up' : K.has('down') && !K.has('up') ? 'down' : '', h = K.has('left') && !K.has('right') ? 'left' : K.has('right') && !K.has('left') ? 'right' : '';
-  return v && h ? v + h : v || h || null;
+  const K = WG.keys, x = (K.has('right') ? 1 : 0) - (K.has('left') ? 1 : 0), y = (K.has('down') ? 1 : 0) - (K.has('up') ? 1 : 0), d = Math.hypot(x, y);
+  return d ? { x: x / d, y: y / d, m: 1 } : null;
 }
 document.addEventListener('keydown', (e) => {
   if (!WG.layer || WG.layer.hidden || e.target.closest?.('input, textarea')) return;
   const k = WKEYS[e.key];
-  if (k) { e.preventDefault(); if (e.repeat) return; WG.keys.add(k); WG.lastAxis = k === 'up' || k === 'down' ? 'v' : 'h'; const d = keyDir(); if (!d) return; WG.path = []; WG.hold = d; WG.holdAt = performance.now(); if (!tryStep(d) && WG.move) WG.queue = d; }
+  if (k) { e.preventDefault(); if (e.repeat) return; WG.keys.add(k); WG.lastAxis = k === 'up' || k === 'down' ? 'v' : 'h'; const d = keyDir(); if (!d) return; WG.path = []; WG.pendingTalk = null; WG.hold = d; }
   else if (e.key === ' ' || e.key === 'Enter') { if (e.repeat) return; if (e.target.closest?.('.wcard button, .wmenu button, .wgame button, .wenc button')) return; e.preventDefault(); const top = WG.layer.querySelector('.wdlg'); if (top) top.click(); else pressA(); }
   else if (e.key === 'm' && !WG.busy) openMenu();
 });
