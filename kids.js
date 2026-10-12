@@ -48,7 +48,7 @@ function badgesFor(id) {
     ['🎟️', 'Treat yourself', 'Redeem a reward', (state.redemptions || []).some((r) => r.memberId === id && r.status === 'approved' && r.rewardId !== 'cash')],
     ['🏆', 'Champion', 'Most points last week', champ],
     ['💯', 'Century', 'Earn 100 points', pointsEarned(id) >= 100],
-  ].filter(([e]) => !(mm === 'none' && ['🐷', '💰', '💝'].includes(e)) && !(mm === 'one' && e === '💝')).map(([emoji, name, how, got]) => ({ emoji, name, how, got }));
+  ].filter(([e]) => !(mm === 'none' && ['🐷', '💰', '💝'].includes(e)) && !(mm === 'one' && e === '💝')).map(([emoji, name, how, got]) => ({ emoji, name, how, got, art: 'badge_' + name.toLowerCase().replace(/[^a-z]/g, '') }));
 }
 const LEVEL_SEEN_KEY = 'gomezfam:levels';
 function checkLevelUp(id) {
@@ -182,7 +182,7 @@ function piggyCard(id, big) {
   const colors = { save: '#e85d8a', spend: '#3b82f6', give: '#22a06b' };
   const max = Math.max(goal?.amount || 0, ...JARS.map(([j]) => jarTotal(id, j)), 20);
   return `<div class="card piggy${big ? ' big' : ''}">
-    <div class="jars">${JARS.map(([j, e, l]) => `<div class="jarbox">${jarSVG(jarTotal(id, j) / max, colors[j])}<b>${money(jarTotal(id, j))}</b><span>${e} ${l}</span></div>`).join('')}</div>
+    <div class="jars">${JARS.map(([j, e, l]) => `<div class="jarbox">${jarSVG(jarTotal(id, j) / max, colors[j])}<b>${money(jarTotal(id, j))}</b><span><span class="art-slot" data-art-id="jar_${j}">${e}</span> ${l}</span></div>`).join('')}</div>
     ${goal ? `<div class="piggy-goal"><div class="kv"><span>🎯 ${esc(goal.name)}</span><b>${money(saveAmt)} / ${money(goal.amount)}</b></div><div class="bar"><i style="width:${Math.min(100, (saveAmt / goal.amount) * 100)}%;background:#e85d8a"></i></div>${saveAmt >= goal.amount ? '<div class="small" style="margin-top:6px">🎉 You saved enough!</div>' : `<div class="small muted" style="margin-top:6px">${money(goal.amount - saveAmt)} to go${pg.allowance?.amount ? ` · about ${Math.ceil((goal.amount - saveAmt) / Math.max(0.01, pg.allowance.amount * (pg.allowance.split?.save ?? 0) / 100))} weeks of saving` : ''}</div>`}</div>` : ''}
     ${pg.allowance?.amount ? `<div class="small muted" style="margin-top:8px">💵 ${money(pg.allowance.amount)} every ${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][pg.allowance.day]}</div>` : ''}
   </div>`;
@@ -200,7 +200,7 @@ views.piggy = (id) => {
     </div>
     ${inKidMode() ? '' : `<div class="btn-row" style="margin-top:0"><button class="btn secondary" data-action="piggy-allowance" data-id="${id}">💵 Allowance</button><button class="btn secondary" data-action="piggy-cashin" data-id="${id}">🏆 Cash in points</button><button class="btn secondary" data-action="piggy-goal" data-id="${id}">🎯 Goal</button></div>`}
     <div class="section-title">History</div>
-    <div class="card flush">${log.map((x) => `<div class="row"><div class="avatar">${JARS.find((j) => j[0] === x.jar)?.[1] || '💵'}</div><div class="grow"><div class="title">${esc(x.note || (x.amount >= 0 ? 'Added' : 'Spent'))}</div><div class="sub">${fmtDate(x.date)} · ${esc(JARS.find((j) => j[0] === x.jar)?.[2] || '')} jar</div></div><span class="amount ${x.amount >= 0 ? 'income' : ''}">${x.amount >= 0 ? '+' : '−'}${money(Math.abs(x.amount))}</span></div>`).join('') || '<div class="empty small">No money yet.</div>'}</div>`;
+    <div class="card flush">${log.map((x) => `<div class="row"><div class="avatar">${JARS.some((j) => j[0] === x.jar) ? `<span class="art-slot" data-art-id="jar_${x.jar}">${JARS.find((j) => j[0] === x.jar)[1]}</span>` : '💵'}</div><div class="grow"><div class="title">${esc(x.note || (x.amount >= 0 ? 'Added' : 'Spent'))}</div><div class="sub">${fmtDate(x.date)} · ${esc(JARS.find((j) => j[0] === x.jar)?.[2] || '')} jar</div></div><span class="amount ${x.amount >= 0 ? 'income' : ''}">${x.amount >= 0 ? '+' : '−'}${money(Math.abs(x.amount))}</span></div>`).join('') || '<div class="empty small">No money yet.</div>'}</div>`;
 };
 
 /* =========================================================
@@ -268,7 +268,7 @@ views.badges = (id) => {
   return `${inKidMode() || kids().length < 2 ? '' : `<div class="segmented">${kids().map((k) => `<button class="${k.id === id ? 'active' : ''}" data-action="go" data-to="badges/${k.id}">${esc(k.emoji)} ${esc(k.name)}</button>`).join('')}</div>`}
     <div class="card level-card"><div class="lvl-num">${L.lvl}</div><div style="flex:1"><b>Level ${L.lvl}</b><div class="bar"><i style="width:${L.pct * 100}%"></i></div><div class="small muted">${L.xp} XP · ${L.toNext} to level ${L.lvl + 1}</div></div></div>
     <div class="section-title">Badges · ${got} of ${bs.length}</div>
-    <div class="badge-grid">${bs.map((b) => `<div class="badge${b.got ? ' got' : ''}"><span>${b.emoji}</span><b>${esc(b.name)}</b><small>${esc(b.how)}</small></div>`).join('')}</div>`;
+    <div class="badge-grid">${bs.map((b) => `<div class="badge${b.got ? ' got' : ''}"><span class="art-slot" data-art-id="${b.art}">${b.emoji}</span><b>${esc(b.name)}</b><small>${esc(b.how)}</small></div>`).join('')}</div>`;
 };
 
 /* =========================================================

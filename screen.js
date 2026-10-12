@@ -308,8 +308,8 @@ afterRender = function () {
 /* =========================================================
    Launchers: Home, More and Kid home are screens of tiles
    ========================================================= */
-const tileHTML = ({ to, e, label, sub, color, act = 'go', attrs = '', alert = false, badge = '' }) => `<button class="tile${alert ? ' alert' : ''}" data-action="${act}" ${to ? `data-to="${to}"` : ''} ${attrs} style="--t:${color}">
-    ${badge ? `<span class="tile-badge">${badge}</span>` : ''}<span class="tile-e">${e}</span><b>${esc(label)}</b>${sub ? `<small>${sub}</small>` : ''}</button>`;
+const tileHTML = ({ to, e, label, sub, color, act = 'go', attrs = '', alert = false, badge = '', art = '' }) => `<button class="tile${alert ? ' alert' : ''}" data-action="${act}" ${to ? `data-to="${to}"` : ''} ${attrs} style="--t:${color}">
+    ${badge ? `<span class="tile-badge">${badge}</span>` : ''}<span class="tile-e"${art ? ` data-art-id="${art}"` : ''}>${e}</span><b>${esc(label)}</b>${sub ? `<small>${sub}</small>` : ''}</button>`;
 
 /* ---------- Grown-up Home ---------- */
 const _dashboardView = views.home;
@@ -466,7 +466,7 @@ function simpleLauncher(id) {
     { to: 'squishies', e: '🧸', label: 'Squishies', sub: free ? 'Free box!' : 'My collection', color: '#a855f7', badge: free ? '!' : '' },
     { to: 'house', e: '🏡', label: 'My house', sub: 'Decorate', color: '#8b5cf6' },
     { to: 'games', e: '🎮', label: 'Games', sub: turns ? 'Your turn!' : 'Play', color: '#0ea5e9' },
-    { to: 'checkin', e: esc(checkinOf(id)?.mood || '😊'), label: 'My feeling', sub: checkinOf(id) ? 'Done ✓' : 'Tap me!', color: '#f97316' },
+    { to: 'checkin', e: esc(checkinOf(id)?.mood || '😊'), art: typeof moodArtId === 'function' ? moodArtId(checkinOf(id)?.mood || '😊') : '', label: 'My feeling', sub: checkinOf(id) ? 'Done ✓' : 'Tap me!', color: '#f97316' },
     { to: 'chat', e: '💬', label: 'Chat', sub: unread ? `${unread} new` : 'Say hi', color: '#10b981', badge: unread || '' },
     { act: 'kudos-new', e: '🙌', label: 'High-five', sub: 'Cheer someone', color: '#14b8a6' },
     { to: 'wishes', e: '💖', label: 'My wishes', sub: `${state.wishes.filter((w) => w.memberId === id).length}`, color: '#d946ef' },

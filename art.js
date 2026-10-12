@@ -38,7 +38,7 @@ function artClay(id, parts, opts = {}) {
     if (p.hl) body += `<ellipse cx="${p.hl[0]}" cy="${p.hl[1]}" rx="${p.hl[2]}" ry="${p.hl[3]}" fill="#fff" opacity=".55" transform="rotate(-25 ${p.hl[0]} ${p.hl[1]})${p.t ? ' ' + p.t : ''}"/>`;
   });
   if (opts.shadow !== false) defs += `<filter id="${k}s" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="4" stdDeviation="3.5" flood-color="#3a2b3d" flood-opacity=".22"/></filter>`;
-  return `<svg class="art-svg" viewBox="0 0 128 128" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><defs>${defs}</defs><g${opts.shadow !== false ? ` filter="url(#${k}s)"` : ''}>${body}</g></svg>`;
+  return `<svg class="art-svg" style="stroke:none" viewBox="0 0 128 128" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><defs>${defs}</defs><g${opts.shadow !== false ? ` filter="url(#${k}s)"` : ''}>${body}</g></svg>`;
 }
 const artCache = new Map();
 function artSVG(id, opts = {}) {

@@ -70,7 +70,7 @@ views.treats = () => {
   if (!id) return '';
   const stars = pointsBalance(id);
   const pending = (state.redemptions || []).filter((r) => r.memberId === id && r.status === 'pending');
-  return `<div class="card star-bank"><span>⭐</span><b>${stars}</b><small>stars to spend</small></div>
+  return `<div class="card star-bank"><span class="art-slot" data-art-id="cur_star">⭐</span><b>${stars}</b><small>stars to spend</small></div>
     ${pending.map((r) => `<div class="card little-wait">⏳ Waiting for Mom or Dad: <b>${esc(state.rewards.find((x) => x.id === r.rewardId)?.name || 'treat')}</b></div>`).join('')}
     <div class="treat-grid">${state.rewards.slice().sort((a, b) => a.cost - b.cost).map((r) => {
       const can = stars >= r.cost;
@@ -115,8 +115,8 @@ function onePiggy(id, kid) {
 /* ---------- Simple stickers ---------- */
 function stickerBook(id) {
   const bs = badgesFor(id), got = bs.filter((b) => b.got), next = bs.filter((b) => !b.got).slice(0, 3);
-  return `<div class="sticker-grid">${got.map((b) => `<div class="sticker"><span>${b.emoji}</span><b>${esc(b.name)}</b></div>`).join('') || '<div class="card empty" style="grid-column:1/-1">Do jobs and routines to earn stickers! 🌟</div>'}</div>
-    ${next.length ? `<div class="section-title">Next stickers</div><div class="sticker-grid">${next.map((b) => `<div class="sticker locked"><span style="filter:grayscale(1);opacity:.45">${b.emoji}</span><b>${esc(b.how)}</b></div>`).join('')}</div>` : ''}`;
+  return `<div class="sticker-grid">${got.map((b) => `<div class="sticker"><span class="art-slot" data-art-id="${b.art}">${b.emoji}</span><b>${esc(b.name)}</b></div>`).join('') || '<div class="card empty" style="grid-column:1/-1">Do jobs and routines to earn stickers! 🌟</div>'}</div>
+    ${next.length ? `<div class="section-title">Next stickers</div><div class="sticker-grid">${next.map((b) => `<div class="sticker locked"><span class="art-slot" data-art-id="${b.art}" style="filter:grayscale(1);opacity:.45">${b.emoji}</span><b>${esc(b.how)}</b></div>`).join('')}</div>` : ''}`;
 }
 
 /* =========================================================

@@ -196,8 +196,11 @@ pointsEarned = function (id) { return _pointsEarnedT(id) + sum(state.kudos.filte
    ========================================================= */
 const MOODS = [['😄', 'Great'], ['🙂', 'Good'], ['😐', 'Okay'], ['😴', 'Tired'], ['😕', 'Meh'], ['😢', 'Sad'], ['😡', 'Grumpy'], ['🤒', 'Sick']];
 const checkinOf = (id, d = today()) => state.checkins[d]?.[id];
+// Mood face art (art-rewards.js) by id; the emoji stays inside as the fallback
+const moodArtId = (e) => { const m = MOODS.find(([x]) => x === e); return m ? `mood_${m[1].toLowerCase()}` : ''; };
+const moodArt = (e) => (moodArtId(e) ? `<span class="art-slot" data-art-id="${moodArtId(e)}">${e}</span>` : esc(e || ''));
 function moodStrip(d = today()) {
-  return `<div class="mood-strip">${state.members.map((m) => { const c = checkinOf(m.id, d); return `<div class="ms${c ? '' : ' off'}" style="--c:${m.color}"><span class="ms-av">${esc(m.emoji)}</span><span class="ms-mood">${c ? esc(c.mood) : '·'}</span></div>`; }).join('')}</div>`;
+  return `<div class="mood-strip">${state.members.map((m) => { const c = checkinOf(m.id, d); return `<div class="ms${c ? '' : ' off'}" style="--c:${m.color}"><span class="ms-av">${esc(m.emoji)}</span><span class="ms-mood${c && moodArtId(c.mood) ? ' art-slot' : ''}"${c && moodArtId(c.mood) ? ` data-art-id="${moodArtId(c.mood)}"` : ''}>${c ? esc(c.mood) : '·'}</span></div>`; }).join('')}</div>`;
 }
 views.checkin = () => {
   const me = actor();
@@ -208,20 +211,20 @@ views.checkin = () => {
   return `${needMe()}
     ${me ? `<div class="card checkin-card">
       <h3>${mine ? 'Today you’re feeling' : 'How are you feeling today?'} ${simple && typeof sayBtn === 'function' ? sayBtn(me, 'How are you feeling today?') : ''}</h3>
-      <div class="mood-grid">${MOODS.map(([e, l]) => `<button class="${mine?.mood === e ? 'on' : ''}" data-action="checkin-mood" data-m="${e}"><span>${e}</span><small>${l}</small></button>`).join('')}</div>
+      <div class="mood-grid">${MOODS.map(([e, l]) => `<button class="${mine?.mood === e ? 'on' : ''}" data-action="checkin-mood" data-m="${e}">${moodArt(e)}<small>${l}</small></button>`).join('')}</div>
       ${mine && !simple ? `<form class="quick-add" data-submit="checkin-note" style="margin-top:12px"><input type="text" name="gratitude" placeholder="🙏 One good thing about today…" value="${esc(mine.note || '')}" autocomplete="off"><button class="btn" type="submit">Save</button></form>` : ''}
     </div>` : ''}
     <div class="section-title">The family today</div>
     <div class="card flush">${state.members.map((m) => {
       const c = day[m.id];
       const hearts = Object.keys(c?.hearts || {});
-      return `<div class="row checkin-row${c ? '' : ' off'}">${avatar(m)}<div class="grow"><div class="title">${esc(m.name)} ${c ? `<span class="ci-mood">${esc(c.mood)}</span>` : ''}</div><div class="sub" style="white-space:normal">${c ? (c.note ? `🙏 ${esc(c.note)}` : esc(MOODS.find(([e]) => e === c.mood)?.[1] || '')) : 'Hasn’t checked in yet'}</div></div>
+      return `<div class="row checkin-row${c ? '' : ' off'}">${avatar(m)}<div class="grow"><div class="title">${esc(m.name)} ${c ? `<span class="ci-mood">${moodArt(c.mood)}</span>` : ''}</div><div class="sub" style="white-space:normal">${c ? (c.note ? `🙏 ${esc(c.note)}` : esc(MOODS.find(([e]) => e === c.mood)?.[1] || '')) : 'Hasn’t checked in yet'}</div></div>
         ${c && m.id !== me ? `<button class="heart-btn${hearts.includes(me || 'anon') ? ' on' : ''}" data-action="checkin-heart" data-id="${m.id}">❤️${hearts.length ? `<span>${hearts.length}</span>` : ''}</button>` : hearts.length ? `<span class="small">❤️ ${hearts.length}</span>` : ''}</div>`;
     }).join('')}</div>
     <div class="section-title">This week</div>
     <div class="card mood-week">
       <div class="mw-row mw-head"><span></span>${week.map((d) => `<span>${parse(d).toLocaleDateString(undefined, { weekday: 'narrow' })}</span>`).join('')}</div>
-      ${state.members.map((m) => `<div class="mw-row"><span>${esc(m.emoji)}</span>${week.map((d) => `<span>${esc(checkinOf(m.id, d)?.mood || '·')}</span>`).join('')}</div>`).join('')}
+      ${state.members.map((m) => `<div class="mw-row"><span>${esc(m.emoji)}</span>${week.map((d) => `<span>${checkinOf(m.id, d)?.mood ? moodArt(checkinOf(m.id, d).mood) : '·'}</span>`).join('')}</div>`).join('')}
     </div>`;
 };
 document.addEventListener('submit', (e) => {
@@ -508,7 +511,7 @@ views.kid = () => {
   const rs = rsvpUpcoming(10).filter(({ ev, d }) => !ev.rsvp?.[d]?.[id]).slice(0, 1);
   const tiles = simple
     ? `<div class="section-title">Family fun</div><div class="little-grid">
-        <button class="lt" data-action="go" data-to="checkin" style="--t:#f59e0b"><span class="lt-e">${esc(checkinOf(id)?.mood || '😊')}</span><b>My feeling</b><small>${checkinOf(id) ? 'Done ✓' : 'Tap me!'}</small></button>
+        <button class="lt" data-action="go" data-to="checkin" style="--t:#f59e0b"><span class="lt-e"${moodArtId(checkinOf(id)?.mood) ? ` data-art-id="${moodArtId(checkinOf(id).mood)}"` : ''}>${esc(checkinOf(id)?.mood || '😊')}</span><b>My feeling</b><small>${checkinOf(id) ? 'Done ✓' : 'Tap me!'}</small></button>
         <button class="lt" data-action="go" data-to="games" style="--t:#3b82f6"><span class="lt-e">🎮</span><b>Games</b><small>${turns.length ? 'Your turn!' : 'Play'}</small></button>
         <button class="lt" data-action="go" data-to="chat" style="--t:#10b981"><span class="lt-e">💬</span><b>Chat</b><small>${unread ? `${unread} new` : 'Say hi'}</small></button>
         <button class="lt" data-action="kudos-new" style="--t:#ec4899"><span class="lt-e">🙌</span><b>High-five</b><small>Cheer someone</small></button>
@@ -516,7 +519,7 @@ views.kid = () => {
     : `<div class="section-title">Family</div><div class="kid-tiles six">
         <button data-action="go" data-to="chat"><span>💬</span>Chat${unread ? ` (${unread})` : ''}</button>
         <button data-action="go" data-to="games"><span>🎮</span>${turns.length ? 'Your turn!' : 'Games'}</button>
-        <button data-action="go" data-to="checkin"><span>${esc(checkinOf(id)?.mood || '😊')}</span>Check-in</button>
+        <button data-action="go" data-to="checkin">${checkinOf(id)?.mood && moodArtId(checkinOf(id).mood) ? moodArt(checkinOf(id).mood) : `<span>${esc(checkinOf(id)?.mood || '😊')}</span>`}Check-in</button>
         <button data-action="kudos-new"><span>🙌</span>High-five</button>
         <button data-action="go" data-to="todos"><span>✅</span>To-dos</button>
         <button data-action="go" data-to="challenges"><span>🏆</span>Challenges</button>
