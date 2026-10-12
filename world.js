@@ -206,7 +206,7 @@ function iceSolve([ix, iy, iw, ih], rocks, entry, exit) {
    2 · Progress & rules
    ========================================================= */
 const WG = { world: null, cv: null, ctx: null, layer: null, raf: 0, ts: 40, dpr: 1, chunks: new Map(), imgs: new Map(), lockN: 0,
-  pos: null, move: null, path: [], hold: null, steps: 0, lastEnc: 0, roamers: [], others: {}, parts: [], saveT: 0, region: -1, emote: null, debug: { autoWin: false } };
+  epoch: 0, marks: [], pos: null, move: null, path: [], hold: null, steps: 0, lastEnc: 0, roamers: [], others: {}, parts: [], saveT: 0, region: -1, emote: null, debug: { autoWin: false } };
 // Busy = a story step is running or any overlay (dialogue, catch, game, card, menu) is open.
 Object.defineProperty(WG, 'busy', { get: () => WG.lockN > 0 || !!WG.layer?.querySelector('.wdlg, .wenc, .wgame, .wcard, .wmenu') });
 const wLock = () => { WG.lockN++; }, wUnlock = () => { WG.lockN = Math.max(0, WG.lockN - 1); };
@@ -255,21 +255,21 @@ const fill = (s, p) => String(s).replace(/\{you\}/g, member(actor())?.name || 'R
 /* =========================================================
    3 · Images (avatars & squishies drawn from the app's own SVG art)
    ========================================================= */
-function svgImg(key, svg) {
+function svgImg(key, make) {
   let im = WG.imgs.get(key);
   if (im) return im.complete && im.naturalWidth ? im : null;
   im = new Image();
-  im.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" '));
+  im.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(make().replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" '));
   WG.imgs.set(key, im);
   return null;
 }
 const lookOf = (k) => ({ ...NPC_BASE, ...(NPC_LOOK[k] || {}) });
-const avImg = (a) => svgImg('a:' + JSON.stringify(a), avatarSVG(a, { noShadow: true }));
-const sqImg = (sid, shiny) => (SQ[sid] ? svgImg('s:' + sid + (shiny ? '*' : ''), squishySVG(sid, { shiny })) : null);
+const avImg = (a) => svgImg('a:' + JSON.stringify(a), () => avatarSVG(a, { noShadow: true }));
+const sqImg = (sid, shiny) => (SQ[sid] ? svgImg('s:' + sid + (shiny ? '*' : ''), () => squishySVG(sid, { shiny })) : null);
 function guardianSid(o) {
   if (o._sid) return o._sid;
   const g = o.guardian || {};
-  const pool = SQUISHIES.filter((s) => s.r !== 'U' && (g.ghost ? s.kind === 'niddo' : s.set === g.set) && (!g.sp || s.sp === g.sp));
+  const pool = SQUISHIES.filter((s) => s.r !== 'U' && (g.set ? s.set === g.set : s.kind === 'niddo') && (!g.sp || s.sp === g.sp));
   const rank = { M: 5, L: 4, E: 3, R: 2, C: 1 };
   pool.sort((a, b) => rank[b.r] - rank[a.r]);
   return (o._sid = (pool[0] || SQUISHIES[0]).id);
@@ -336,7 +336,7 @@ function drawTile(g, t, x, y, s, R) {
   if (t === T.GRAVE) { g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(X + s * 0.2, Y + s * 0.82, s * 0.6, s * 0.08); g.fillStyle = '#9aa0b0'; g.beginPath(); g.moveTo(X + s * 0.25, Y + s * 0.85); g.lineTo(X + s * 0.25, Y + s * 0.35); g.arc(X + s * 0.5, Y + s * 0.35, s * 0.25, Math.PI, 0); g.lineTo(X + s * 0.75, Y + s * 0.85); g.fill(); g.fillStyle = '#7a8090'; g.fillRect(X + s * 0.45, Y + s * 0.42, s * 0.1, s * 0.25); g.fillRect(X + s * 0.37, Y + s * 0.5, s * 0.26, s * 0.08); }
 }
 function chunk(cx, cy) {
-  const key = cx + ',' + cy + ',' + WG.ts;
+  const key = cx + ',' + cy + ',' + WG.ts + ',' + WG.dpr;
   let c = WG.chunks.get(key);
   if (c) { WG.chunks.delete(key); WG.chunks.set(key, c); return c; }
   const s = WG.ts * WG.dpr, w = getWorld();
@@ -349,7 +349,7 @@ function chunk(cx, cy) {
     g.save(); g.translate(x * s, y * s); drawTile(g, w.at(tx, ty), tx, ty, s, WREG[r] || WREG[0]); g.restore();
   }
   WG.chunks.set(key, c);
-  if (WG.chunks.size > 40) WG.chunks.delete(WG.chunks.keys().next().value);
+  if (WG.chunks.size > 12) { const k = WG.chunks.keys().next().value; const old = WG.chunks.get(k); old.width = old.height = 0; WG.chunks.delete(k); }
   return c;
 }
 
@@ -427,10 +427,12 @@ function resize() {
   const r = WG.layer.getBoundingClientRect();
   WG.dpr = Math.min(2, window.devicePixelRatio || 1);
   const want = Math.max(32, Math.min(58, Math.floor(Math.min(r.width / 11, r.height / 12))));
-  if (want !== WG.ts) { WG.ts = want; WG.chunks.clear(); }
+  if (want !== WG.ts) { WG.ts = want; for (const c of WG.chunks.values()) c.width = c.height = 0; WG.chunks.clear(); }
   cv.width = Math.round(r.width * WG.dpr); cv.height = Math.round(r.height * WG.dpr);
   cv.style.width = r.width + 'px'; cv.style.height = r.height + 'px';
   WG.vw = r.width; WG.vh = r.height;
+  const sub = WG.layer.querySelector('.wh-sub'), pad = WG.layer.querySelector('.wh-pad');
+  if (sub && pad) { WG.hudTop = sub.getBoundingClientRect().bottom - r.top + 10; WG.hudBot = pad.getBoundingClientRect().top - r.top - 10; }
 }
 
 function draw() {
@@ -440,6 +442,7 @@ function draw() {
   const px = WG.pos.fx, py = WG.pos.fy;
   const cam = { x: Math.max(0, Math.min(MW - WG.vw / s, px + 0.5 - WG.vw / s / 2)), y: Math.max(0, Math.min(MH - WG.vh / s, py + 0.5 - WG.vh / s / 2)) };
   WG.cam = cam;
+  WG.litLighthouse = chDone(p, 2) || (p.ch === 2 && p.step >= 4);
   g.fillStyle = '#2b2b2b'; g.fillRect(0, 0, WG.vw, WG.vh);
   const x0 = Math.floor(cam.x / CH), y0 = Math.floor(cam.y / CH), x1 = Math.floor((cam.x + WG.vw / s) / CH), y1 = Math.floor((cam.y + WG.vh / s) / CH);
   for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) { if (cx * CH >= MW || cy * CH >= MH) continue; g.drawImage(chunk(cx, cy), (cx * CH - cam.x) * s, (cy * CH - cam.y) * s, CH * s, CH * s); }
@@ -478,15 +481,32 @@ function draw() {
   // Spooky Hollow is dark until its lanterns are lit
   if (R.key === 'hollow') {
     const lit = (WREG[6].items || []).filter((it) => p.flags['it:' + it.id]).length;
-    const sx = (px - cam.x + 0.5) * s, sy = (py - cam.y + 0.4) * s, rad = s * (2.6 + lit * 1.2) * (chDone(p, 7) ? 3 : 1);
+    const sx = (px - cam.x + 0.5) * s, sy = (py - cam.y + 0.4) * s, rad = s * (3.4 + lit * 1.2) * (chDone(p, 7) ? 3 : 1);
     const gr = g.createRadialGradient(sx, sy, rad * 0.35, sx, sy, rad);
-    gr.addColorStop(0, 'rgba(10,4,25,0)'); gr.addColorStop(1, `rgba(10,4,25,${chDone(p, 7) ? 0.35 : lit >= 4 ? 0.55 : 0.88})`);
+    gr.addColorStop(0, 'rgba(10,4,25,0)'); gr.addColorStop(1, `rgba(10,4,25,${chDone(p, 7) ? 0.35 : lit >= 4 ? 0.55 : 0.78})`);
     g.fillStyle = gr; g.fillRect(0, 0, WG.vw, WG.vh);
     for (const it of WREG[6].items) if (p.flags['it:' + it.id]) { const o = objById(it.id); const lx = (o.x - cam.x + 0.5) * s, ly = (o.y - cam.y + 0.3) * s; const lg = g.createRadialGradient(lx, ly, 0, lx, ly, s * 2.2); lg.addColorStop(0, 'rgba(255,214,102,.45)'); lg.addColorStop(1, 'rgba(255,214,102,0)'); g.fillStyle = lg; g.beginPath(); g.arc(lx, ly, s * 2.2, 0, 7); g.fill(); }
   }
+  // Unlit lanterns glow faintly while you're looking for them
+  if (R.key === 'hollow' && curStep(p)?.collect === 'lantern') for (const it of WREG[6].items) if (!p.flags['it:' + it.id]) { const o = objById(it.id); if (!o) continue; const lx = (o.x - cam.x + 0.5) * s, ly = (o.y - cam.y - 0.5) * s, a = 0.35 + 0.25 * Math.sin(now * 3); const lg = g.createRadialGradient(lx, ly, 0, lx, ly, s * 1.4); lg.addColorStop(0, `rgba(165,216,255,${a})`); lg.addColorStop(1, 'rgba(165,216,255,0)'); g.fillStyle = lg; g.beginPath(); g.arc(lx, ly, s * 1.4, 0, 7); g.fill(); }
+  // Quest markers: drawn above the darkness so they can always be seen
+  for (const [mx, my, tg] of WG.marks) { g.fillStyle = tg ? '#ffd43b' : '#74c0fc'; g.beginPath(); g.arc(mx, my - s * 0.18, s * 0.32, 0, 7); g.fill(); g.strokeStyle = '#3a2b3d'; g.lineWidth = 2.5; g.stroke(); g.fillStyle = '#3a2b3d'; g.font = `900 ${s * 0.42}px system-ui`; g.textAlign = 'center'; g.fillText(tg ? '!' : '?', mx, my - s * 0.03); }
+  WG.marks = [];
+  drawGuide(g, p, cam, s, now);
   // Floating text (+1, ! …)
   WG.parts = WG.parts.filter((pt) => now - pt.t < 1.2);
   for (const pt of WG.parts) { const k = (now - pt.t) / 1.2; g.globalAlpha = 1 - k; g.font = `900 ${s * 0.45}px system-ui`; g.textAlign = 'center'; g.fillStyle = '#fff'; g.strokeStyle = 'rgba(0,0,0,.4)'; g.lineWidth = 3; const X = (pt.x - cam.x + 0.5) * s, Y = (pt.y - cam.y - k) * s; g.strokeText(pt.text, X, Y); g.fillText(pt.text, X, Y); g.globalAlpha = 1; }
+}
+// Where to go next: a pulsing ring on screen, or an arrow at the screen edge pointing to it
+function drawGuide(g, p, cam, s, now) {
+  const t = stepTarget(p); if (!t || WG.busy) return;
+  const cx = (t[0] - cam.x + 0.5) * s, cy = (t[1] - cam.y + 0.5) * s, m = 36, top = WG.hudTop || 120, bot = WG.hudBot || WG.vh - 200;
+  if (cx > m && cx < WG.vw - m && cy > top && cy < bot) { if (Math.hypot(t[0] - WG.pos.fx, t[1] - WG.pos.fy) < 1.6) return; g.strokeStyle = 'rgba(255,212,59,.95)'; g.lineWidth = 4; g.beginPath(); g.ellipse(cx, cy + s * 0.32, s * (0.55 + 0.08 * Math.sin(now * 5)), s * (0.3 + 0.04 * Math.sin(now * 5)), 0, 0, 7); g.stroke(); return; }
+  const px = (WG.pos.fx - cam.x + 0.5) * s, py = (WG.pos.fy - cam.y + 0.5) * s, a = Math.atan2(cy - py, cx - px), c = Math.cos(a), sn = Math.sin(a);
+  const k = Math.min(Math.abs(c) > 1e-6 ? Math.abs(((c > 0 ? WG.vw - m : m) - px) / c) : 1e9, Math.abs(sn) > 1e-6 ? Math.abs(((sn > 0 ? bot : top) - py) / sn) : 1e9), bob = Math.sin(now * 6) * 6;
+  if (!(k > 0 && k < 1e8)) return;
+  g.save(); g.translate(px + c * (k - bob), py + sn * (k - bob)); g.rotate(a);
+  g.fillStyle = '#ffd43b'; g.strokeStyle = '#3a2b3d'; g.lineWidth = 3; g.beginPath(); g.moveTo(24, 0); g.lineTo(-12, -18); g.lineTo(-4, 0); g.lineTo(-12, 18); g.closePath(); g.fill(); g.stroke(); g.restore();
 }
 function drawPerson(g, a, x, y, d, s, cam, walking, name, emote, other) {
   const im = avImg(a); const H = s * 1.75, W = (H * 100) / 158, now = performance.now() / 1000;
@@ -519,8 +539,8 @@ function drawObj(g, o, p, s, cam, now) {
     else if (o.group === 'escapee') drawSquishy(g, o._sid || (o._sid = (SQUISHIES.filter((x) => x.set === o.set && x.r === 'C')[hash2(o.x, o.y) * 3 | 0] || SQUISHIES[0]).id), X, Y, s, 0.85, now * 2 + o.x, false);
     else { const b = Math.sin(now * 3 + o.x) * s * 0.06; g.fillStyle = 'rgba(255,255,255,.6)'; g.beginPath(); g.arc(X + s / 2, Y + s * 0.55, s * (0.32 + Math.sin(now * 4) * 0.04), 0, 7); g.fill(); g.font = `${s * 0.6}px system-ui`; g.textAlign = 'center'; g.fillText(o.icon || '✨', X + s / 2, Y + s * 0.75 + b); }
   }
-  const sideReady = o.side && !p.sides[o.side.id];
-  if (target || (o.shop && false) || sideReady) { const bob = Math.sin(now * 5) * s * 0.08; g.font = `900 ${s * 0.55}px system-ui`; g.textAlign = 'center'; g.fillStyle = target ? '#ffd43b' : '#74c0fc'; g.strokeStyle = 'rgba(0,0,0,.5)'; g.lineWidth = 3; const ty = Y - s * (o.type === 'guardian' ? 1.6 : 1.25) + bob; g.strokeText(target ? '!' : '?', X + s / 2, ty); g.fillText(target ? '!' : '?', X + s / 2, ty); }
+  const sqp = o.side && p.sides[o.side.id], sideReady = o.side && (!sqp || (!sqp.done && (sqp.n || 0) >= o.side.n));
+  if (target || (o.shop && false) || sideReady) { const bob = Math.sin(now * 5) * s * 0.08; g.font = `900 ${s * 0.55}px system-ui`; g.textAlign = 'center'; g.fillStyle = target ? '#ffd43b' : '#74c0fc'; g.strokeStyle = 'rgba(0,0,0,.5)'; g.lineWidth = 3; const ty = Y - s * (o.type === 'guardian' ? 1.6 : 1.25) + bob; WG.marks.push([X + s / 2, ty, target]); }
 }
 
 /* =========================================================
@@ -538,6 +558,7 @@ function tryStep(dir) {
 }
 function bump(x, y, p) {
   const o = getWorld().occ.get(x + ',' + y);
+  if (Date.now() - (WG.bumpT || 0) > 600) { WG.bumpT = Date.now(); navigator.vibrate?.(10); }
   if (o && o.type === 'blocker' && objVisible(o, p)) { toast(BLOCKER_TEXT[o.kind] || 'The way is blocked.'); return; }
   const r = WG.roamers.find((q) => q.on && q.x === x && q.y === y);
   if (r) { encounter(r.sid, { roamer: r, shiny: r.shiny }); return; }
@@ -585,13 +606,13 @@ function arrive(dir) {
   if (r !== WG.region) enterRegion(r, p);
   // Items you walk over
   const it = itemAt(x, y, p);
-  if (it && !it.lantern && it.group !== 'escapee') { pickItem(it, p); }
+  if (it && it.group !== 'escapee') pickItem(it, p);
   for (const z of w.objs) if (z.type === 'zone' && x >= z.x && y >= z.y && x < z.x + z.w && y < z.y + z.h) { const st = curStep(p); if (st && st.reach === z.id) advance(p); }
-  if (typeof livePush === 'function') livePush();
+  if (typeof liveSend === 'function' && Date.now() - (WG.liveT || 0) > 500) { WG.liveT = Date.now(); liveSend(); } else if (typeof livePush === 'function') livePush();
   if (Date.now() - WG.saveT > 15000) { WG.saveT = Date.now(); savePos(); }
   // Wild encounters in tall grass
-  if (w.at(x, y) === T.TALL && !WG.path.length && WG.steps - WG.lastEnc > 2 && Math.random() < 0.13) { WG.lastEnc = WG.steps; WG.hold = null; WG.path = []; setTimeout(() => encounter(wildSid(r), {}), 120); }
-  else if (w.at(x, y) === T.TALL && WG.path.length && WG.steps - WG.lastEnc > 3 && Math.random() < 0.08) { WG.lastEnc = WG.steps; WG.path = []; WG.pendingTalk = null; setTimeout(() => encounter(wildSid(r), {}), 120); }
+  if ((p.bubbles || 0) > 0 && w.at(x, y) === T.TALL && !WG.path.length && WG.steps - WG.lastEnc > 2 && Math.random() < 0.13) { WG.lastEnc = WG.steps; WG.hold = null; WG.path = []; setTimeout(() => encounter(wildSid(r), {}), 120); }
+  else if ((p.bubbles || 0) > 0 && w.at(x, y) === T.TALL && WG.path.length && WG.steps - WG.lastEnc > 3 && Math.random() < 0.08) { WG.lastEnc = WG.steps; WG.path = []; WG.pendingTalk = null; setTimeout(() => encounter(wildSid(r), {}), 120); }
 }
 function savePos() { const p = wMe(); if (!p || !WG.pos) return; p.x = WG.pos.x; p.y = WG.pos.y; p.d = WG.pos.d; save(); }
 function enterRegion(r, p) {
@@ -692,7 +713,7 @@ async function interact(o) {
   if (o.type === 'blocker') { toast(BLOCKER_TEXT[o.kind]); return; }
   if (o.type === 'stop') return travelMenu(o);
   if (o.type === 'item') {
-    if (o.group === 'escapee') { wLock(); try { const ok = await miniGame({ type: 'ring', title: 'Gently now!', sub: 'Pop the bubble when it’s green', need: 1, of: 3, zone: 0.34, speed: 1.6, art: squishySVG(o._sid) }); if (ok) pickItem(o, p); } finally { wUnlock(); } return; }
+    if (o.group === 'escapee') { const ep = WG.epoch; wLock(); try { const ok = await miniGame({ type: 'ring', title: 'Gently now!', sub: 'Pop the bubble when it’s green', need: 1, of: 3, zone: 0.34, speed: 1.6, art: squishySVG(o._sid) }); if (ok && WG.epoch === ep) pickItem(o, wMe()); } finally { if (WG.epoch === ep) wUnlock(); } return; }
     if (o.lantern) { if (p.flags['it:' + o.id]) return; if (st?.collect !== 'lantern') { toast('A cold, dark lantern post. 🏮'); return; } return pickItem(o, p); }
     return pickItem(o, p);
   }
@@ -705,31 +726,37 @@ async function interact(o) {
   // Side quests
   if (o.side) {
     const sq = o.side, have = p.sides[sq.id];
-    if (!have) { await dialog(sq.ask.map((t) => [o.id, t])); p.sides[sq.id] = { n: 0 }; save(); updateHud(); return; }
-    if (have.done) return dialog([[o.id, 'Thanks again, Ranger! 🤙']]);
+    if (!have) { await dialog(sq.ask.map((t) => [o.id, t])); wMe().sides[sq.id] = { n: 0 }; save(); updateHud(); return; }
+    if (have.done) return dialog((sq.after || ['Thanks again, Ranger! 🤙']).map((t) => [o.id, t]));
     if (have.n >= sq.n) { have.done = true; reward(p, sq.give); save(); return dialog(sq.thanks.map((t) => [o.id, t])); }
     return dialog([[o.id, `${have.n} of ${sq.n} so far — keep going!`]]);
   }
-  if (o.type === 'guardian' && !chDone(p, o.c + 1) && p.ch === o.c + 1) return dialog([[o.id, 'It looks at you warily… maybe someone in town knows how to help.']]);
+  if (o.type === 'guardian' && !chDone(p, o.c + 1) && p.ch === o.c + 1 && !p.flags['g:' + o.id]) return dialog([[o.id, 'It looks at you warily… maybe someone in town knows how to help.']]);
   const idle = o.idle || NPC_IDLE[o.id]?.(p) || ['Hi there, Ranger! 👋'];
   return dialog(idle.map((t) => [o.id, t]));
 }
 async function runStep(p, st, o) {
+  const ep = WG.epoch, live = () => ep === WG.epoch;
   wLock();
   let held = true;
   try {
     if (st.lines) await dialog(st.lines);
+    if (!live()) return;
     if (st.game) {
       const ok = await miniGame({ ...st.game, art: o.type === 'guardian' ? squishySVG(guardianSid(o)) : o.type === 'special' ? squishySVG(specialSid(o)) : '', who: o.id });
+      if (!live()) return;
       if (!ok) { if (st.lose) await dialog(st.lose); return; }
       if (st.win) await dialog(st.win);
-      if (st.joins) { const g = objById(st.joins); const sid = guardianSid(g); p.flags['g:' + g.id] = 1; const { isNew } = giveSquishy(actor(), sid, 'wild'); celebrateJoin(sid, isNew); }
+      if (!live()) return;
+      p = wMe(); if (!p || curStep(p) !== st) return; // state was replaced and the step already moved on
+      if (st.joins) { const g = objById(st.joins); const sid = guardianSid(g); p.flags['g:' + g.id] = 1; const { isNew } = giveSquishy(actor(), sid, 'wild'); celebrateJoin(sid, isNew, g.name); }
     }
+    p = wMe(); if (!p || curStep(p) !== st) return;
     if (st.set) p.flags[st.set] = 1;
     if (st.give) reward(p, st.give);
     wUnlock(); held = false; // chapter cards manage themselves
     await advance(p);
-  } finally { if (held) wUnlock(); }
+  } finally { if (held && live()) wUnlock(); }
 }
 function reward(p, give) {
   if (give.bubbles) { p.bubbles = (p.bubbles || 0) + give.bubbles; floatText(`+${give.bubbles} 🫧`); }
@@ -741,7 +768,7 @@ function advance(p) {
   if (p.step >= STORY[p.ch].length) return completeChapter(p);
   save(); updateHud();
   const st = curStep(p);
-  if (st) objectiveFlash();
+  if (st) { objectiveFlash(); sqSound('pop'); floatText('✔'); if (simpleNow() && typeof speak === 'function') setTimeout(() => { if (!WG.layer?.hidden && !WG.busy) speak(goalText(wMe() || p)); }, 900); }
 }
 async function completeChapter(p) {
   const ch = p.ch, R = WREG[ch - 1];
@@ -770,7 +797,7 @@ function onCatch(p, sid, r) {
   if (st && st.catch) { p.cnt = (p.cnt || 0) + 1; if (p.cnt >= st.catch) advance(p); }
   for (const n of WREG.flatMap((R) => R.npcs || []).filter((x) => x.side)) {
     const q = p.sides[n.side.id];
-    if (q && !q.done && SQ[sid].set === n.side.set) q.n = (q.n || 0) + 1;
+    if (q && !q.done && SQ[sid].set === n.side.set) { q.n = (q.n || 0) + 1; if (q.n === n.side.n) setTimeout(() => toast(`🎉 Side quest done! Go tell ${n.name.split(' · ')[0]}.`), 1600); }
   }
   void r;
 }
@@ -787,7 +814,12 @@ function stepTarget(p) {
 }
 function goalText(p) {
   const st = curStep(p);
-  if (!st) return p.ch > 8 ? '🎉 All 8 Squish Stars are home! Catch ’em all!' : '';
+  if (!st) {
+    if (p.ch <= 8) return '';
+    const pool = [...new Set(WREG.flatMap((R, r) => wildPool(r).filter((s) => s.r !== 'M').map((s) => s.id)))];
+    const got = pool.filter((id) => ownsSid(actor(), id)).length;
+    return got >= pool.length ? '🏆 Your Squishvale Guide is complete! Master Ranger!' : `🎉 All 8 stars home! Fill your Guide 📖 (${got}/${pool.length})`;
+  }
   let t = fill(st.goal);
   if (st.collect) t += ` (${p.items[st.collect] || 0}/${st.n})`;
   if (st.catch) t += ` (${p.cnt || 0}/${st.catch})`;
@@ -844,10 +876,10 @@ function titleCard(R) {
   const t = wEl('wtitle', `<span>${R.emoji}</span><b>${esc(R.name)}</b><small>Chapter ${R.ch} · ${esc(R.title)}</small>`);
   setTimeout(() => t.classList.add('out'), 2200); setTimeout(() => t.remove(), 2900);
 }
-const chapterCard = (R) => cardOverlay(`<div class="wc-art">${R.emoji}</div><div class="wc-kick">Chapter ${R.ch}</div><h2>${esc(R.title)}</h2><p>The road to <b>${esc(R.name)}</b> is open!</p>`, 'Let’s go!');
+const chapterCard = (R) => cardOverlay(`<div class="wc-art">${R.emoji}</div><div class="wc-kick">Chapter ${R.ch}</div><h2>${esc(R.title)}</h2><p>${R.ch === 1 ? `Your adventure starts in <b>${esc(R.name)}</b>!` : `The road to <b>${esc(R.name)}</b> is open!`}</p>`, 'Let’s go!');
 const starCard = (ch, gems) => cardOverlay(`<div class="wc-art star">⭐</div><div class="wc-kick">Chapter ${ch} complete!</div><h2>${esc(WREG[ch - 1].name)} Star</h2><p>${ch} of 8 Squish Stars found</p><div class="wc-stars">${[1, 2, 3, 4, 5, 6, 7, 8].map((k) => `<i class="${k <= ch ? 'on' : ''}">★</i>`).join('')}</div><p class="wc-rew">+${gems} ${GEM} · +5 🫧</p>`, 'Yay!');
-function celebrateJoin(sid, isNew) { sqSound('win'); setTimeout(() => toast(`💖 ${SQ[sid].name} joined your collection!${isNew ? ' (New!)' : ''}`), 200); }
-const endingCard = () => cardOverlay(`<div class="wc-art">🎉</div><div class="wc-kick">The End… for now!</div><h2>The Great Squish Festival</h2><p>All eight Squish Stars shine over Squishvale. The squishies are soft and happy, the Baron runs the best cookie stand in town, and you are a true <b>Squish Ranger</b>.</p><p class="wc-rew">+100 ${GEM} · 👑 Star Ranger unlocked!</p><p class="small">Keep exploring, catch every squishy, and play together with your family!</p>`, 'Keep playing');
+function celebrateJoin(sid, isNew, nick) { sqSound('win'); setTimeout(() => toast(`💖 ${nick && nick !== SQ[sid].name ? nick + ' the ' + SQ[sid].name : SQ[sid].name} joined your collection!${isNew ? ' (New!)' : ''}`), 200); }
+const endingCard = () => cardOverlay(`<div class="wc-art">🎉</div><div class="wc-kick">The End… for now!</div><h2>The Great Squish Festival</h2><p>All eight Squish Stars shine over Squishvale. The squishies are soft and happy, the Baron runs the best cookie stand in town, and you are a true <b>Squish Ranger</b>.</p><p class="wc-rew">👑 Star Ranger unlocked!</p><p class="small">Keep exploring, catch every squishy, and play together with your family!</p>`, 'Keep playing');
 function floatText(text) { if (WG.pos) WG.parts.push({ x: WG.pos.x, y: WG.pos.y, text, t: performance.now() / 1000 }); }
 async function introSlides() {
   for (const [i, s] of WORLD_INTRO.entries()) await cardOverlay(`<div class="wc-art">${s.art}</div><div class="wc-kick">${i === 0 ? WORLD_SUB : ''}</div><h2>${esc(s.title)}</h2><p>${esc(s.text)}</p>`, i === WORLD_INTRO.length - 1 ? 'Start my adventure!' : 'Next');
@@ -856,10 +888,10 @@ async function introSlides() {
 function objectiveFlash() { const el = WG.layer?.querySelector('.wh-goal'); if (el) { el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); } }
 
 /* ---------- Catching ---------- */
-const RING = { C: [0.3, 1.6, 99], R: [0.24, 1.4, 4], E: [0.18, 1.2, 3], L: [0.13, 1.0, 2], M: [0.1, 0.9, 2] };
+const RING = { C: [0.3, 1.6, 99], R: [0.26, 1.4, 4], E: [0.2, 1.3, 3], L: [0.16, 1.1, 3], M: [0.13, 1.0, 2] };
 function teamNearby() { return Object.values(WG.others).some((o) => Math.abs(o.x - WG.pos.x) + Math.abs(o.y - WG.pos.y) <= 5); }
 async function encounter(sid, opt = {}) {
-  const p = wMe(); if (!p || WG.busy || !SQ[sid]) return;
+  const p = wMe(); if (!p || WG.busy || !SQ[sid] || !WG.layer || WG.layer.hidden) return;
   WG.hold = null; WG.path = [];
   const s = SQ[sid], [zone0, speed0, flee] = RING[s.r] || RING.C;
   const team = teamNearby(), simple = simpleNow();
@@ -869,23 +901,25 @@ async function encounter(sid, opt = {}) {
   const d = wEl('wenc', `<div class="we-bg we-${R.key}"></div>
     <div class="we-top"><b>A wild ${esc(s.name)}${opt.shiny ? ' ✨' : ''} appeared!</b>${rarityPill(s.r)}${team ? '<span class="we-team">🤝 Teamwork bonus!</span>' : ''}</div>
     <div class="we-stage"><svg class="we-ring" viewBox="-50 -50 100 100"><circle class="we-zone" r="${(0.45 * 46).toFixed(1)}" stroke-width="${(zone * 46).toFixed(1)}"/><circle class="we-cur" r="40"/></svg><div class="we-sq">${squishySVG(sid, { shiny: opt.shiny })}</div></div>
-    <div class="we-msg">${simple ? 'Tap 🫧 when the ring is GREEN!' : 'Toss when the ring is inside the green band!'}</div>
+    <div class="we-msg">${simple ? 'Tap 🫧 when the ring is GREEN!' : 'Toss when the ring turns GREEN!'}</div>
     <div class="we-btns"><button class="we-throw">🫧 Toss <small>${p.bubbles || 0}</small></button><button class="we-run">🏃 Run</button></div>`);
   sqSound('pop');
   const cur = d.querySelector('.we-cur'), msg = d.querySelector('.we-msg'), sqEl = d.querySelector('.we-sq');
   let t0 = performance.now(), raf = 0, misses = 0, done = false, lock = false;
   const rad = () => { const ph = ((performance.now() - t0) / 1000 / speed) % 2; return ph < 1 ? 1 - ph * 0.85 : 0.15 + (ph - 1) * 0.85; };
   const inZone = (r) => Math.abs(r - 0.45) <= zone / 2;
-  const tick = () => { const r = rad(); cur.setAttribute('r', (r * 46).toFixed(1)); cur.classList.toggle('in', inZone(r)); raf = requestAnimationFrame(tick); };
+  const tick = () => { if (!d.isConnected) return; const r = rad(); cur.setAttribute('r', (r * 46).toFixed(1)); cur.classList.toggle('in', inZone(r)); raf = requestAnimationFrame(tick); };
   tick();
   const finish = (caught) => new Promise((res) => {
     done = true; cancelAnimationFrame(raf);
     setTimeout(() => { d.remove(); res(caught); }, caught ? 1400 : 700);
   });
   return new Promise((resolve) => {
-    d.querySelector('.we-run').onclick = async () => { if (done || lock) return; msg.textContent = 'You got away safely.'; resolve(await finish(false)); };
+    d.querySelector('.we-run').onclick = async () => { if (done) return; msg.textContent = 'You got away safely.'; resolve(await finish(false)); };
     d.querySelector('.we-throw').onclick = async () => {
       if (done || lock) return;
+      const p = wMe(); if (!p) return;
+      if ((p.bubbles || 0) <= 0 && curStep(p)?.catch) { p.bubbles = 3; save(); updateHud(); d.querySelector('.we-throw small').textContent = 3; msg.textContent = 'Professor Mallow sent you 3 more bubbles! 🫧 Try again!'; return; }
       if ((p.bubbles || 0) <= 0) { msg.textContent = 'Out of bubbles! 🫧 Get more at a Bubble Shop — or tomorrow’s 5 free ones.'; return; }
       lock = true;
       p.bubbles--; d.querySelector('.we-throw small').textContent = p.bubbles;
@@ -907,7 +941,7 @@ async function encounter(sid, opt = {}) {
       }
       sqSound('goo'); misses++;
       if (misses >= flee) { msg.textContent = `${s.name} bounced away into the grass!`; if (opt.roamer) { opt.roamer.on = false; opt.roamer.back = performance.now() + 15000; } save(); resolve(await finish(false)); return; }
-      msg.textContent = ['So close! Try again!', 'It wiggled free!', 'Almost! Watch the ring…'][misses % 3];
+      msg.textContent = ['So close! Try again!', 'It wiggled free!', 'Almost! Watch the ring…'][(misses - 1) % 3];
       setTimeout(() => { sqEl.classList.remove('dodge'); lock = false; }, 600);
       save();
     };
@@ -931,17 +965,18 @@ async function ringGame(cfg) {
   const cur = g.d.querySelector('.we-cur'), score = g.d.querySelector('.wg-score');
   let hits = 0, tries = 0, t0 = performance.now(), raf = 0, lock = false;
   const rad = () => { const ph = ((performance.now() - t0) / 1000 / speed) % 2; return ph < 1 ? 1 - ph * 0.85 : 0.15 + (ph - 1) * 0.85; };
-  const tick = () => { const r = rad(); cur.setAttribute('r', (r * 46).toFixed(1)); cur.classList.toggle('in', Math.abs(r - 0.45) <= zone / 2); raf = requestAnimationFrame(tick); };
-  const paint = () => { score.innerHTML = [...Array(cfg.of)].map((_, i) => `<i class="${i < tries ? (i < hits + (tries - hits) && WG._hitLog?.[i] ? 'hit' : 'miss') : ''}"></i>`).join(''); };
-  WG._hitLog = []; paint(); tick();
+  const tick = () => { if (!g.d.isConnected) return; const r = rad(); cur.setAttribute('r', (r * 46).toFixed(1)); cur.classList.toggle('in', Math.abs(r - 0.45) <= zone / 2); raf = requestAnimationFrame(tick); };
+  const log = [], paint = () => { score.innerHTML = [...Array(cfg.of)].map((_, i) => `<i class="${i < tries ? (log[i] ? 'hit' : 'miss') : ''}"></i>`).join(''); };
+  paint(); tick();
   return new Promise((resolve) => {
     g.d.querySelector('.wg-act').onclick = async () => {
       if (lock) return; lock = true;
       const hit = Math.abs(rad() - 0.45) <= zone / 2;
-      WG._hitLog.push(hit); tries++; if (hit) hits++;
+      log.push(hit); tries++; if (hit) hits++;
       sqSound(hit ? 'pop' : 'goo'); paint();
       g.msg(hit ? '<b>Nice!</b>' : 'Missed!');
       const win = hits >= cfg.need, lost = cfg.of - tries < cfg.need - hits;
+      if (!g.d.isConnected) { resolve(false); return; }
       if (win || lost) { cancelAnimationFrame(raf); g.msg(win ? '<b>🎉 You did it!</b>' : '😅 Not this time…'); if (win) sqSound('win'); await g.close(1100); resolve(win); return; }
       setTimeout(() => { lock = false; }, 350);
     };
@@ -951,12 +986,12 @@ async function simonGame(cfg) {
   const icons = cfg.icons || ['🔴', '🟡', '🟢', '🔵'], len = Math.max(3, (cfg.len || 5) - (simpleNow() ? 2 : 0));
   const g = gameShell(cfg, `<div class="wg-pads">${icons.map((ic, i) => `<button class="wg-pad p${i}" data-i="${i}">${ic}</button>`).join('')}</div><div class="wg-score"></div>`);
   const pads = [...g.d.querySelectorAll('.wg-pad')], seq = [...Array(len)].map(() => Math.floor(Math.random() * icons.length));
-  const flash = (i, ms = 420) => new Promise((r) => { pads[i].classList.add('lit'); sqSound('pop'); setTimeout(() => { pads[i].classList.remove('lit'); setTimeout(r, 160); }, ms); });
+  const flash = (i, ms = 420) => new Promise((r) => { if (!g.d.isConnected) return r(); pads[i].classList.add('lit'); sqSound('pop'); setTimeout(() => { pads[i].classList.remove('lit'); setTimeout(r, 280); }, ms); });
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  let lives = 2;
+  let lives = 3;
   for (let round = 3; round <= len; round++) {
     g.d.querySelector('.wg-score').textContent = `Round ${round - 2} of ${len - 2} · ${'❤️'.repeat(lives)}`;
-    g.msg('Watch…'); pads.forEach((b) => (b.disabled = true)); await sleep(500);
+    g.msg('Watch…'); pads.forEach((b) => (b.disabled = true)); await sleep(500); if (!g.d.isConnected) return false;
     for (let k = 0; k < round; k++) await flash(seq[k], simpleNow() ? 560 : 420);
     g.msg('Your turn!'); pads.forEach((b) => (b.disabled = false));
     const ok = await new Promise((res) => {
@@ -969,18 +1004,27 @@ async function simonGame(cfg) {
   g.msg('<b>🎉 Perfect!</b>'); sqSound('win'); await g.close(1100); return true;
 }
 async function rhythmGame(cfg) {
-  const beats = cfg.beats || 8, gap = (60 / (cfg.bpm || 70)) * 1000 * (simpleNow() ? 1.2 : 1), win = simpleNow() ? 300 : 220;
+  const simple = simpleNow(), beats = cfg.beats || 8, gap = (60 / (cfg.bpm || 70)) * 1000 * (simple ? 1.25 : 1);
+  const early = 250, late = simple ? 600 : 480; // kids tap a little after the beat — be generous there
   const g = gameShell(cfg, `<div class="wg-star">⭐</div><div class="wg-score"></div><button class="btn block wg-act">🎵 Tap!</button>`);
   const star = g.d.querySelector('.wg-star'), score = g.d.querySelector('.wg-score');
-  const start = performance.now() + 1500, times = [...Array(beats)].map((_, i) => start + i * gap);
-  const got = new Set(); let raf = 0;
-  const tick = () => { const now = performance.now(); const near = times.findIndex((t) => Math.abs(now - t) < 120); star.classList.toggle('twinkle', near >= 0); score.innerHTML = times.map((t, i) => `<i class="${got.has(i) ? 'hit' : now > t + win ? 'miss' : ''}"></i>`).join(''); raf = requestAnimationFrame(tick); };
-  tick(); g.msg('Get ready…'); setTimeout(() => g.msg('Tap when the star twinkles ✨'), 1200);
-  g.d.querySelector('.wg-act').onclick = () => { const now = performance.now(); const i = times.findIndex((t, k) => !got.has(k) && Math.abs(now - t) <= win); if (i >= 0) { got.add(i); sqSound('pop'); } else sqSound('goo'); };
-  await new Promise((r) => setTimeout(r, start - performance.now() + beats * gap + win + 200));
+  const start = performance.now() + 2000, times = [...Array(beats)].map((_, i) => start + i * gap);
+  const got = new Set(), rung = new Set(); let raf = 0, strays = 0;
+  const tick = () => {
+    if (!g.d.isConnected) return;
+    const now = performance.now();
+    star.classList.toggle('twinkle', times.some((t) => now >= t - 80 && now <= t + 320));
+    const bi = times.findIndex((t, i) => !rung.has(i) && now >= t); if (bi >= 0) { rung.add(bi); sqSound('squish'); } // a beat you can hear
+    score.innerHTML = times.map((t, i) => `<i class="${got.has(i) ? 'hit' : now > t + late ? 'miss' : ''}"></i>`).join('');
+    raf = requestAnimationFrame(tick);
+  };
+  tick(); g.msg('Get ready… listen for the beat!'); setTimeout(() => { if (g.d.isConnected) g.msg('Tap when the star twinkles ✨'); }, 1500);
+  g.d.querySelector('.wg-act').onclick = () => { const now = performance.now(); const i = times.findIndex((t, k) => !got.has(k) && now >= t - early && now <= t + late); if (i >= 0) { got.add(i); sqSound('pop'); } else { strays++; sqSound('goo'); } };
+  await new Promise((r) => setTimeout(r, start - performance.now() + (beats - 1) * gap + late + 250));
   cancelAnimationFrame(raf);
-  const ok = got.size >= Math.ceil(beats * 0.7);
-  g.msg(ok ? `<b>🎉 ${got.size} of ${beats}! Beautiful!</b>` : `😅 ${got.size} of ${beats}. Almost!`); if (ok) sqSound('win');
+  if (!g.d.isConnected) return false;
+  const ok = got.size >= Math.ceil(beats * (simple ? 0.6 : 0.7)) && strays <= beats * 2; // mashing doesn't count
+  g.msg(ok ? `<b>🎉 ${got.size} of ${beats}! Beautiful!</b>` : strays > beats * 2 ? '😅 Nice and steady — one tap per twinkle!' : `😅 ${got.size} of ${beats}. Almost!`); if (ok) sqSound('win');
   await g.close(1300); return ok;
 }
 async function quizGame(cfg) {
@@ -989,10 +1033,11 @@ async function quizGame(cfg) {
   for (const [i, q] of cfg.qs.entries()) {
     g.d.querySelector('.wg-score').textContent = `Question ${i + 1} of ${cfg.qs.length}`;
     g.d.querySelector('.wg-q').textContent = q.q;
-    if (simpleNow()) speak(q.q);
+    if (simpleNow() && typeof speak === 'function') speak(q.q);
     const choices = [q.a, ...q.wrong].sort(() => Math.random() - 0.5);
     const box = g.d.querySelector('.wg-choices'); g.msg('');
     box.innerHTML = choices.map((c) => `<button class="wg-choice">${esc(c)}</button>`).join('');
+    if (simpleNow() && typeof speak === 'function') setTimeout(() => { if (g.d.isConnected) speak(choices.join('… or… ')); }, 1200);
     await new Promise((res) => {
       box.querySelectorAll('.wg-choice').forEach((b) => (b.onclick = () => {
         if (b.textContent === q.a) { b.classList.add('right'); sqSound('pop'); g.msg('<b>Correct!</b>'); box.querySelectorAll('button').forEach((x) => (x.disabled = true)); setTimeout(res, 700); }
@@ -1000,19 +1045,21 @@ async function quizGame(cfg) {
       }));
     });
   }
-  const ok = wrong <= cfg.qs.length; // kind: you keep trying until you get each one
-  g.msg('<b>🎉 All done!</b>'); sqSound('win'); await g.close(1000); return ok;
+  const ok = true; // kind: you keep trying until you get each one
+  g.msg(wrong ? `<b>🎉 All done!</b> (${wrong} tr${wrong === 1 ? 'y' : 'ies'} to get there)` : '<b>🎉 Perfect!</b>'); sqSound('win'); await g.close(1000); return ok;
 }
 async function hideGame(cfg) {
   const g = gameShell(cfg, `<div class="wg-graves">${[0, 1, 2, 3].map((i) => `<button class="wg-grave" data-i="${i}"><span class="wg-boo">👻</span><span class="wg-stone">🪦</span></button>`).join('')}</div><div class="wg-score"></div>`);
   const graves = [...g.d.querySelectorAll('.wg-grave')], sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   let found = 0;
+  await sleep(900);
   for (let round = 1; round <= cfg.rounds; round++) {
+    if (!g.d.isConnected) return false;
     g.d.querySelector('.wg-score').textContent = `Round ${round} of ${cfg.rounds} · Found ${found}`;
     const at = Math.floor(Math.random() * 4);
     graves.forEach((b) => { b.disabled = true; b.classList.remove('show', 'peek'); });
     g.msg('Boo is hiding… watch closely!');
-    graves[at].classList.add('peek'); await sleep(simpleNow() ? 1100 : 750); graves[at].classList.remove('peek');
+    graves[at].classList.add('peek'); await sleep(simpleNow() ? 1300 : 1000); graves[at].classList.remove('peek');
     for (let k = 0; k < (simpleNow() ? 2 : 4); k++) { const a = Math.floor(Math.random() * 4); graves[a].classList.add('wiggle'); await sleep(260); graves[a].classList.remove('wiggle'); }
     g.msg('Where is Boo? Tap a gravestone!'); graves.forEach((b) => (b.disabled = false));
     const pick = await new Promise((res) => graves.forEach((b) => (b.onclick = () => res(Number(b.dataset.i)))));
@@ -1026,9 +1073,11 @@ async function hideGame(cfg) {
 }
 async function bossGame(cfg) {
   void cfg;
-  if (!(await simonGame({ title: 'Trial 1 · Cookie Memory', sub: 'Copy the Baron’s cookie pattern!', len: 6, icons: ['🍪', '🧁', '🍩', '🥐'] }))) return false;
-  if (!(await rhythmGame({ title: 'Trial 2 · Crunchy Rhythm', sub: 'Tap on every twinkle!', beats: 10, bpm: 84 }))) return false;
-  return ringGame({ title: 'Trial 3 · The Big Toss', sub: 'Land 3 of 4 bubbles!', need: 3, of: 4, zone: 0.2, speed: 1.15, art: '<span style="font-size:56px">🍪</span>' });
+  // Trials already won stay won (a young player shouldn't redo all three after one slip)
+  const mark = (n) => { const q = wMe(); if (q) { q.flags.boss = Math.max(q.flags.boss || 0, n); save(); } }, at = () => wMe()?.flags.boss || 0;
+  if (at() < 1) { if (!(await simonGame({ title: 'Trial 1 · Cookie Memory', sub: 'Copy the Baron’s cookie pattern!', len: 5, icons: ['🍪', '🧁', '🍩', '🥐'] }))) return false; mark(1); }
+  if (at() < 2) { if (!(await rhythmGame({ title: 'Trial 2 · Crunchy Rhythm', sub: 'Tap on every twinkle!', beats: 10, bpm: 84 }))) return false; mark(2); }
+  return ringGame({ title: 'Trial 3 · The Big Toss', sub: 'Land 3 of 5 bubbles!', need: 3, of: 5, zone: 0.24, speed: 1.3, art: '<span style="font-size:56px">🍪</span>' });
 }
 
 /* ---------- Shop, travel, menu ---------- */
@@ -1038,6 +1087,7 @@ async function shopMenu(o) {
     <button class="btn block ws-buy" data-n="5" data-c="10">5 bubbles · ${GEM} 10</button><button class="btn block secondary ws-buy" data-n="12" data-c="20">12 bubbles · ${GEM} 20</button><button class="btn block secondary wc-go">Bye!</button></div>`);
   void o;
   d.querySelectorAll('.ws-buy').forEach((b) => (b.onclick = () => {
+    const p = wMe(); if (!p) return;
     if (!spendGems(actor(), Number(b.dataset.c), 'Squishvale bubbles', 'squish')) return;
     p.bubbles = (p.bubbles || 0) + Number(b.dataset.n); save(); sqSound('pop');
     d.querySelector('.ws-b').textContent = p.bubbles; d.querySelector('.ws-g').textContent = gemBalance(actor()); updateHud();
@@ -1061,6 +1111,14 @@ function teleport(x, y) {
   enterRegion(regionAt(best[0], best[1]), p); savePos();
   if (typeof livePush === 'function') livePush(true);
 }
+function sideQuestHTML(p) {
+  const qs = WREG.flatMap((R) => (R.npcs || []).filter((n) => n.side && p.sides[n.side.id]).map((n) => ({ n, R, q: p.sides[n.side.id] })));
+  if (!qs.length) return '';
+  return '<p class="small muted" style="margin:14px 0 6px;font-weight:800">Side quests</p>' + qs.map(({ n, R, q }) => {
+    const ready = !q.done && (q.n || 0) >= n.side.n, set = SETS[n.side.set] || ['', ''];
+    return `<div class="wm-ch${q.done ? ' done' : ' now'}"><span>${q.done ? '✅' : ready ? '❗' : set[0]}</span><div><b>${esc(n.name)} · ${esc(R.name)}</b><small>${q.done ? 'Done — thanks, Ranger!' : ready ? `You did it! Go tell ${esc(n.name.split(' · ')[0])} 🎉` : `Catch ${n.side.n} ${esc(set[1])} (${q.n || 0}/${n.side.n})`}</small></div></div>`;
+  }).join('');
+}
 function openMenu(tab = 'quests') {
   const p = wMe();
   const d = wEl('wmenu', `<div class="wm-in"><div class="wm-tabs">${[['quests', '📜', 'Story'], ['map', '🗺️', 'Map'], ['guide', '📖', 'Guide'], ['team', '👨‍👩‍👧', 'Team']].map(([k, e, l]) => `<button data-t="${k}" class="${k === tab ? 'on' : ''}"><span>${e}</span>${l}</button>`).join('')}</div><div class="wm-body"></div><button class="btn block wm-close">Back to the adventure</button></div>`);
@@ -1069,16 +1127,19 @@ function openMenu(tab = 'quests') {
     d.querySelectorAll('.wm-tabs button').forEach((b) => b.classList.toggle('on', b.dataset.t === t));
     if (t === 'quests') body.innerHTML = `<div class="wm-stars">${WREG.map((R) => `<i class="${chDone(p, R.ch) ? 'on' : ''}">★</i>`).join('')}</div>` + WREG.map((R) => {
       const done = chDone(p, R.ch), now = p.ch === R.ch;
-      return `<div class="wm-ch${done ? ' done' : now ? ' now' : ' locked'}"><span>${done ? '⭐' : now ? R.emoji : '🔒'}</span><div><b>Chapter ${R.ch} · ${done || now ? esc(R.title) : '???'}</b><small>${done ? 'Star found!' : now ? esc(goalText(p)) : 'Not yet'}</small></div></div>`;
-    }).join('');
+      return `<div class="wm-ch${done ? ' done' : now ? ' now' : ' locked'}"><span>${done ? '⭐' : now ? R.emoji : '🔒'}</span><div><b>Chapter ${R.ch} · ${done || now ? esc(R.title) : '???'}</b><small>${done ? esc(STORY_RECAP[R.ch] || 'Star found!') : now ? esc(goalText(p)) : 'Not yet'}</small></div></div>`;
+    }).join('') + sideQuestHTML(p);
     else if (t === 'map') {
-      body.innerHTML = '<canvas class="wm-map"></canvas><p class="small muted">⭐ you · 🟢 family · 🔒 not yet</p>';
+      body.innerHTML = '<canvas class="wm-map"></canvas><p class="small muted">🩷 you · 🟢 family · 🟡 next goal · 🔒 not yet</p>';
       const c = body.querySelector('canvas'), k = 3, w = getWorld(); c.width = MW * k; c.height = MH * k; const g = c.getContext('2d');
       const col = { [T.WATER]: '#4fb3e8', [T.TREE]: '#2f7d3c', [T.PINE]: '#2f6f5f', [T.PALM]: '#4fae5a', [T.DEAD]: '#3d2f52', [T.PATH]: '#e8d6a8', [T.CHECK]: '#ffd6e7', [T.SAND]: '#f6e6b8', [T.SNOW]: '#eef6fb', [T.ICE]: '#bfe6ff', [T.VOID]: '#c9e4fb', [T.CLOUD]: '#ffffff', [T.ROCK]: '#a3a3a3', [T.TALL]: '#4f9e3a', [T.BRIDGE]: '#c8955a', [T.FENCE]: '#c8955a', [T.CROP]: '#e8c35a', [T.GRAVE]: '#9aa0b0' };
       for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) { const r = regionAt(x, y); const t = w.at(x, y); g.fillStyle = col[t] || WREG[r].pal.g1; g.fillRect(x * k, y * k, k, k); }
       WREG.forEach((R, r) => { if (!p.visited[r] && !chDone(p, R.ch) && p.ch !== R.ch) { g.fillStyle = 'rgba(30,30,40,.72)'; g.fillRect(REG_POS[r][0] * RW * k, REG_POS[r][1] * RH * k, RW * k, RH * k); g.font = `${RH * k * 0.3}px system-ui`; g.textAlign = 'center'; g.fillText('🔒', (REG_POS[r][0] + 0.5) * RW * k, (REG_POS[r][1] + 0.62) * RH * k); } });
       for (const o of Object.values(WG.others)) { g.fillStyle = '#2f8a5b'; g.beginPath(); g.arc(o.x * k, o.y * k, 5, 0, 7); g.fill(); }
-      g.font = '18px system-ui'; g.textAlign = 'center'; g.fillText('⭐', WG.pos.x * k, WG.pos.y * k + 6);
+      g.textAlign = 'center'; g.font = '22px system-ui';
+      WREG.forEach((R, r) => { if (p.visited[r] || chDone(p, R.ch) || p.ch === R.ch) g.fillText(R.emoji, (REG_POS[r][0] + 0.5) * RW * k, (REG_POS[r][1] + 0.5) * RH * k + 8); });
+      const tg = stepTarget(p); if (tg) { g.fillStyle = '#ffd43b'; g.strokeStyle = '#3a2b3d'; g.lineWidth = 2; g.beginPath(); g.arc(tg[0] * k, tg[1] * k, 9, 0, 7); g.fill(); g.stroke(); g.fillStyle = '#3a2b3d'; g.font = '900 13px system-ui'; g.fillText('!', tg[0] * k, tg[1] * k + 5); }
+      g.fillStyle = '#fff'; g.beginPath(); g.arc(WG.pos.x * k, WG.pos.y * k, 9, 0, 7); g.fill(); g.fillStyle = '#e64980'; g.beginPath(); g.arc(WG.pos.x * k, WG.pos.y * k, 6, 0, 7); g.fill();
     } else if (t === 'guide') body.innerHTML = WREG.map((R, r) => {
       const pool = wildPool(r).filter((s) => s.r !== 'M');
       const got = pool.filter((s) => ownsSid(actor(), s.id)).length;
@@ -1089,10 +1150,11 @@ function openMenu(tab = 'quests') {
       const ch = q?.ch ? Math.min(8, q.ch) : 0, stars = q?.done?.length || 0;
       return `<div class="wm-team">${avatarSVG(avatarOf(m.id), { head: true })}<div><b>${esc(m.name)}${me ? ' (you)' : ''}</b><small>${q?.ch ? `⭐ ${stars}/8 · Chapter ${ch}` : 'Hasn’t started yet'}${live ? ` · <span class="live-dot"></span> here now` : ''}</small></div>${live && !me ? `<button class="btn secondary wm-join" data-id="${m.id}">Go to</button>` : ''}</div>`;
     }).join('') + '<p class="small muted" style="margin-top:10px">Play at the same time to see each other on the map. Catching near family gives a 🤝 teamwork bonus!</p>';
-    body.querySelectorAll('.wm-join').forEach((b) => (b.onclick = () => { const o = WG.others[b.dataset.id]; const r = regionAt(Math.round(o.x), Math.round(o.y)); const R = WREG[r]; if (!R || !(p.visited[r] || chDone(p, R.ch) || p.ch >= R.ch)) { toast('You haven’t reached that part of Squishvale yet!'); return; } d.remove(); teleport(Math.round(o.x) + 1, Math.round(o.y)); }));
+    body.querySelectorAll('.wm-join').forEach((b) => (b.onclick = () => { const o = WG.others[b.dataset.id]; if (!o) { toast('They just left Squishvale.'); return; } const r = regionAt(Math.round(o.x), Math.round(o.y)); const R = WREG[r]; if (!R || !(p.visited[r] || chDone(p, R.ch) || p.ch >= R.ch)) { toast('You haven’t reached that part of Squishvale yet!'); return; } d.remove(); teleport(Math.round(o.x) + 1, Math.round(o.y)); }));
   };
   d.querySelectorAll('.wm-tabs button').forEach((b) => (b.onclick = () => show(b.dataset.t)));
   d.querySelector('.wm-close').onclick = () => d.remove();
+  d.addEventListener('click', (e) => { if (e.target === d) d.remove(); });
   show(tab);
 }
 
@@ -1117,9 +1179,9 @@ function arrowUpdate() {
 }
 function hudHTML() {
   return `<canvas class="wcv"></canvas>
-    <div class="wh-top"><button class="wh-x" aria-label="Leave Squishvale">✕</button><div class="wh-goal"><span class="wh-arrow">⬆</span><span class="wh-goal-t"></span></div><button class="wh-menu" aria-label="Menu">☰</button></div>
+    <div class="wh-top"><button class="wh-x" aria-label="Leave Squishvale">✕</button><div class="wh-goal"><span class="wh-arrow">⬆&#xFE0E;</span><span class="wh-goal-t"></span></div><button class="wh-menu" aria-label="Menu">☰</button></div>
     <div class="wh-sub"><span class="wh-region"></span><span class="wh-stars"></span><span class="wh-bub">🫧 <b>0</b></span></div>
-    <div class="wh-pad"><button data-d="up">▲</button><button data-d="left">◀</button><button data-d="right">▶</button><button data-d="down">▼</button></div>
+    <div class="wh-pad"><button data-d="up">▲&#xFE0E;</button><button data-d="left">◀&#xFE0E;</button><button data-d="right">▶&#xFE0E;</button><button data-d="down">▼&#xFE0E;</button></div>
     <div class="wh-act"><button class="wh-emo" aria-label="Wave">👋</button><button class="wh-ice" aria-label="Restart the ice" hidden>↩️</button><button class="wh-a" aria-label="Talk / interact">A</button></div>`;
 }
 function mount() {
@@ -1155,15 +1217,15 @@ function mount() {
   resize();
   if (WG.region < 0) enterRegion(regionAt(WG.pos.x, WG.pos.y), p);
   updateHud();
-  if (!WG.raf) { let last = performance.now(); const loop = (t) => { const dt = Math.min(0.05, (t - last) / 1000); last = t; syncOthers(); update(dt); draw(); arrowUpdate(); WG.raf = requestAnimationFrame(loop); }; WG.raf = requestAnimationFrame(loop); }
-  if (!p.intro) { p.intro = true; save(); setTimeout(() => introSlides(), 300); }
+  if (!WG.raf) { let last = performance.now(); const loop = (t) => { WG.raf = requestAnimationFrame(loop); const dt = Math.min(0.05, (t - last) / 1000); last = t; try { syncOthers(); update(dt); draw(); arrowUpdate(); if (t - (WG.readyT || 0) > 200) { WG.readyT = t; WG.layer.querySelector('.wh-a')?.classList.toggle('ready', !WG.busy && !WG.move && !!frontObj()); } } catch (e) { console.error(e); } }; WG.raf = requestAnimationFrame(loop); }
+  if (!p.intro) { p.intro = true; save(); setTimeout(() => introSlides().then(() => { if (WG.region >= 0 && !WG.layer.hidden) titleCard(WREG[WG.region]); }), 300); }
 }
 function unmount() {
   if (!WG.layer || WG.layer.hidden) return;
   savePos();
   WG.layer.hidden = true; document.body.classList.remove('world-mode');
   cancelAnimationFrame(WG.raf); WG.raf = 0; WG.hold = null; WG.path = [];
-  WG.layer.querySelectorAll('.wdlg, .wenc, .wgame, .wcard, .wmenu').forEach((x) => x.remove()); WG.lockN = 0;
+  WG.layer.querySelectorAll('.wdlg, .wenc, .wgame, .wcard, .wmenu').forEach((x) => x.remove()); WG.lockN = 0; WG.epoch++;
 }
 function syncOthers() {
   if (typeof Live === 'undefined') return;
@@ -1185,8 +1247,8 @@ document.addEventListener('keydown', (e) => {
   if (!WG.layer || WG.layer.hidden || e.target.closest?.('input, textarea')) return;
   const k = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', w: 'up', s: 'down', a: 'left', d: 'right' }[e.key];
   if (k) { e.preventDefault(); WG.path = []; WG.hold = k; tryStep(k); }
-  else if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); const top = WG.layer.querySelector('.wdlg'); if (top) top.click(); else pressA(); }
-  else if (e.key === 'm') openMenu();
+  else if (e.key === ' ' || e.key === 'Enter') { if (e.target.closest?.('.wcard button, .wmenu button, .wgame button, .wenc button')) return; e.preventDefault(); const top = WG.layer.querySelector('.wdlg'); if (top) top.click(); else pressA(); }
+  else if (e.key === 'm' && !WG.busy) openMenu();
 });
 document.addEventListener('keyup', (e) => { const k = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', w: 'up', s: 'down', a: 'left', d: 'right' }[e.key]; if (k && WG.hold === k) WG.hold = null; });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && WG.layer && !WG.layer.hidden) savePos(); });

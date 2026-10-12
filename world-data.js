@@ -53,7 +53,7 @@ const WREG = [
     npcs: [
       { id: 'mallow', look: 'mallow', x: 12, y: 10, name: 'Professor Mallow' },
       { id: 'puddle', look: 'puddle', x: 24, y: 10, name: 'Mayor Puddle' },
-      { id: 'tilly', look: 'tilly', x: 16, y: 18, name: 'Tilly', idle: ['Psst! Squishies hide in the tall, dark grass 🌿', 'Walk through it and one might pop out!'] },
+      { id: 'tilly', look: 'tilly', x: 16, y: 18, name: 'Tilly', side: { id: 'tilly', ask: ['Psst! Squishies hide in the tall, dark grass 🌿 Walk through it and one might pop out!', 'Can you catch 3 Cozy Critters 🐾 for me? I’ll give you 5 bubbles!'], set: 'critters', n: 3, give: { bubbles: 5 }, thanks: ['So fluffy! Here, 5 bubbles. Thank you, Ranger! 🫧'], after: ['Psst! Squishies hide in the tall, dark grass 🌿'] } },
       { id: 'nibs', look: 'nibs', x: 30, y: 8, name: 'Nibs', crumb: true, when: (p) => p.ch === 1 && p.step <= 5 },
       { id: 'shop1', look: 'shop', x: 29, y: 21, name: 'Bubble Shop', shop: true },
     ],
@@ -67,7 +67,7 @@ const WREG = [
     grass: 5, trees: 3, rocks: 4,
     npcs: [
       { id: 'coral', look: 'coral', x: 28, y: 9, name: 'Captain Coral' },
-      { id: 'shelly', look: 'shelly', x: 10, y: 16, name: 'Shelly', idle: ['Jellies love music! When they’re upset, copy their wave song and they calm right down 🎵'] },
+      { id: 'shelly', look: 'shelly', x: 10, y: 16, name: 'Sandy', idle: ['Jellies love music! When they’re upset, copy their wave song and they calm right down 🎵'] },
       { id: 'kai', look: 'kai', x: 21, y: 12, name: 'Kai', side: { id: 'kai', ask: ['Yo Ranger! Catch 3 ocean squishies and I’ll hook you up with 5 bubbles 🤙'], set: 'ocean', n: 3, give: { bubbles: 5 }, thanks: ['Gnarly catches! Here, 5 bubbles. Ride on! 🌊'] } },
       { id: 'shop2', look: 'shop', x: 9, y: 22, name: 'Bubble Shop', shop: true },
       { id: 'jelly', guardian: { set: 'ocean', sp: 'jelly' }, x: 26, y: 4, name: 'Tidal Jelly', idle: ['The Tidal Jelly bobs happily and glows soft blue 💙'] },
@@ -113,7 +113,7 @@ const WREG = [
     grass: 4, trees: 4, rocks: 1,
     npcs: [
       { id: 'ruby', look: 'ruby', x: 10, y: 8, name: 'Ringmaster Ruby' },
-      { id: 'gus', look: 'gus', x: 7, y: 11, name: 'Gus · Ring Toss' },
+      { id: 'gus', look: 'gus', x: 7, y: 11, name: 'Gus · Ring Toss', side: { id: 'gus', ask: ['Psst, Ranger! Catch 3 Snack Shack squishies 🍦 and I’ll give you 8 bubbles!'], set: 'snack', n: 3, give: { bubbles: 8 }, thanks: ['A snack-tastic catch! Here are 8 bubbles 🎯'], after: ['Step right up, step right up!'] } },
       { id: 'mimi', look: 'mimi', x: 7, y: 22, name: 'Mimi · Memory Booth' },
       { id: 'quizzy', look: 'quizzy', x: 31, y: 22, name: 'Quizzy · Squish Quiz' },
       { id: 'nibs5', look: 'nibs', x: 27, y: 10, name: 'Nibs', crumb: true, when: (p) => p.ch === 5 && p.step >= 4 },
@@ -132,7 +132,7 @@ const WREG = [
       { id: 'owl', look: 'owl', x: 27, y: 7, name: 'Sage Owlbert' },
       { id: 'bell', bell: true, x: 20, y: 12, name: 'Cloud Bell' },
       { id: 'wisp', guardian: { set: 'dream', sp: 'star' }, x: 8, y: 8, name: 'Star Wisp', idle: ['The Star Wisp twinkles and zips in happy circles ✨'] },
-      { id: 'skye', look: 'skye', x: 6, y: 16, name: 'Skye' },
+      { id: 'skye', look: 'skye', x: 6, y: 16, name: 'Skye', side: { id: 'skye', ask: ['Have you seen the Dreamland squishies 🌈 up here? Catch 3 and I’ll share my bubbles!'], set: 'dream', n: 3, give: { bubbles: 10 }, thanks: ['They’re so dreamy! Here, 10 bubbles ✨'], after: ['The clouds remember you now. Walk across anytime! ☁️'] } },
     ],
     stop: [23, 17],
   },
@@ -144,7 +144,7 @@ const WREG = [
     npcs: [
       { id: 'mira', look: 'mira', x: 18, y: 9, name: 'Mira' },
       { id: 'grim', look: 'grim', x: 21, y: 14, name: 'Gravedigger Grim' },
-      { id: 'boo', guardian: { set: 'niddo', ghost: true }, x: 27, y: 17, name: 'Boo', idle: ['Boo giggles: “Wanna play again sometime?” 👻'] },
+      { id: 'boo', guardian: { set: 'spooky', sp: 'ghost', ghost: true }, x: 27, y: 17, name: 'Boo', idle: ['Boo giggles: “Wanna play again sometime?” 👻'] },
     ],
     items: [{ id: 'lan1', group: 'lantern', x: 5, y: 6, lantern: true }, { id: 'lan2', group: 'lantern', x: 30, y: 6, lantern: true }, { id: 'lan3', group: 'lantern', x: 5, y: 22, lantern: true }, { id: 'lan4', group: 'lantern', x: 15, y: 24, lantern: true }],
     stop: [12, 14],
@@ -181,15 +181,15 @@ const STORY = {
     { goal: 'Show Professor Mallow your catch', talk: 'mallow', lines: [
       ['mallow', 'You did it! What a natural!'],
       ['mallow', 'Oh dear… my penguin Pip got so scared he waddled off. He loves the flowers south of the pond. Could you find him?']] },
-    { goal: 'Find Pip south of the pond 🐧', special: 'pip', game: { type: 'ring', title: 'Pip is wiggly!', need: 1, of: 3, zone: 0.34, speed: 1.6 }, win: [['pip', 'Pip snuggles into your bubble and peeps happily! 🐧💕']] },
+    { goal: 'Find Pip south of the pond 🐧', special: 'pip', game: { type: 'ring', title: 'Pip is wiggly!', sub: 'Toss when the ring is green!', need: 1, of: 3, zone: 0.34, speed: 1.6 }, lose: [['pip', 'Pip wiggles out of the bubble! Try again — gently! 🐧']], win: [['pip', 'Pip snuggles into your bubble and peeps happily! 🐧💕']] },
     { goal: 'Bring Pip back to Professor Mallow', talk: 'mallow', lines: [
       ['mallow', 'Pip! You found him! Thank you, {you}!'],
       ['mallow', 'But look — cookie crumbs everywhere. Only the Crumb Crew leaves crumbs like that…'],
       ['mallow', 'I bet that rascal Nibs is up to no good by the big oaks to the east.']] },
-    { goal: 'Stop Nibs of the Crumb Crew', talk: 'nibs', game: { type: 'ring', title: 'Bubble Showdown', sub: 'Pop 2 of 3 bubbles!', need: 2, of: 3, zone: 0.26, speed: 1.35 }, lines: [
+    { goal: 'Stop Nibs of the Crumb Crew', talk: 'nibs', game: { type: 'ring', title: 'Bubble Showdown', sub: 'Pop 2 of 3 bubbles!', need: 2, of: 3, zone: 0.3, speed: 1.5 }, lines: [
       ['nibs', 'Heh heh! I’m Nibs of the Crumb Crew! The Baron says squishies should be CRUNCHY!'],
       ['nibs', 'This shiny Meadow Star is mine now. Want it? Beat me at a Bubble Showdown!']],
-      win: [['nibs', 'Aww, CRUMBS! Fine, take your star…'], ['nibs', 'Heh — the Baron still has the other seven! See ya!']], lose: [['nibs', 'Ha! Too slow! Come back and try again, Ranger!']] },
+      win: [['nibs', 'Aww, CRUMBS! Fine, take your star…'], ['nibs', 'Heh — the Crew hid the other seven all over Squishvale! Good luck finding ’em!']], lose: [['nibs', 'Ha! Too slow! Come back and try again, Ranger!']] },
     { goal: 'Bring the Meadow Star to Mayor Puddle', talk: 'puddle', lines: [
       ['puddle', 'The Meadow Star! Puffington is saved!'],
       ['puddle', 'By the power of… well, me — I name you an official Squish Ranger! 🎖️'],
@@ -251,7 +251,7 @@ const STORY = {
     { goal: 'Meet Ringmaster Ruby at the big tent', talk: 'ruby', lines: [
       ['ruby', 'Welcome to the Snack Shack Boardwalk! …Or what’s left of it. The Crumb twins rigged every booth!'],
       ['ruby', 'The Boardwalk Star is our grand prize. Win my three booths and it’s yours!']] },
-    { goal: 'Win the Ring Toss booth', talk: 'gus', game: { type: 'ring', title: 'Ring Toss', sub: 'Land 3 of 5!', need: 3, of: 5, zone: 0.24, speed: 1.3 }, lines: [['gus', 'Step right up! Land 3 rings out of 5 and you win!']], win: [['gus', 'WINNER! You’ve got the touch!']], lose: [['gus', 'So close! Have another go!']] },
+    { goal: 'Win the Ring Toss booth', talk: 'gus', game: { type: 'ring', title: 'Ring Toss', sub: 'Land 3 of 5!', need: 3, of: 5, zone: 0.28, speed: 1.4 }, lines: [['gus', 'Step right up! Land 3 rings out of 5 and you win!']], win: [['gus', 'WINNER! You’ve got the touch!']], lose: [['gus', 'So close! Have another go!']] },
     { goal: 'Win the Memory booth', talk: 'mimi', game: { type: 'simon', title: 'Snack Memory', sub: 'Remember the snacks!', len: 5, icons: ['🍦', '🍩', '🧋', '🍪'] }, lines: [['mimi', 'Watch the snacks light up, then tap them in the same order!']], win: [['mimi', 'Wow, what a memory!']], lose: [['mimi', 'Oops! Try again!']] },
     { goal: 'Win the Squish Quiz booth', talk: 'quizzy', game: { type: 'quiz', title: 'Squish Quiz', qs: [
       Q('What do Rangers toss to catch wild squishies?', 'Squish Bubbles', 'Cookies', 'Socks'),
@@ -283,7 +283,7 @@ const STORY = {
       ['owl', 'Hoo-hoo! A Ranger! The Cloud Bell answers only to a clever mind.'], ['owl', 'Solve my three riddles!']],
       win: [['owl', 'Hoo! Splendid! Ring the Cloud Bell at the edge of the Sky Gap.']], lose: [['owl', 'Hmm, hoo. Think again, young Ranger!']] },
     { goal: 'Ring the Cloud Bell at the Sky Gap 🔔', talk: 'bell', set: 'clouds', lines: [['bell', 'DONG… DONG… Fluffy clouds drift in and puff up into a bridge across the gap! ☁️']] },
-    { goal: 'Catch the Star Wisp across the clouds', talk: 'wisp', game: { type: 'ring', title: 'Catch the Star Wisp!', sub: 'It’s super fast — 2 of 4!', need: 2, of: 4, zone: 0.17, speed: 1.0 }, lines: [['wisp', 'A Star Wisp is zooming around the Peaks Star — way too fast to see! Quick, a bubble!']],
+    { goal: 'Catch the Star Wisp across the clouds', talk: 'wisp', game: { type: 'ring', title: 'Catch the Star Wisp!', sub: 'It’s super fast — 2 of 5!', need: 2, of: 5, zone: 0.22, speed: 1.2 }, lines: [['wisp', 'A Star Wisp is zooming around the Peaks Star — way too fast to see! Quick, a bubble!']],
       win: [['wisp', 'Got it! The Star Wisp twinkles hello and hands you the Peaks Star ✨']], joins: 'wisp', lose: [['wisp', 'Zip! It got away. Try again!']] },
     { goal: 'Say hi to Skye by the west trail', talk: 'skye', lines: [
       ['skye', 'You crossed the Sky Gap! That was amazing!'],
@@ -293,7 +293,7 @@ const STORY = {
     { goal: 'Find Mira the lantern keeper', talk: 'mira', lines: [
       ['mira', 'Shh… who’s there? Oh, a Ranger! Thank goodness.'],
       ['mira', 'The Crumb Crew blew out all four Hollow lanterns. It’s so dark the squishies are afraid to come out.'],
-      ['mira', 'Can you light them again? Look for the cold lantern posts in the corners of the Hollow.']] },
+      ['mira', 'Can you light them again? Look for the four cold lantern posts around the edges of the Hollow — walk up to one to light it.']] },
     { goal: 'Light the Hollow lanterns 🏮', collect: 'lantern', n: 4 },
     { goal: 'Tell Mira the lanterns are lit', talk: 'mira', lines: [
       ['mira', 'Light! Beautiful light!'],
@@ -314,12 +314,12 @@ const STORY = {
     { goal: 'Cross the Slippy Slopes ⛸️', reach: 'castleGate' },
     { goal: 'Talk to Yeti Yuki at the castle', talk: 'yuki', give: { bubbles: 5 }, lines: [
       ['yuki', 'RAWR! …Oh, sorry. That’s just how yetis say hello.'],
-      ['yuki', 'The Baron locked himself in with all the stars. Here — warm cocoa and 5 bubbles. For courage!']] },
+      ['yuki', 'The Baron is guarding the castle door with the very last star. Here — warm cocoa and 5 bubbles. For courage!']] },
     { goal: 'Face Baron Von Crumb', talk: 'baron', game: { type: 'boss', title: 'The Baron’s Three Trials' }, lines: [
       ['baron', 'So! The little Ranger came all this way. Squishies should be CRUNCHY, like my perfect cookies!'],
       ['baron', 'Nobody ever comes to my cookie parties. Everyone’s too busy squishing!'],
       ['baron', 'Beat my three trials — Memory, Rhythm and the Big Toss — and maybe… just maybe… I’ll listen.']],
-      win: [['baron', '…You’re really good. And you were kind to everyone the whole way here.'], ['baron', 'I guess I just wanted someone to share cookies with. Here. All the stars. I’m sorry.']], lose: [['baron', 'Mwa-ha-ha! Not good enough! …Try again?']] },
+      win: [['baron', '…You’re really good. And you were kind to everyone the whole way here.'], ['baron', 'I guess I just wanted someone to share cookies with. Here — the Summit Star, the very last one. I’m sorry.']], lose: [['baron', 'Mwa-ha-ha! Not good enough! …Try again? (You keep the trials you already won.)']] },
     { goal: 'Celebrate with Professor Mallow', talk: 'mallow8', lines: [
       ['mallow8', '{you}! You did it! All eight Squish Stars are home and every squishy is soft and happy again!'],
       ['mallow8', 'And Baron — the Festival needs a cookie stand. Will you come?'],
@@ -328,35 +328,70 @@ const STORY = {
   ],
 };
 
-// What each townsperson says once their part is done, or before it starts.
+// What each townsperson says once their part is done, or before it starts. (p = the player's progress)
+const atStep = (p, ch, ...steps) => p.ch === ch && (!steps.length || steps.includes(p.step));
 const NPC_IDLE = {
-  mallow: (p) => p.ch === 1 ? ['Remember: toss the bubble when the ring turns green! 🫧'] : ['How’s the Squish Star hunt going, {you}? You’re doing amazing!'],
-  puddle: (p) => p.ch === 1 ? ['Ahem! The Mayor is very busy being worried. Talk to Professor Mallow!'] : ['Puffington will never forget you, Ranger! 🎖️'],
-  coral: () => ['Steady as she goes, Ranger! ⚓'],
-  bun: () => ['Fresh sugarplum cake, still warm! 🍰'],
-  moss: () => ['Shh… listen to the woods. Squishies love the quiet spots.'],
-  fern: () => ['The pens are shut tight now. Thanks, partner! 🤠'],
-  hay: () => ['Big Moo’s been dancing all week. Hee hee!'],
-  ruby: () => ['The show must go on! 🎪'],
-  gus: () => ['Step right up, step right up!'], mimi: () => ['Memory is like a muscle — keep it squishy!'], quizzy: () => ['Did you know squishies hum when they’re happy?'],
-  rocky: () => ['The view from up here is the best in Squishvale! 🏔️'],
-  owl: () => ['Hoo-hoo. A clever mind is a squishy mind.'],
+  mallow: (p) => p.ch > 8 ? ['{you}, our Star Ranger! 🌟 Have you filled your Squishvale Guide yet? Tap ☰ then 📖 Guide!']
+    : atStep(p, 1, 3) ? ['Pip loves the flowers south of the pond. Please find him! 🐧']
+    : atStep(p, 1, 5) ? ['Nibs is by the big oaks to the east. You can do it! 🫧']
+    : p.ch === 1 ? ['Remember: toss the bubble when the ring turns green! 🫧'] : ['How’s the Squish Star hunt going, {you}? You’re doing amazing!'],
+  puddle: (p) => atStep(p, 1, 0) ? ['Ahem! The Mayor is very busy being worried. Talk to Professor Mallow!']
+    : p.ch === 1 ? ['Ahem! Any luck with that missing Meadow Star? Puffington is counting on you!']
+    : p.ch > 8 ? ['Three cheers for our Star Ranger! Hip hip… SQUISH! 🎖️'] : ['Puffington will never forget you, Ranger! 🎖️'],
+  coral: (p) => atStep(p, 2, 1) ? ['Three Shell Keys, scattered all over the beach. Keep looking! 🐚']
+    : atStep(p, 2, 3) ? ['That jelly’s all in a tangle. Sandy knows all about jellies — ask her!']
+    : p.ch > 8 ? ['The lighthouse has never shone brighter. Ahoy, Star Ranger! ⚓'] : ['Steady as she goes, Ranger! ⚓'],
+  bun: (p) => atStep(p, 3, 1) ? ['I need 5 Sugarberries. Look for the bushes all around the woods! 🫐']
+    : atStep(p, 3, 3) ? ['Ranger Moss is in the east woods. He knows how to calm Snorebear!']
+    : atStep(p, 3, 4) ? ['Snorebear’s hollow is in the southwest woods. Sing softly! 😴']
+    : p.ch > 8 ? ['I baked a giant cake for the Festival! The Baron helped with the sprinkles 🍰'] : ['Fresh sugarplum cake, still warm! 🍰'],
+  moss: (p) => atStep(p, 3, 4) ? ['Nice and steady, like a heartbeat. His hollow is in the southwest woods 🎵'] : ['Shh… listen to the woods. Squishies love the quiet spots.'],
+  fern: (p) => atStep(p, 4, 1) ? ['Five runaways are hiding all over the farm. Walk up to one and pop a bubble — gently! 🐷']
+    : atStep(p, 4, 3) ? ['Grandpa Hay knows Big Moo’s favorite song. Go ask him! 🎵']
+    : atStep(p, 4, 4) ? ['Big Moo is by the barn door. Play her that tune!'] : ['The pens are shut tight now. Thanks, partner! 🤠'],
+  hay: (p) => atStep(p, 4, 0, 1, 2) ? ['Hee hee! Those runaway squishies sure are fast. Help Farmer Fern round ’em up!']
+    : atStep(p, 4, 4) ? ['Copy the Moo-sic Box tune and Big Moo will dance right out of that barn! 🐮'] : ['Big Moo’s been dancing all week. Hee hee!'],
+  ruby: (p) => atStep(p, 5, 1, 2, 3) ? ['Win all three booths — Ring Toss, then Memory, then the Squish Quiz! 🎪']
+    : atStep(p, 5, 4) ? ['Those crumb-snatchers ran to the Ferris wheel! After them!']
+    : p.ch > 8 ? ['Tonight’s show: the Great Squish Festival parade! Front-row seat for you ⭐'] : ['The show must go on! 🎪'],
+  gus: () => ['Step right up, step right up!'],
+  mimi: (p) => atStep(p, 5, 0, 1) ? ['My booth opens after you win Gus’s Ring Toss! 🎯'] : ['Memory is like a muscle — keep it squishy!'],
+  quizzy: (p) => atStep(p, 5, 0, 1, 2) ? ['Quiz time comes last! Win the Ring Toss and Memory booths first 🧠'] : ['Did you know squishies hum when they’re happy?'],
+  rocky: (p) => atStep(p, 6, 1) ? ['Sage Owlbert’s observatory is up the north trail!'] : ['The view from up here is the best in Squishvale! 🏔️'],
+  owl: (p) => atStep(p, 6, 2) ? ['Hoo! Ring the Cloud Bell at the edge of the Sky Gap.'] : ['Hoo-hoo. A clever mind is a squishy mind.'],
   skye: () => ['The clouds remember you now. Walk across anytime! ☁️'],
-  mira: () => ['The lanterns will glow forever now. Thank you 🏮'],
-  grim: () => ['Spooky? Nah. Cozy! Hee hee.'],
-  penny: () => ['Wheee! I love sliding! ⛸️'],
-  yuki: () => ['Want more cocoa? RAWR! (That means yes.)'],
-  baron: (p) => p.ch > 8 ? ['Cookie? They’re… a little squishy now. And I love them! 🍪'] : ['Hmph! Who goes there?'],
+  mira: (p) => atStep(p, 7, 1) ? ['Look for the four cold lantern posts around the edges of the Hollow. Walk up to one to light it! 🏮']
+    : atStep(p, 7, 3) ? ['Gravedigger Grim knows all of Boo’s hiding spots. He’s near the graveyard!']
+    : atStep(p, 7, 4) ? ['Boo is hiding in the graveyard. Watch closely! 👻'] : ['The lanterns will glow forever now. Thank you 🏮'],
+  grim: (p) => atStep(p, 7, 0, 1, 2) ? ['Hee hee! It’s too dark for visitors. Help Mira light the lanterns!']
+    : atStep(p, 7, 4) ? ['Boo hides behind my gravestones. Watch closely… then point!'] : ['Spooky? Nah. Cozy! Hee hee.'],
+  penny: (p) => atStep(p, 8, 1) ? ['On ice you slide until you bump into something. Tap ↩️ to start over! ⛸️'] : ['Wheee! I love sliding! ⛸️'],
+  yuki: (p) => atStep(p, 8, 0, 1) ? ['RAWR! …Oh, sorry. That’s just how yetis say hello.']
+    : atStep(p, 8, 3) ? ['The Baron is right by the castle door. Be brave! RAWR!'] : ['Want more cocoa? RAWR! (That means yes.)'],
+  baron: (p) => p.ch > 8 || atStep(p, 8, 4) ? ['Cookie? They’re… a little squishy now. And I love them! 🍪'] : ['Hmph! Who goes there?'],
   mallow8: () => ['The Festival is the best ever! 🎉'],
-  bell: () => ['A big golden bell. It rings with a soft DONG… 🔔'],
-  nibs: () => ['Heh heh! Can’t catch me!'], nibs5: () => ['Nyah nyah!'], nobs5: () => ['The Crumb Crew rules!'],
+  bell: (p) => atStep(p, 6, 0, 1) ? ['A big golden bell. It won’t ring… maybe Sage Owlbert knows how. 🔔'] : ['A big golden bell. It rings with a soft DONG… 🔔'],
+  nibs: () => ['Heh heh! Can’t catch me!'],
+  nibs5: (p) => atStep(p, 5, 4) ? ['Don’t look at me! Nobs has the star — he’s the brains. Heh.'] : ['Aww, crumbs. The Baron’s gonna be SO crumbly…'],
+  nobs5: (p) => atStep(p, 5, 4) ? ['The Crumb Crew rules!'] : ['Fine, fine. Enjoy your shiny star…'],
+};
+// One line per finished chapter, for the ☰ Story tab
+const STORY_RECAP = {
+  1: 'Rescued Pip and beat Nibs in a Bubble Showdown.',
+  2: 'Found 3 Shell Keys and sang with the Tidal Jelly.',
+  3: 'Picked Sugarberries and sang Snorebear to sleep.',
+  4: 'Rounded up 5 runaways and danced with Big Moo.',
+  5: 'Won every booth and out-quizzed the Crumb twins.',
+  6: 'Solved Owlbert’s riddles and caught the Star Wisp.',
+  7: 'Lit 4 lanterns and found Boo at hide-and-seek.',
+  8: 'Faced the Baron — and made a new friend.',
 };
 const BLOCKER_TEXT = {
   puffball: 'A giant Sleepy Puffball is snoring on the road. 😴 Help Puffington first!',
   log: 'A huge driftwood log blocks the trail. Help Captain Coral first!',
-  crumbs: 'A wall of giant cookies blocks the way! The Crumb Crew built it…',
+  crumbs: 'A wall of giant cookies blocks the way! The Crumb Crew built it… Help Baker Bun first!',
   hay: 'Stacks of hay bales block the south road. Help Farmer Fern first!',
   gate: 'The carnival gate is locked tight. Win back the Boardwalk Star first!',
   fog: 'Thick fog hides the trail. Something on Cloud Peaks needs your help first.',
-  icewall: 'A wall of ice blocks the path north. Bring light back to the Hollow first!',
+  icewall: 'A wall of ice blocks the path west. Bring light back to the Hollow first!',
 };
