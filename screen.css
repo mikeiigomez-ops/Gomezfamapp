@@ -266,3 +266,111 @@ body.paged .fab { bottom: calc(var(--tabbar-h) + var(--tab-gap) + 66px); }
 #view.pg-cols .card { -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 
 body.storage-full #app::before { content: '⚠️ Storage full — changes not saved'; position: fixed; top: var(--safe-top); left: 0; right: 0; z-index: 80; background: #b42318; color: #fff; text-align: center; font: 700 13px/28px system-ui; }
+
+/* =========================================================
+   Polish layer: calmer hierarchy, one icon treatment, toy-like kid tiles, iPad dashboard
+   ========================================================= */
+
+/* 1 — Type & elevation tokens */
+:root {
+  --fs-title: 22px; --fs-tile: 15px; --fs-sub: 12.5px;
+  --w-strong: 780; --w-sub: 600;
+  --chip-r: 30%;                       /* squircle-ish radius for icon chips, scales with size */
+  --tile-shadow: 0 1px 0 rgba(60, 40, 20, .04), 0 1px 2px rgba(60, 40, 20, .05), 0 10px 24px -14px rgba(60, 40, 20, .22);
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --tile-shadow: inset 0 0 0 1px rgba(255,255,255,.06), 0 10px 24px -14px rgba(0,0,0,.8); } }
+:root[data-theme="dark"] { --tile-shadow: inset 0 0 0 1px rgba(255,255,255,.06), 0 10px 24px -14px rgba(0,0,0,.8); }
+
+/* 2 — Parent launcher tiles: neutral surface, colour lives only in the icon chip */
+body:not(.kid-mode) .launch .tile {
+  background: var(--surface); box-shadow: var(--tile-shadow); gap: 2px; border-radius: 24px;
+}
+.launch .tile b { font-size: var(--fs-tile); font-weight: var(--w-strong); letter-spacing: -.015em; }
+.launch .tile small { font-size: var(--fs-sub); font-weight: var(--w-sub); }
+
+/* 3 — One icon treatment: emoji sit at ~56% inside a lit, tinted squircle chip */
+.tile-e {
+  position: relative; width: 48px; height: 48px; margin-bottom: 3px; border-radius: var(--chip-r);
+  font-size: 27px;
+  background:
+    radial-gradient(120% 90% at 30% 15%, rgba(255,255,255,.55), transparent 55%),
+    linear-gradient(160deg, color-mix(in srgb, var(--t) 30%, var(--surface)), color-mix(in srgb, var(--t) 48%, var(--surface)));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--t) 22%, transparent), inset 0 -2px 0 color-mix(in srgb, var(--t) 18%, transparent);
+  filter: none;
+}
+.tile-e { text-shadow: 0 2px 3px color-mix(in srgb, var(--t) 35%, transparent); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .tile-e { background: radial-gradient(120% 90% at 30% 15%, rgba(255,255,255,.12), transparent 55%), linear-gradient(160deg, color-mix(in srgb, var(--t) 34%, var(--surface)), color-mix(in srgb, var(--t) 22%, var(--surface))); } }
+:root[data-theme="dark"] .tile-e { background: radial-gradient(120% 90% at 30% 15%, rgba(255,255,255,.12), transparent 55%), linear-gradient(160deg, color-mix(in srgb, var(--t) 34%, var(--surface)), color-mix(in srgb, var(--t) 22%, var(--surface))); }
+@media (min-width: 700px) { .tile-e { width: 64px; height: 64px; font-size: 35px; } .launch.big .tile-e { width: 84px; height: 84px; font-size: 46px; } }
+
+/* 4 — Kid tiles keep their candy colour, but get a toy-like "lip" and press-down */
+body.kid-mode .launch .tile {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--t) 10%, var(--surface)), color-mix(in srgb, var(--t) 20%, var(--surface)));
+  box-shadow: inset 0 -5px 0 color-mix(in srgb, var(--t) 26%, transparent), 0 8px 18px -12px color-mix(in srgb, var(--t) 70%, transparent);
+  border-radius: 28px;
+}
+body.kid-mode .launch .tile:active { transform: translateY(3px) scale(.97); box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--t) 26%, transparent); }
+body.kid-mode .tile-e { background: #fff; box-shadow: 0 3px 0 color-mix(in srgb, var(--t) 30%, transparent); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) body.kid-mode .tile-e { background: color-mix(in srgb, var(--t) 28%, var(--surface)); } }
+:root[data-theme="dark"] body.kid-mode .tile-e { background: color-mix(in srgb, var(--t) 28%, var(--surface)); }
+
+/* 5 — Heroes get depth: soft light blooms instead of a flat fill */
+.home-hi, .kid-hi2 { position: relative; overflow: hidden; isolation: isolate; }
+.home-hi::before, .kid-hi2::before {
+  content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(60% 120% at 100% 0%, rgba(255,255,255,.22), transparent 60%),
+    radial-gradient(30% 60% at 88% 110%, rgba(255,255,255,.14), transparent 70%),
+    radial-gradient(14% 28% at 76% 30%, rgba(255,255,255,.10), transparent 70%);
+}
+.hh-greet { font-weight: 800; letter-spacing: -.025em; }
+.hh-date { font-weight: 600; opacity: .85; }
+.hh-facts span { background: rgba(255,255,255,.16); box-shadow: inset 0 0 0 1px rgba(255,255,255,.18); border-radius: 999px; padding: 6px 12px; font-weight: 650; backdrop-filter: blur(6px); }
+
+/* 6 — Top bar: one glass capsule for the action buttons, calmer title */
+.topbar { gap: 0; }
+.topbar h1 { font-size: var(--fs-title); font-weight: 800; letter-spacing: -.025em; }
+.topbar h1 ~ .icon-btn { margin-left: 0 !important; border-radius: 0; box-shadow: 0 6px 16px -10px rgba(40,30,20,.35); width: 42px; }
+.topbar h1 + .icon-btn { margin-left: auto !important; border-radius: 22px 0 0 22px; padding-left: 4px; }
+.topbar h1 ~ .icon-btn:last-of-type { border-radius: 0 22px 22px 0; padding-right: 4px; margin-right: 6px; }
+.topbar h1 + .icon-btn:last-of-type { border-radius: 50%; padding: 0; }
+.topbar .icon-btn svg { width: 21px; height: 21px; stroke-width: 1.9; }
+
+/* 7 — Pager: lighter, smaller, and it shares one row with the + button */
+.pg-ctl { height: 44px; gap: 4px; padding: 0 2px; background: var(--glass); backdrop-filter: blur(18px) saturate(1.6); -webkit-backdrop-filter: blur(18px) saturate(1.6);
+  box-shadow: 0 8px 20px -12px rgba(40,30,20,.35), inset 0 0 0 1px var(--hair); }
+.pg-ctl button { width: 44px; height: 40px; font-size: 22px; font-weight: 700; }
+.pg-dots { gap: 6px; font-size: 13px; }
+.pg-dots i { width: 7px; height: 7px; }
+.pg-dots i.on { width: 18px; }
+body.paged .fab { bottom: calc(var(--barspace) - 10px); width: 56px; height: 56px; border-radius: 19px; }
+@media (min-width: 1000px) { body.paged .fab { bottom: calc(var(--safe-bottom) + 20px); } }
+
+/* 8 — iPad landscape: the rail hugs its tabs; parent launcher uses 5 roomier columns */
+@media (min-width: 1000px) {
+  .tabbar { bottom: auto; padding: 8px 6px; }
+  body:not(.kid-mode) .launch { grid-template-columns: repeat(5, 1fr); gap: 18px; }
+  .launch .tile { aspect-ratio: 1 / .8; }
+}
+
+/* 9 — iPad landscape Home: greeting card on the left, a 3×3 launcher on the right (a real dashboard, no dead half-screen) */
+@media (min-width: 1000px) {
+  body[data-route="home"]:not(.kid-mode) main#view { display: grid; grid-template-columns: minmax(300px, 1fr) 1.55fr; column-gap: 20px; align-content: start; }
+  body[data-route="home"]:not(.kid-mode) main#view > :not(.home-hi):not(.launch) { grid-column: 1 / -1; }
+  body[data-route="home"]:not(.kid-mode) .home-hi { margin: 0; display: flex; flex-direction: column; justify-content: flex-end; padding: 26px; min-height: 100%; }
+  body[data-route="home"]:not(.kid-mode) .hh-greet { font-size: 34px; }
+  body[data-route="home"]:not(.kid-mode) .hh-facts { flex-direction: column; align-items: flex-start; margin-top: 18px; gap: 8px; }
+  body[data-route="home"]:not(.kid-mode) .hh-facts span { font-size: 15px; padding: 8px 14px; }
+  body[data-route="home"]:not(.kid-mode) .launch { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* 10 — Kid home on phones: slightly flatter tiles so 3 rows (9 tiles) fit a page instead of 6 */
+@media (max-width: 699px) {
+  body.kid-mode .launch:not(.big) { gap: 9px; }
+  body.kid-mode .launch:not(.big) .tile { aspect-ratio: auto; height: 96px; gap: 0; padding: 4px; }
+  body.kid-mode .launch:not(.big) .tile-e { width: 44px; height: 44px; font-size: 26px; }
+}
+
+/* 11 — Small fixes: kid-mode lone bell stays round; toasts stay on one line */
+body.kid-mode .topbar .icon-btn.bell { border-radius: 50% !important; padding: 0; margin-right: 0; }
+.toast { width: max-content; }   /* shrink-to-fit at left:50% was forcing a 2-line wrap; max-width still caps it */
