@@ -608,6 +608,7 @@ function update(dt) {
     if (o.sid && o.on !== undefined) { if (o.on) encounter(o.sid, { roamer: o, shiny: o.shiny }); } else interact(o);
     return;
   }
+  if (WG.queue) { const q = WG.queue; WG.queue = null; if (tryStep(q)) { WG.move.t = carry; return; } }
   if (WG.hold && performance.now() - (WG.holdAt || 0) > 230 && tryStep(WG.hold)) WG.move.t = carry; // a quick tap = one step
 }
 function faceTo(x, y) { const dx = x - WG.pos.x, dy = y - WG.pos.y; WG.pos.d = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : dy > 0 ? 'down' : 'up'; }
@@ -626,7 +627,7 @@ function arrive(dir) {
   if (Date.now() - WG.saveT > 3000) { WG.saveT = Date.now(); savePos(); }
   // Wild encounters in tall grass
   const canEnc = (p.bubbles || 0) > 0 || !!curStep(p)?.catch;
-  if (canEnc && w.at(x, y) === T.TALL && !WG.path.length && WG.steps - WG.lastEnc > 2 && Math.random() < 0.13) { WG.lastEnc = WG.steps; WG.hold = null; WG.path = []; setTimeout(() => encounter(wildSid(r), {}), 120); }
+  if (canEnc && w.at(x, y) === T.TALL && !WG.path.length && WG.steps - WG.lastEnc > 2 && Math.random() < 0.13) { WG.lastEnc = WG.steps; WG.hold = null; WG.queue = null; WG.path = []; setTimeout(() => encounter(wildSid(r), {}), 120); }
   else if (canEnc && w.at(x, y) === T.TALL && WG.path.length && WG.steps - WG.lastEnc > 3 && Math.random() < 0.08) { WG.lastEnc = WG.steps; WG.path = []; WG.pendingTalk = null; setTimeout(() => encounter(wildSid(r), {}), 120); }
 }
 function savePos() {
@@ -730,7 +731,7 @@ function pressA() {
    ========================================================= */
 async function interact(o) {
   const p = wMe(); if (!p || WG.busy) return;
-  WG.hold = null; WG.path = [];
+  WG.hold = null; WG.queue = null; WG.path = [];
   const st = curStep(p);
   if (o.type === 'blocker') { toast(BLOCKER_TEXT[o.kind]); return; }
   if (o.type === 'stop') return travelMenu(o);
@@ -913,7 +914,7 @@ const RING = { C: [0.3, 1.6, 99], R: [0.26, 1.4, 4], E: [0.2, 1.3, 3], L: [0.16,
 function teamNearby() { return Object.values(WG.others).some((o) => Math.abs(o.x - WG.pos.x) + Math.abs(o.y - WG.pos.y) <= 5); }
 async function encounter(sid, opt = {}) {
   const p = wMe(); if (!p || WG.busy || !SQ[sid] || !WG.layer || WG.layer.hidden) return;
-  WG.hold = null; WG.path = [];
+  WG.hold = null; WG.queue = null; WG.path = [];
   const s = SQ[sid], [zone0, speed0, flee] = RING[s.r] || RING.C;
   const team = teamNearby(), simple = simpleNow();
   const zone = Math.min(0.5, zone0 * (simple ? 1.4 : 1) * (team ? 1.25 : 1)), speed = speed0 * (simple ? 1.25 : 1);
@@ -1198,11 +1199,49 @@ function arrowUpdate() {
   el.hidden = dist < 2;
   el.style.transform = `rotate(${Math.atan2(dy, dx) + Math.PI / 2}rad)`;
 }
+// Thumb stick: press anywhere on it and drag. The way you push decides the direction; a quick flick = one step.
+function stickInit(el) {
+  const knob = el.querySelector('.wh-knob');
+  let id = null, cx = 0, cy = 0, rad = 1, dir = null;
+  const setKnob = (x, y) => { knob.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`; };
+  const move = (e) => {
+    const dx = e.clientX - cx, dy = e.clientY - cy, dist = Math.hypot(dx, dy), max = rad * 0.55, k = dist > max ? max / dist : 1;
+    setKnob(dx * k, dy * k);
+    let d = null;
+    if (dist > rad * 0.2) {
+      const horiz = Math.abs(dx) > Math.abs(dy);
+      d = horiz ? (dx > 0 ? 'right' : 'left') : dy > 0 ? 'down' : 'up';
+      // Near a diagonal, keep going the way you were going (no zig-zag)
+      if (dir && d !== dir && Math.max(Math.abs(dx), Math.abs(dy)) < Math.min(Math.abs(dx), Math.abs(dy)) * 1.25 && (Math.abs(dx) > 1 || Math.abs(dy) > 1)) {
+        const keep = { left: dx < 0, right: dx > 0, up: dy < 0, down: dy > 0 }[dir]; if (keep) d = dir;
+      }
+    }
+    el.classList.toggle('on', !!d);
+    if (d === dir) return;
+    const first = !dir; dir = d;
+    if (!d) { WG.hold = null; return; }
+    WG.path = []; WG.pendingTalk = null; WG.hold = d; WG.holdAt = first ? performance.now() : 0;
+    if (!tryStep(d) && WG.move) WG.queue = d; // mid-step: take this step as soon as the current one ends
+  };
+  const end = (e) => {
+    if (e.pointerId !== id) return;
+    id = null; dir = null; el.classList.remove('on', 'held'); knob.style.transition = 'transform .15s'; setKnob(0, 0);
+    WG.hold = null;
+  };
+  el.addEventListener('pointerdown', (e) => {
+    if (id !== null) return;
+    e.preventDefault(); id = e.pointerId; el.setPointerCapture?.(e.pointerId);
+    const r = el.getBoundingClientRect(); cx = r.left + r.width / 2; cy = r.top + r.height / 2; rad = r.width / 2;
+    knob.style.transition = 'none'; el.classList.add('held'); move(e);
+  });
+  el.addEventListener('pointermove', (e) => { if (e.pointerId === id) move(e); });
+  for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) el.addEventListener(ev, end);
+}
 function hudHTML() {
   return `<canvas class="wcv"></canvas>
     <div class="wh-top"><button class="wh-x" aria-label="Leave Squishvale">✕</button><div class="wh-goal"><span class="wh-arrow">⬆&#xFE0E;</span><span class="wh-goal-t"></span></div><button class="wh-menu" aria-label="Menu">☰</button></div>
     <div class="wh-sub"><span class="wh-region"></span><span class="wh-stars"></span><span class="wh-bub">🫧 <b>0</b></span></div>
-    <div class="wh-pad"><button data-d="up">▲&#xFE0E;</button><button data-d="left">◀&#xFE0E;</button><button data-d="right">▶&#xFE0E;</button><button data-d="down">▼&#xFE0E;</button></div>
+    <div class="wh-pad wh-stick" aria-label="Move: drag the stick"><i class="ws-hint up"></i><i class="ws-hint down"></i><i class="ws-hint left"></i><i class="ws-hint right"></i><div class="wh-knob"></div></div>
     <div class="wh-act"><button class="wh-emo" aria-label="Wave">👋</button><button class="wh-ice" aria-label="Restart the ice" hidden>↩️</button><button class="wh-a" aria-label="Talk / interact">A</button></div>`;
 }
 function mount() {
@@ -1218,11 +1257,7 @@ function mount() {
     L.querySelector('.wh-a').onclick = pressA;
     L.querySelector('.wh-emo').onclick = () => { const list = ['👋', '❤️', '😂', '🎉', '🫧']; const i = (list.indexOf(WG.emote?.e) + 1) % list.length; WG.emote = { e: Date.now() - (WG.emote?.at || 0) < 3500 ? list[i] : '👋', at: Date.now() }; if (typeof livePush === 'function') livePush(true); };
     L.querySelector('.wh-ice').onclick = () => { const ice = WREG[7]._ice; if (ice) teleport(ice.g.entry[0] + 1, ice.g.entry[1]); };
-    for (const b of L.querySelectorAll('.wh-pad button')) {
-      const d = b.dataset.d;
-      b.addEventListener('pointerdown', (e) => { e.preventDefault(); WG.path = []; WG.pendingTalk = null; WG.hold = d; WG.holdAt = performance.now(); tryStep(d); });
-      for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, () => { if (WG.hold === d) WG.hold = null; });
-    }
+    stickInit(L.querySelector('.wh-stick'));
     window.addEventListener('resize', () => { if (WG.layer && !WG.layer.hidden) resize(); });
   }
   WG.layer = L; L.hidden = false;
@@ -1248,7 +1283,7 @@ function unmount() {
   if (!WG.layer || WG.layer.hidden) return;
   savePos();
   WG.layer.hidden = true; document.body.classList.remove('world-mode');
-  cancelAnimationFrame(WG.raf); WG.raf = 0; WG.hold = null; WG.path = [];
+  cancelAnimationFrame(WG.raf); WG.raf = 0; WG.hold = null; WG.queue = null; WG.path = [];
   WG.layer.querySelectorAll('.wdlg, .wenc, .wgame, .wcard, .wmenu').forEach((x) => x.remove()); WG.lockN = 0; WG.epoch++;
 }
 function syncOthers() {
