@@ -114,14 +114,14 @@ function buildWorld() {
         const x = k % RW, y = (k / RW) | 0;
         const t = get(x, y);
         if (opt.trail) { if (L(x, y) < 1) { mark(x, y, 1); if (SOLID_T.has(t) || t === T.TALL) put(x, y, G); } continue; }
-        put(x, y, t === T.VOID ? T.CLOUD : t === T.CHECK ? T.CHECK : t === T.BRIDGE ? T.BRIDGE : T.PATH); mark(x, y, 2);
+        put(x, y, t === T.VOID || t === T.CLOUD ? T.CLOUD : t === T.CHECK ? T.CHECK : t === T.BRIDGE ? T.BRIDGE : T.PATH); mark(x, y, 2);
       }
     };
     const [hx, hy] = R.hub;
     put(hx, hy, R.plaza ? T.CHECK : T.PATH); mark(hx, hy, 2);
     for (const g of gates) { const [ix, iy] = gateInner(g.side); carve(ix, iy, (x, y) => x === hx && y === hy, { noVoid: !(R.chasm && g.side === 'W') }); }
     if (R.chasm) { const [ix, iy] = gateInner('W'); carve(ix, iy, (x, y) => L(x, y) === 2 && x > R.chasm[1], {}); }
-    if (iceInfo) { carve(iceInfo.entry[0] + 1, iceInfo.entry[1], (x, y) => L(x, y) === 2 && !(x === iceInfo.entry[0] + 1 && y === iceInfo.entry[1]), {}); carve(iceInfo.exit[0] - 1, iceInfo.exit[1], (x, y) => x === iceInfo.castleDoor[0] && y === iceInfo.castleDoor[1], {}); }
+    if (iceInfo) { const [ax, ay] = [iceInfo.entry[0] + 1, iceInfo.entry[1]], [bx, by] = [iceInfo.exit[0] - 1, iceInfo.exit[1]]; put(ax, ay, T.PATH); mark(ax, ay, 2); put(bx, by, T.PATH); mark(bx, by, 2); carve(ax, ay, (x, y) => L(x, y) === 2 && !(x === ax && y === ay) && !(x === iceInfo.entry[0] && y === iceInfo.entry[1]), {}); carve(iceInfo.exit[0] - 1, iceInfo.exit[1], (x, y) => x === iceInfo.castleDoor[0] && y === iceInfo.castleDoor[1], {}); }
     const toPath = (x, y, opt) => { if (L(x, y) === 2) return; mark(x, y, 1); carve(x, y, (a, b) => L(a, b) === 2, opt); };
     for (const b of R.buildings || []) if (b.kind !== 'ferris') { const dx = b.x + Math.floor(b.w / 2), dy = b.y + b.h; mark(dx, dy, 1); put(dx, dy, R.plaza ? T.CHECK : T.PATH); toPath(dx, dy, { noVoid: true }); }
     const people = [...(R.npcs || []), ...(R.specials || [])];
@@ -172,12 +172,14 @@ function buildIce(R, put, mark, rand, ox, oy) {
     if (ring) { if ((x === entry[0] && y === entry[1]) || (x === exit[0] && y === exit[1])) { put(x, y, T.SNOW); mark(x, y, 2); } else { put(x, y, T.PINE); mark(x, y, 3); } }
     else { put(x, y, T.ICE); mark(x, y, 3); }
   }
+  // The only way to the castle is across the ice (no walking around it)
+  for (let y = 1; y < 27; y++) if (y < iy - 1 || y > iy + ih) { put(ix - 1, y, T.PINE); mark(ix - 1, y, 3); }
   let rocks = [];
   for (let attempt = 0; attempt < 4000; attempt++) {
     rocks = [];
     for (let y = iy; y < iy + ih; y++) for (let x = ix; x < ix + iw; x++) if (rand() < 0.11) rocks.push([x, y]);
     const sol = iceSolve(R.ice, rocks, entry, exit);
-    if (sol && sol.length >= 6) break;
+    if (sol && sol.length >= 6 && iceSolve(R.ice, rocks, exit, entry)) break; // solvable both ways, so you can get back
   }
   for (const [x, y] of rocks) put(x, y, T.ROCK);
   const castle = (R.buildings || []).find((b) => b.kind === 'castle');
@@ -440,7 +442,7 @@ function draw() {
   if (!g || !p || !WG.pos) return;
   g.setTransform(WG.dpr, 0, 0, WG.dpr, 0, 0);
   const px = WG.pos.fx, py = WG.pos.fy;
-  const cam = { x: Math.max(0, Math.min(MW - WG.vw / s, px + 0.5 - WG.vw / s / 2)), y: Math.max(0, Math.min(MH - WG.vh / s, py + 0.5 - WG.vh / s / 2)) };
+  const cam = { x: Math.max(0, Math.min(MW - WG.vw / s, px + 0.5 - WG.vw / s / 2)), y: Math.max(-90 / s, Math.min(MH - (WG.vh - 170) / s, py + 0.5 - WG.vh / s / 2)) };
   WG.cam = cam;
   WG.litLighthouse = chDone(p, 2) || (p.ch === 2 && p.step >= 4);
   g.fillStyle = '#2b2b2b'; g.fillRect(0, 0, WG.vw, WG.vh);
@@ -558,7 +560,9 @@ function tryStep(dir) {
 }
 function bump(x, y, p) {
   const o = getWorld().occ.get(x + ',' + y);
-  if (Date.now() - (WG.bumpT || 0) > 600) { WG.bumpT = Date.now(); navigator.vibrate?.(10); }
+  if (Date.now() - (WG.bumpT || 0) < 600) return; // holding into a wall: react once, not every frame
+  WG.bumpT = Date.now(); navigator.vibrate?.(10);
+  if (getWorld().at(x, y) === T.CLOUD && !hasCloud(p)) { toast('☁️ The cloud bridge blew away! Maybe someone can call it back…'); return; }
   if (o && o.type === 'blocker' && objVisible(o, p)) { toast(BLOCKER_TEXT[o.kind] || 'The way is blocked.'); return; }
   const r = WG.roamers.find((q) => q.on && q.x === x && q.y === y);
   if (r) { encounter(r.sid, { roamer: r, shiny: r.shiny }); return; }
@@ -577,16 +581,19 @@ function update(dt) {
     r.fx += (r.x - r.fx) * Math.min(1, dt * 6); r.fy += (r.y - r.fy) * Math.min(1, dt * 6);
     if (now > r.next) { r.next = now + 900 + Math.random() * 1600; const [dx, dy] = Object.values(DIRS)[Math.floor(Math.random() * 4)]; const nx = r.x + dx, ny = r.y + dy; if (getWorld().at(nx, ny) === T.TALL && !(nx === WG.pos.x && ny === WG.pos.y) && !WG.roamers.some((q) => q !== r && q.x === nx && q.y === ny)) { r.x = nx; r.y = ny; } }
   }
+  let carry = 0; // time left over from the last step, so held walking never pauses on a tile
   if (WG.move) {
     const m = WG.move; m.t += dt;
     const k = Math.min(1, m.t / m.dur);
     WG.pos.fx = m.fx + (m.tx - m.fx) * k; WG.pos.fy = m.fy + (m.ty - m.fy) * k;
-    if (k >= 1) { WG.move = null; arrive(m.dir); }
-    return;
+    if (k < 1) return;
+    WG.move = null; arrive(m.dir);
+    carry = Math.min(0.05, m.t - m.dur);
+    if (WG.move) { WG.move.t = carry; return; } // still sliding on ice
   }
   WG.pos.fx = WG.pos.x; WG.pos.fy = WG.pos.y;
   if (WG.busy) return;
-  if (WG.path.length) { const d = WG.path.shift(); if (!tryStep(d)) { WG.path = []; WG.pendingTalk = null; } else if (!WG.path.length && WG.pendingTalk) { /* talk on arrival */ } return; }
+  if (WG.path.length) { const d = WG.path.shift(); if (!tryStep(d)) { WG.path = []; WG.pendingTalk = null; } else WG.move.t = carry; return; }
   if (WG.pendingTalk) {
     const o = WG.pendingTalk; WG.pendingTalk = null;
     if (Math.abs(o.x - WG.pos.x) + Math.abs(o.y - WG.pos.y) > 1) return; // it moved
@@ -594,7 +601,7 @@ function update(dt) {
     if (o.sid && o.on !== undefined) { if (o.on) encounter(o.sid, { roamer: o, shiny: o.shiny }); } else interact(o);
     return;
   }
-  if (WG.hold) tryStep(WG.hold);
+  if (WG.hold && performance.now() - (WG.holdAt || 0) > 230 && tryStep(WG.hold)) WG.move.t = carry; // a quick tap = one step
 }
 function faceTo(x, y) { const dx = x - WG.pos.x, dy = y - WG.pos.y; WG.pos.d = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : dy > 0 ? 'down' : 'up'; }
 function arrive(dir) {
@@ -603,7 +610,7 @@ function arrive(dir) {
   // Ice: keep sliding until something stops you
   if (w.at(x, y) === T.ICE) { const [dx, dy] = DIRS[dir]; if (!blockedAt(x + dx, y + dy, p)) { WG.path = []; tryStep(dir); return; } }
   const r = regionAt(x, y);
-  if (r !== WG.region) enterRegion(r, p);
+  if (r !== WG.region) enterRegion(r, p); else if (WREG[r]?.key === 'frost') updateHud();
   // Items you walk over
   const it = itemAt(x, y, p);
   if (it && it.group !== 'escapee') pickItem(it, p);
@@ -681,9 +688,10 @@ function onTap(e) {
     if (path) { WG.path = path; WG.pendingTalk = o; }
     return;
   }
-  if (blockedAt(tx, ty, p)) { const b = w.occ.get(tx + ',' + ty); if (b && b.type === 'blocker' && objVisible(b, p)) toast(BLOCKER_TEXT[b.kind]); return; }
+  const nope = () => WG.parts.push({ x: tx, y: ty + 0.6, text: '✖', t: performance.now() / 1000 });
+  if (blockedAt(tx, ty, p)) { const b = w.occ.get(tx + ',' + ty); if (b && b.type === 'blocker' && objVisible(b, p)) toast(BLOCKER_TEXT[b.kind]); else nope(); return; }
   const path = pathTo(tx, ty, false);
-  if (path) { WG.path = path; WG.pendingTalk = null; tapMark(tx, ty); }
+  if (path) { WG.path = path; WG.pendingTalk = null; tapMark(tx, ty); } else nope();
 }
 function tapMark(x, y) { WG.parts.push({ x, y: y + 0.6, text: '•', t: performance.now() / 1000 }); }
 function frontObj() {
@@ -1199,7 +1207,7 @@ function mount() {
     L.querySelector('.wh-ice').onclick = () => { const ice = WREG[7]._ice; if (ice) teleport(ice.g.entry[0] + 1, ice.g.entry[1]); };
     for (const b of L.querySelectorAll('.wh-pad button')) {
       const d = b.dataset.d;
-      b.addEventListener('pointerdown', (e) => { e.preventDefault(); WG.path = []; WG.pendingTalk = null; WG.hold = d; tryStep(d); });
+      b.addEventListener('pointerdown', (e) => { e.preventDefault(); WG.path = []; WG.pendingTalk = null; WG.hold = d; WG.holdAt = performance.now(); tryStep(d); });
       for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, () => { if (WG.hold === d) WG.hold = null; });
     }
     window.addEventListener('resize', () => { if (WG.layer && !WG.layer.hidden) resize(); });
@@ -1211,7 +1219,7 @@ function mount() {
   if (!WG.pos || WG.posFor !== me) {
     WG.posFor = me; WG.others = {};
     WG.pos = { x: p.x, y: p.y, fx: p.x, fy: p.y, d: p.d || 'down' };
-    if (blockedAt(p.x, p.y, p)) { const [sx, sy] = WREG[0].start; Object.assign(WG.pos, { x: sx, y: sy, fx: sx, fy: sy }); }
+    if (blockedAt(p.x, p.y, p)) { let f = null; for (let rr = 1; rr < 8 && !f; rr++) for (let dy = -rr; dy <= rr && !f; dy++) for (let dx = -rr; dx <= rr; dx++) if (!blockedAt(p.x + dx, p.y + dy, p)) { f = [p.x + dx, p.y + dy]; break; } const [sx, sy] = f || WREG[0].start; Object.assign(WG.pos, { x: sx, y: sy, fx: sx, fy: sy }); }
     WG.region = -1; WG.roamers = [];
   }
   resize();
@@ -1246,8 +1254,8 @@ function worldLive() {
 document.addEventListener('keydown', (e) => {
   if (!WG.layer || WG.layer.hidden || e.target.closest?.('input, textarea')) return;
   const k = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', w: 'up', s: 'down', a: 'left', d: 'right' }[e.key];
-  if (k) { e.preventDefault(); WG.path = []; WG.hold = k; tryStep(k); }
-  else if (e.key === ' ' || e.key === 'Enter') { if (e.target.closest?.('.wcard button, .wmenu button, .wgame button, .wenc button')) return; e.preventDefault(); const top = WG.layer.querySelector('.wdlg'); if (top) top.click(); else pressA(); }
+  if (k) { e.preventDefault(); if (e.repeat && WG.hold === k) return; WG.path = []; WG.hold = k; WG.holdAt = performance.now(); tryStep(k); }
+  else if (e.key === ' ' || e.key === 'Enter') { if (e.repeat) return; if (e.target.closest?.('.wcard button, .wmenu button, .wgame button, .wenc button')) return; e.preventDefault(); const top = WG.layer.querySelector('.wdlg'); if (top) top.click(); else pressA(); }
   else if (e.key === 'm' && !WG.busy) openMenu();
 });
 document.addEventListener('keyup', (e) => { const k = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', w: 'up', s: 'down', a: 'left', d: 'right' }[e.key]; if (k && WG.hold === k) WG.hold = null; });
@@ -1279,4 +1287,4 @@ if (typeof ULTS !== 'undefined' && !SQ.u_ranger) {
 }
 
 // Test hooks
-window.WorldDebug = { WG, getWorld, wMe, iceSolve, teleport: (x, y) => teleport(x, y), interact, encounter, objById, stepTarget, blockedAt, pathTo, regionAt, MW, MH, RW, RH, REG_POS, T, completeChapter };
+window.WorldDebug = { WG, getWorld, wMe, iceSolve, teleport: (x, y) => teleport(x, y), interact, encounter, miniGame, objById, stepTarget, blockedAt, pathTo, regionAt, MW, MH, RW, RH, REG_POS, T, completeChapter };
