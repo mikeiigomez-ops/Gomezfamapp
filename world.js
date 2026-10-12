@@ -625,8 +625,9 @@ function arrive(dir) {
   if (typeof liveSend === 'function' && Date.now() - (WG.liveT || 0) > (typeof Live !== 'undefined' && Live.fallback ? 3000 : 1000)) { WG.liveT = Date.now(); liveSend(); } else if (typeof livePush === 'function') livePush();
   if (Date.now() - WG.saveT > 3000) { WG.saveT = Date.now(); savePos(); }
   // Wild encounters in tall grass
-  if ((p.bubbles || 0) > 0 && w.at(x, y) === T.TALL && !WG.path.length && WG.steps - WG.lastEnc > 2 && Math.random() < 0.13) { WG.lastEnc = WG.steps; WG.hold = null; WG.path = []; setTimeout(() => encounter(wildSid(r), {}), 120); }
-  else if ((p.bubbles || 0) > 0 && w.at(x, y) === T.TALL && WG.path.length && WG.steps - WG.lastEnc > 3 && Math.random() < 0.08) { WG.lastEnc = WG.steps; WG.path = []; WG.pendingTalk = null; setTimeout(() => encounter(wildSid(r), {}), 120); }
+  const canEnc = (p.bubbles || 0) > 0 || !!curStep(p)?.catch;
+  if (canEnc && w.at(x, y) === T.TALL && !WG.path.length && WG.steps - WG.lastEnc > 2 && Math.random() < 0.13) { WG.lastEnc = WG.steps; WG.hold = null; WG.path = []; setTimeout(() => encounter(wildSid(r), {}), 120); }
+  else if (canEnc && w.at(x, y) === T.TALL && WG.path.length && WG.steps - WG.lastEnc > 3 && Math.random() < 0.08) { WG.lastEnc = WG.steps; WG.path = []; WG.pendingTalk = null; setTimeout(() => encounter(wildSid(r), {}), 120); }
 }
 function savePos() {
   const me = actor(); if (!me || !WG.pos || WG.posFor !== me) return;

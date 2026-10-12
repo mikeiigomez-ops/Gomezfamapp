@@ -256,7 +256,7 @@ const STORY = {
     { goal: 'Win the Squish Quiz booth', talk: 'quizzy', game: { type: 'quiz', title: 'Squish Quiz', qs: [
       Q('What do Rangers toss to catch wild squishies?', 'Squish Bubbles', 'Cookies', 'Socks'),
       Q('Who runs the lab in Puffington?', 'Professor Mallow', 'Captain Coral', 'Baker Bun'),
-      Q('What did Baker Bun need from the woods?', 'Sugarberries', 'Snowballs', 'Seashells')] }, lines: [['quizzy', 'Ding ding! Three questions, Ranger. Ready?']], win: [['quizzy', 'Perfect score! You really know your Squishvale!']], lose: [['quizzy', 'Not quite! Want to try again?']] },
+      Q('What did Baker Bun need from the woods?', 'Sugarberries', 'Snowballs', 'Seashells')] }, lines: [['quizzy', 'Ding ding! Three questions, Ranger. Ready?']], win: [['quizzy', 'You got them all! You really know your Squishvale!']], lose: [['quizzy', 'Not quite! Want to try again?']] },
     { goal: 'Claim the prize from Ringmaster Ruby', talk: 'ruby', lines: [
       ['ruby', 'Three for three! Here’s your grand prize, the Boardw—'],
       ['nobs5', 'GRAND PRIZE IS OURS! To the Ferris wheel, Nibs!'],
