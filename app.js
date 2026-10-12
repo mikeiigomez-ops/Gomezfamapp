@@ -220,6 +220,9 @@ window.addEventListener('pagehide', () => { if (saveTimer) flushSave(); else wri
 // iOS often closes a home-screen app in the background without pagehide: write a pending save as soon as it's hidden
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && saveTimer) flushSave(); });
 
+// Behave like an app, not a web page: iOS Safari ignores user-scalable=no, so block its pinch gestures directly
+for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
+document.addEventListener('touchmove', (e) => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
 // Ask the browser not to evict our data.
 if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
 

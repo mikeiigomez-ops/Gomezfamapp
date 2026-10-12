@@ -170,3 +170,5 @@ body.kid-mode .launch .tile:nth-child(3n) .tile-e { animation-delay: -1.8s; }
 .buy-preview .art-svg { width: 100%; height: auto; display: block; }
 /* Try-before-you-buy: the "Keep it" button sizes to its label (the bar's 38px icon-button width cut it off) */
 .hsel-bar.try .try-yes { width: auto; min-width: 0; }
+/* App, not a web page: no pinch or double-tap zoom (screens are designed to fit) */
+html, body { touch-action: pan-x pan-y; }

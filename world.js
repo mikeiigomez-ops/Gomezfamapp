@@ -1137,15 +1137,35 @@ function drawObj(g, o, p, s, cam, now) {
 /* =========================================================
    5 · Movement & input
    ========================================================= */
-const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0], upleft: [-1, -1], upright: [1, -1], downleft: [-1, 1], downright: [1, 1] };
+const DIAG = { upleft: 1, upright: 1, downleft: 1, downright: 1 };
 function tryStep(dir) {
   const p = wMe(); if (!p || WG.busy || WG.move) return false;
+  if (DIAG[dir]) return tryDiagonal(dir, p);
   WG.pos.d = dir;
   const [dx, dy] = DIRS[dir], nx = WG.pos.x + dx, ny = WG.pos.y + dy;
   if (blockedAt(nx, ny, p)) { worldBump(nx, ny, p); return false; }
   WG.move = { fx: WG.pos.x, fy: WG.pos.y, tx: nx, ty: ny, t: 0, dur: getWorld().at(nx, ny) === T.ICE ? 0.08 : 0.17, dir };
   WG.pos.x = nx; WG.pos.y = ny;
   return true;
+}
+// Diagonal steps: never cut a corner past a wall, and never on ice (the Slippy Slopes stay a straight-line puzzle).
+// When the diagonal is blocked, slide along whichever straight direction is open, like most top-down games.
+function tryDiagonal(dir, p) {
+  const [dx, dy] = DIRS[dir], x = WG.pos.x, y = WG.pos.y, w = getWorld();
+  const h = dx > 0 ? 'right' : 'left', v = dy > 0 ? 'down' : 'up';
+  const hOk = !blockedAt(x + dx, y, p), vOk = !blockedAt(x, y + dy, p);
+  const icy = w.at(x, y) === T.ICE || w.at(x + dx, y + dy) === T.ICE || w.at(x + dx, y) === T.ICE || w.at(x, y + dy) === T.ICE;
+  if (!icy && hOk && vOk && !blockedAt(x + dx, y + dy, p)) {
+    WG.pos.d = h; // sprites face left/right
+    WG.move = { fx: x, fy: y, tx: x + dx, ty: y + dy, t: 0, dur: 0.17 * 1.35, dir };
+    WG.pos.x = x + dx; WG.pos.y = y + dy;
+    return true;
+  }
+  // Prefer the axis the player is pushing harder on (last straight direction), then the other
+  const first = WG.lastAxis === 'v' ? [v, h] : [h, v];
+  for (const d of first) if (!blockedAt(x + DIRS[d][0], y + DIRS[d][1], p)) return tryStep(d);
+  return tryStep(first[0]); // both blocked: bump the first one
 }
 function worldBump(x, y, p) {
   const o = getWorld().occ.get(x + ',' + y);
@@ -1795,12 +1815,11 @@ function stickInit(el) {
     setKnob(dx * k, dy * k);
     let d = null;
     if (dist > rad * 0.2) {
-      const horiz = Math.abs(dx) > Math.abs(dy);
-      d = horiz ? (dx > 0 ? 'right' : 'left') : dy > 0 ? 'down' : 'up';
-      // Near a diagonal, keep going the way you were going (no zig-zag)
-      if (dir && d !== dir && Math.max(Math.abs(dx), Math.abs(dy)) < Math.min(Math.abs(dx), Math.abs(dy)) * 1.25 && (Math.abs(dx) > 1 || Math.abs(dy) > 1)) {
-        const keep = { left: dx < 0, right: dx > 0, up: dy < 0, down: dy > 0 }[dir]; if (keep) d = dir;
-      }
+      // 8 directions: each gets a 45° slice; stay in the current one until you're clearly past its edge (no flicker)
+      const ang = Math.atan2(dy, dx), SECT = ['right', 'downright', 'down', 'downleft', 'left', 'upleft', 'up', 'upright'];
+      d = SECT[((Math.round(ang / (Math.PI / 4)) % 8) + 8) % 8];
+      if (dir && d !== dir) { const i = SECT.indexOf(dir), diff = Math.abs(((ang - i * Math.PI / 4) + 3 * Math.PI) % (2 * Math.PI) - Math.PI); if (diff < Math.PI / 8 + 0.14) d = dir; }
+      WG.lastAxis = Math.abs(dy) > Math.abs(dx) ? 'v' : 'h';
     }
     el.classList.toggle('on', !!d);
     if (d === dir) return;
@@ -1888,14 +1907,22 @@ function worldLive() {
   if (!WG.pos || !WG.layer || WG.layer.hidden) return null;
   return { x: WG.pos.x, y: WG.pos.y, d: WG.pos.d, ...(WG.emote && Date.now() - WG.emote.at < 3500 ? { e: WG.emote.e, et: WG.emote.at } : {}) };
 }
+// Two arrow keys at once walk diagonally
+const WKEYS = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', w: 'up', s: 'down', a: 'left', d: 'right' };
+WG.keys = new Set();
+function keyDir() {
+  const K = WG.keys, v = K.has('up') && !K.has('down') ? 'up' : K.has('down') && !K.has('up') ? 'down' : '', h = K.has('left') && !K.has('right') ? 'left' : K.has('right') && !K.has('left') ? 'right' : '';
+  return v && h ? v + h : v || h || null;
+}
 document.addEventListener('keydown', (e) => {
   if (!WG.layer || WG.layer.hidden || e.target.closest?.('input, textarea')) return;
-  const k = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', w: 'up', s: 'down', a: 'left', d: 'right' }[e.key];
-  if (k) { e.preventDefault(); if (e.repeat && WG.hold === k) return; WG.path = []; WG.hold = k; WG.holdAt = performance.now(); tryStep(k); }
+  const k = WKEYS[e.key];
+  if (k) { e.preventDefault(); if (e.repeat) return; WG.keys.add(k); WG.lastAxis = k === 'up' || k === 'down' ? 'v' : 'h'; const d = keyDir(); if (!d) return; WG.path = []; WG.hold = d; WG.holdAt = performance.now(); if (!tryStep(d) && WG.move) WG.queue = d; }
   else if (e.key === ' ' || e.key === 'Enter') { if (e.repeat) return; if (e.target.closest?.('.wcard button, .wmenu button, .wgame button, .wenc button')) return; e.preventDefault(); const top = WG.layer.querySelector('.wdlg'); if (top) top.click(); else pressA(); }
   else if (e.key === 'm' && !WG.busy) openMenu();
 });
-document.addEventListener('keyup', (e) => { const k = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', w: 'up', s: 'down', a: 'left', d: 'right' }[e.key]; if (k && WG.hold === k) WG.hold = null; });
+document.addEventListener('keyup', (e) => { const k = WKEYS[e.key]; if (!k) return; WG.keys.delete(k); WG.hold = WG.keys.size ? keyDir() : null; });
+window.addEventListener('blur', () => { WG.keys.clear(); WG.hold = null; });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && WG.layer && !WG.layer.hidden) savePos(); });
 
 /* ---------- App wiring ---------- */
@@ -1924,6 +1951,6 @@ if (typeof ULTS !== 'undefined' && !SQ.u_ranger) {
 }
 
 // Test hooks
-window.WorldDebug = { WG, getWorld, wMe, iceSolve, teleport: (x, y) => teleport(x, y), interact, encounter, miniGame, objById, stepTarget, blockedAt, pathTo, regionAt, MW, MH, RW, RH, REG_POS, T, completeChapter };
+window.WorldDebug = { WG, getWorld, wMe, iceSolve, teleport: (x, y) => teleport(x, y), interact, encounter, miniGame, objById, stepTarget, tryStep, blockedAt, pathTo, regionAt, MW, MH, RW, RH, REG_POS, T, completeChapter };
 // sync.js drew the first screen before this file registered the world route: draw it again if we opened on #world.
 if (currentRoute().name === 'world') render();
