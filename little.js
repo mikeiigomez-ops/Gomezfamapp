@@ -172,7 +172,7 @@ applyKidChrome = (() => {
       if (bar.dataset.kidLayout !== want) {
         const tabs = isSimple(id)
           ? [['kid', '🏠', 'Home'], ['chores', '🧹', 'Jobs'], ['routines', '🌅', 'Routine'], ['treats', '🎁', 'Treats'], ['wishes', '💖', 'Wishes']]
-          : [['kid', '🏠', 'Home'], ['chores', '🧹', 'Chores'], ['routines', '🌅', 'Routines'], moneyMode(id) === 'none' ? ['treats', '🎁', 'Rewards'] : ['piggy', '🐷', 'Piggy'], ['wishes', '🎁', 'Wishes']];
+          : [['kid', '🏠', 'Home'], ['chores', '🧹', 'Chores'], ['play', '🎮', 'Play'], moneyMode(id) === 'none' ? ['treats', '🎁', 'Rewards'] : ['piggy', '🐷', 'Piggy'], ['wishes', '🎁', 'Wishes']];
         bar.innerHTML = `<span class="tab-ink" aria-hidden="true"></span>${tabs.map(([to, e, l]) => `<button data-action="go" data-to="${to}" data-tab="${to}"><span class="kt">${e}</span><span>${l}</span></button>`).join('')}`;
         bar.dataset.kidLayout = want;
       }
@@ -268,7 +268,7 @@ function onePiggyMoney(id, sign) {
 // Kids hub: a settings button + "Simple" tag on each kid card
 const _kidsView = views.kids;
 views.kids = () => _kidsView()
-  .replace(/<button class="btn secondary" data-action="kid-mode-on" data-id="([^"]+)">/g, '<button class="btn secondary" data-action="kid-settings" data-id="$1">⚙️ Settings</button><button class="btn secondary" data-action="kid-mode-on" data-id="$1">')
+  .replace(/<button class="btn secondary" data-action="kid-mode-on" data-id="([^"]+)">/g, '<button class="btn secondary" data-action="kid-settings" data-id="$1">⚙️ Kid settings</button><button class="btn secondary" data-action="kid-mode-on" data-id="$1">')
   .replace(/(<div class="kid-av sm">[^<]*<\/div>\s*<div style="flex:1;min-width:0"><b style="font-size:18px">)([^<]*)<\/b>/g, (all, pre, name) => {
     const k = kids().find((x) => esc(x.name) === name);
     return `${pre}${name}</b>${k && k.simple ? ' <span class="pill accent">Simple</span>' : ''}`;

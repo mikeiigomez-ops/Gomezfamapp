@@ -1,7 +1,7 @@
 // Network-first service worker: always tries for the latest version,
 // falls back to the cached copy when offline.
-const CACHE = 'gomezfam-v50';
-const SHELL = ['./', './index.html', './styles.css', './theme.css', './screen.css', './ui.js', './art.js', './art-icons.js', './art-house.js', './art-rewards.js', './app.js', './extras.js', './plus.js', './kids.js', './little.js', './family.js', './together.js', './games.js', './gems.js', './squish.js', './collect.js', './friends.js', './avatar.js', './house.js', './polish.js', './screen.js', './sync.js', './live.js', './world-data.js', './world.js', './world.css', './motion.css', './motion.js', './manifest.webmanifest', './icons/apple-touch-icon.png', './icons/icon-192.png', './icons/icon-512.png', './vendor/qrcode.min.js', './vendor/jsQR.js'];
+const CACHE = 'gomezfam-v51';
+const SHELL = ['./', './index.html', './styles.css', './theme.css', './screen.css', './ui.js', './art.js', './art-icons.js', './art-house.js', './art-rewards.js', './app.js', './extras.js', './plus.js', './kids.js', './little.js', './family.js', './together.js', './games.js', './gems.js', './squish.js', './collect.js', './friends.js', './avatar.js', './house.js', './polish.js', './screen.js', './sync.js', './live.js', './world-data.js', './world.js', './nav.js', './world.css', './motion.css', './motion.js', './manifest.webmanifest', './icons/apple-touch-icon.png', './icons/icon-192.png', './icons/icon-512.png', './vendor/qrcode.min.js', './vendor/jsQR.js'];
 
 self.addEventListener('install', (e) => {
   // Skip the browser's 10-minute HTTP cache so an update shows up on the next open.

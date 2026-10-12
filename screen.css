@@ -374,3 +374,34 @@ body.paged .fab { bottom: calc(var(--barspace) - 10px); width: 56px; height: 56p
 /* 11 — Small fixes: kid-mode lone bell stays round; toasts stay on one line */
 body.kid-mode .topbar .icon-btn.bell { border-radius: 50% !important; padding: 0; margin-right: 0; }
 .toast { width: max-content; }   /* shrink-to-fit at left:50% was forcing a 2-line wrap; max-width still caps it */
+
+/* ---------- Section chips (nav.js): siblings in Plan, Money and Family are one tap apart ---------- */
+.subnav {
+  flex: none; display: flex; gap: 8px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  padding: 0 max(16px, calc((100% - var(--rail) - var(--maxw)) / 2)) 6px;
+  padding-left: calc(var(--rail) + max(16px, calc((100% - var(--rail) - var(--maxw)) / 2)));
+  scroll-padding-inline: 16px;
+}
+.subnav::-webkit-scrollbar { display: none; }
+.subnav .chip {
+  flex: none; position: relative; height: 34px; padding: 0 14px; border-radius: 17px;
+  font-size: 14.5px; font-weight: 700; letter-spacing: -.01em; white-space: nowrap; color: var(--text);
+  background: var(--surface); box-shadow: inset 0 0 0 1px var(--line), 0 1px 2px rgba(40, 30, 20, .05);
+  transition: background .18s, color .18s, transform .12s;
+}
+.subnav .chip:active { transform: scale(.95); }
+.subnav .chip.on { background: var(--accent); color: #fff; box-shadow: 0 4px 12px color-mix(in oklab, var(--accent) 35%, transparent); }
+.subnav .chip i {
+  display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; margin-left: 6px; border-radius: 9px;
+  font: 800 11px/1 system-ui; font-style: normal; background: var(--bad, #e5484d); color: #fff; vertical-align: 1px;
+}
+.subnav .chip.on i { background: #fff; color: var(--accent); }
+body.has-subnav main#view { padding-top: 0; }
+body.game-mode .subnav, body.store-mode .subnav, body.wrapped-mode .subnav, body.house-editing .subnav { display: none; }
+/* Settings lives on Home (top right), not on every screen */
+body:not([data-route="home"]) .topbar [data-to="settings"] { display: none; }
+.home-hi[data-action] { cursor: pointer; }
+.home-hi[data-action]:active { transform: scale(.985); transition: transform .12s; }
+.hh-more { position: absolute; top: 12px; right: 14px; z-index: 1; padding: 5px 11px; border-radius: 14px; font-size: 13px; font-weight: 800; background: rgba(255, 255, 255, .2); color: #fff; }
+/* Month grid: rows shrink on short screens so the whole month fits under the section chips */
+@media (max-width: 999px) and (min-height: 501px) { .cal-day { aspect-ratio: auto; height: clamp(34px, calc((100dvh - 440px) / 6), calc((100vw - 48px) / 7)); } }

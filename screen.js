@@ -335,18 +335,23 @@ views.home = () => {
     left != null ? `💳 ${money(left, { maximumFractionDigits: 0 })} left` : '',
     dinner ? `🍽️ ${esc(dinner)}` : '',
   ].filter(Boolean);
+  const todos = state.todos.filter((x) => !x.done).length;
+  const poll = me && state.board.find((x) => x.type === 'poll' && !x.closed && !x.votes?.[me]);
+  // Today's shortcuts: each tile says what needs doing; the tabs below hold everything else
   const tiles = [
-    { to: 'today', e: '☀️', label: 'My day', sub: evs.length ? `${evs.length} event${evs.length > 1 ? 's' : ''}` : 'Overview', color: '#f59e0b' },
+    { to: 'calendar', e: '📅', label: 'Calendar', sub: evs.length ? `${evs.length} today` : 'Nothing today', color: '#f59e0b' },
     { to: 'chores', e: '🧹', label: 'Chores', sub: choresDue ? `${choresDue} to do` : 'All done ✓', color: '#3b82f6' },
     { to: 'meals', e: '🍽️', label: 'Meals', sub: dinner ? 'Planned' : 'Plan dinner', color: '#ef4444' },
+    { to: 'shop', e: '🛒', label: 'Groceries', sub: listN ? `${listN} on list` : 'List', color: '#84cc16' },
     { to: 'budget', e: '🧾', label: 'Bills', sub: billsDue ? `${billsDue} due soon` : 'All paid', color: '#10b981', attrs: 'data-btab="bills"', alert: billsDue > 0 },
     { to: 'chat', e: '💬', label: 'Chat', sub: unread ? `${unread} new` : 'Family', color: '#8b5cf6', badge: unread || '' },
+    { to: 'todos', e: '✅', label: 'To-dos', sub: todos ? `${todos} open` : 'Shared list', color: '#06b6d4' },
     { to: 'kids', e: '🧒', label: 'Kids', sub: kids().length ? `${kids().length} kid${kids().length > 1 ? 's' : ''}` : 'Set up', color: '#ec4899' },
-    { to: 'play', e: '🎮', label: 'Play', sub: turns ? 'Your turn!' : 'Games & collecting', color: '#0ea5e9', badge: turns || '' },
-    { to: 'shop', e: '🛒', label: 'Groceries', sub: listN ? `${listN} on list` : 'List', color: '#84cc16' },
-    { to: 'more', e: '✨', label: 'More', sub: 'Everything else', color: '#64748b' },
+    turns ? { to: 'games', e: '🎮', label: 'Games', sub: 'Your turn!', color: '#0ea5e9', badge: turns }
+      : { to: 'board', e: '📌', label: 'Fridge', sub: poll ? 'Vote!' : 'Notes & polls', color: '#ef4444', badge: poll ? '!' : '' },
   ];
-  return `<section class="home-hi">
+  return `<section class="home-hi" data-action="go" data-to="today" role="button" tabindex="0" aria-label="See my whole day">
+      <span class="hh-more" aria-hidden="true">My day ›</span>
       <div class="hh-text"><div class="hh-greet">${greet}${name ? `, ${esc(name)}` : ''}</div>
       <div class="hh-date">${fmtDate(t, { weekday: 'long', month: 'long', day: 'numeric' })}</div></div>
       <div class="hh-facts">${facts.map((f) => `<span>${f}</span>`).join('')}</div>
@@ -405,7 +410,6 @@ views.kid = () => {
   const rsLeft = rs.filter((r) => !routineComplete(r)).length;
   const evs = eventsOn(today()).filter((e) => e.kind === 'event' && (!e.who?.id || e.who.id === id) || e.kind === 'birthday');
   const unread = state.chat.filter((x) => x.at > (seen().chat || 0) && x.who !== id).length;
-  const turns = typeof myTurnGames === 'function' ? myTurnGames().length : 0;
   const poll = state.board.find((b) => b.type === 'poll' && !b.closed && !b.votes?.[id]);
   const n = new Set(myItems(id).map((i) => i.sid)).size;
   const free = state.squish.free[id] !== today() || sqBankOf(id) > 0;
@@ -419,20 +423,15 @@ views.kid = () => {
     rs.length ? { to: 'routines', e: '🌅', label: 'Routines', sub: rsLeft ? `${rsLeft} to finish` : 'Done ✓', color: '#f59e0b' } : null,
     { to: 'squishies', e: '🧸', label: 'Squishies', sub: free ? '🎁 Free box!' : `${n} collected`, color: '#ec4899', badge: free ? '!' : '' },
     { to: 'house', e: '🏡', label: 'Dream House', sub: h ? `${h.rooms.length} room${h.rooms.length > 1 ? 's' : ''}` : 'Move in!', color: '#8b5cf6' },
-    { to: 'games', e: '🎮', label: 'Games', sub: turns ? 'Your turn!' : 'Play', color: '#0ea5e9', badge: turns || '' },
     { to: 'chat', e: '💬', label: 'Chat', sub: unread ? `${unread} new` : 'Family', color: '#10b981', badge: unread || '' },
     fr ? { to: 'friends', e: '👯', label: 'Friends', sub: frNew ? `${frNew} new` : 'Trade & chat', color: '#f43f5e', badge: frNew || '' } : null,
-    { to: 'gems', e: GEM, label: 'Gems', sub: `${gemBalance(id)} game gems`, color: '#7c3aed' },
-    { to: 'chores', e: '🏆', label: 'Rewards', sub: `${pointsBalance(id)} points`, color: '#eab308', attrs: 'data-ctab="rewards"' },
     moneyMode(id) !== 'none' ? { to: 'piggy', e: '🐷', label: 'Piggy bank', sub: money(jarTotal(id, 'save') + jarTotal(id, 'spend') + jarTotal(id, 'give'), { maximumFractionDigits: 0 }), color: '#e85d8a' } : null,
     { to: 'checkin', e: esc(checkinOf(id)?.mood || '😊'), label: 'Check-in', sub: checkinOf(id) ? 'Done ✓' : 'How are you?', color: '#f97316' },
     { act: 'kudos-new', e: '🙌', label: 'High-five', sub: 'Cheer someone', color: '#14b8a6' },
     { to: 'wishes', e: '🎁', label: 'My wishes', sub: `${state.wishes.filter((w) => w.memberId === id).length}`, color: '#a855f7' },
     { to: 'badges', e: '🏅', label: 'Badges', sub: `${badgesFor(id).filter((b) => b.got).length}`, color: '#22c55e' },
-    { to: 'todos', e: '✅', label: 'To-dos', sub: 'Family list', color: '#06b6d4' },
     { to: 'challenges', e: '🏁', label: 'Challenges', sub: 'Team goals', color: '#f59e0b' },
     { to: 'board', e: '📌', label: 'Fridge', sub: poll ? 'Vote!' : 'Notes', color: '#ef4444', badge: poll ? '!' : '' },
-    { to: 'packing', e: '🧳', label: 'Packing', sub: 'Trip lists', color: '#64748b' },
   ].filter(Boolean);
   return `${syncWait ? `<div class="card install-tip"><b>⏳ Almost ready!</b><div class="small" style="margin-top:4px">${Sync.status === 'unverified' ? `Ask a grown-up to tap the approval link sent to their email (${esc(Sync.cfg.kid.email)}).` : 'Connecting to your family…'}</div>${Sync.status === 'unverified' ? '<button class="btn block" style="margin-top:10px" data-action="sync-verified">A grown-up approved it</button>' : ''}</div>` : ''}
     <section class="kid-hi2" style="--c:${m.color}">
