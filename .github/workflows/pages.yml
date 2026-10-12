@@ -28,7 +28,16 @@ jobs:
       - name: Collect site files
         run: |
           mkdir _site
-          cp -r index.html styles.css theme.css screen.css app.js ui.js art.js art-icons.js art-house.js art-rewards.js extras.js plus.js kids.js little.js family.js together.js games.js gems.js squish.js collect.js friends.js avatar.js house.js polish.js screen.js sync.js live.js world-data.js world.js world.css motion.css motion.js sw.js manifest.webmanifest icons vendor _site/
+          # Every app file, so a new script can never be left off the site
+          cp -r *.html *.css *.js manifest.webmanifest icons vendor _site/
+      - name: Check every file the app loads is on the site
+        run: |
+          missing=0
+          for f in $(grep -oE '(src|href)="[^":#]+\.(js|css)"' index.html | sed -E 's/.*="([^"]+)"/\1/') $(grep -oE "'\./[^']+'" sw.js | tr -d "'" | sed 's#^\./##'); do
+            [ -z "$f" ] && continue
+            [ -e "_site/$f" ] || { echo "Missing on site: $f"; missing=1; }
+          done
+          exit $missing
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
