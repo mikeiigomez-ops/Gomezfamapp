@@ -177,7 +177,7 @@ function listen() {
   const { doc, onSnapshot } = Sync.fb.fs;
   Sync.ref = doc(Sync.fb.db, 'families', Sync.cfg.familyId);
   setStatus('connecting');
-  Sync.unsub = onSnapshot(Sync.ref, (snap) => {
+  Sync.unsub = onSnapshot(Sync.ref, async (snap) => {
     if (!snap.exists()) return setStatus('error', 'That family wasn\'t found. Check the invite code.');
     const d = snap.data();
     Sync.emails = d.emails || [];
@@ -185,9 +185,12 @@ function listen() {
     const kidEmails = Object.values(state.kidAccounts || {}).map((a) => String(a?.email || '').toLowerCase()).filter(Boolean);
     if (!Sync.cfg.kid && kidEmails.some((e) => !(d.kids || []).includes(e))) Sync.fb.fs.updateDoc(Sync.ref, { kids: Sync.fb.fs.arrayUnion(...kidEmails) }).catch(() => {});
     if (typeof liveFromDoc === 'function') liveFromDoc(d.live);
+    // Our own write echoing back (or a live-spot update): nothing new to read
+    if (!Sync.cfg.joining && Sync.base && (d.rev || 0) <= Sync.base.rev) { markSynced(); return; }
     let remote;
-    try { remote = JSON.parse(d.data); } catch { return setStatus('error', 'The shared data looks damaged.'); }
+    try { remote = await unpackData(d.data); } catch { return setStatus('error', 'The shared data looks damaged.'); }
     const rev = d.rev || 0;
+    if (!Sync.cfg.joining && Sync.base && rev <= Sync.base.rev) { markSynced(); return; } // a newer copy landed while unpacking
     if (Sync.cfg.joining) {
       state = adopt(remote);
       setBase(remote, rev);
@@ -210,6 +213,22 @@ function renderRemote() {
   if (!keep) return;
   const el = viewEl.querySelector(keep.sel);
   if (el && el !== document.activeElement) { el.value = keep.v; el.focus({ preventScroll: true }); try { el.setSelectionRange(keep.s, keep.e); } catch {} }
+}
+// Big families: the shared copy is gzip-compressed (about 7× smaller) so it stays under Firestore's 1 MB document limit.
+// Small families stay plain JSON, readable by any version of the app.
+const GZ = 'gz1:';
+async function packData(obj) {
+  const json = JSON.stringify(obj);
+  if (json.length < 300000 || typeof CompressionStream === 'undefined') return json;
+  const buf = new Uint8Array(await new Response(new Blob([json]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer());
+  let bin = ''; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+  return GZ + btoa(bin);
+}
+async function unpackData(str) {
+  if (!String(str).startsWith(GZ)) return JSON.parse(str);
+  const bin = atob(str.slice(GZ.length)), buf = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+  return JSON.parse(await new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'))).text());
 }
 function applyRemote(remote, rev) {
   if (Sync.base && rev <= Sync.base.rev) return; // our own write echoing back, or an older copy
@@ -243,12 +262,14 @@ async function push() {
       const snap = await tx.get(Sync.ref);
       if (!snap.exists()) throw Object.assign(new Error('missing'), { code: 'not-found' });
       const d = snap.data();
-      const server = JSON.parse(d.data);
+      const server = await unpackData(d.data);
       merged = mergeState(Sync.base.data, start, server);
       rev = d.rev || 0;
       if (same(merged, server)) return; // nothing new from this phone: skip the write
       rev += 1;
-      tx.update(Sync.ref, { data: JSON.stringify(merged), rev, updatedAt: serverTimestamp(), updatedBy: Sync.user.email });
+      const dataStr = await packData(merged);
+      if (new Blob([dataStr]).size > 1000000) throw Object.assign(new Error('Family data is over Firebase’s 1 MB limit'), { code: 'too-big' });
+      tx.update(Sync.ref, { data: dataStr, rev, updatedAt: serverTimestamp(), updatedBy: Sync.user.email });
     });
     setBase(merged, rev);
     // Fold in anything changed on this phone while the write was in flight.
@@ -281,6 +302,9 @@ function syncError(e) {
   if (code.includes('permission-denied')) {
     stopListening();
     setStatus('denied');
+  } else if (code === 'too-big') {
+    Sync.tooBigAt = Date.now();
+    setStatus('error', 'Shared data is too big to sync. Make a backup in Settings, then remove old history.');
   } else if (code.includes('unavailable') || !navigator.onLine) {
     setStatus('offline', 'Offline — changes are saved on this phone and will sync later.');
   } else {
@@ -289,7 +313,7 @@ function syncError(e) {
 }
 
 // Hooks called from app.js
-function syncAfterSave() { if (Sync.ref && Sync.base) schedulePush(); }
+function syncAfterSave() { if (Sync.ref && Sync.base && Date.now() - (Sync.tooBigAt || 0) > 60000) schedulePush(); } // don't re-merge every save while over the size limit
 function syncAfterSheet() {
   if (Sync.pending) { const p = Sync.pending; applyRemote(p.remote, p.rev); }
   if (Sync.dirty) schedulePush(300);

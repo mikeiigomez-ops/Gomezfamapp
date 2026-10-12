@@ -630,12 +630,14 @@ function arrive(dir) {
   if (canEnc && w.at(x, y) === T.TALL && !WG.path.length && WG.steps - WG.lastEnc > 2 && Math.random() < 0.13) { WG.lastEnc = WG.steps; WG.hold = null; WG.queue = null; WG.path = []; setTimeout(() => encounter(wildSid(r), {}), 120); }
   else if (canEnc && w.at(x, y) === T.TALL && WG.path.length && WG.steps - WG.lastEnc > 3 && Math.random() < 0.08) { WG.lastEnc = WG.steps; WG.path = []; WG.pendingTalk = null; setTimeout(() => encounter(wildSid(r), {}), 120); }
 }
+const WPOS_KEY = 'gomezfam:wpos';
+try { const x = JSON.parse(localStorage.getItem(WPOS_KEY) || 'null'); if (x && typeof x === 'object' && !Array.isArray(x)) state.settings.wpos = { ...(state.settings.wpos && typeof state.settings.wpos === 'object' ? state.settings.wpos : {}), ...x }; } catch {}
 const wposMap = () => { const w = state.settings.wpos; return w && typeof w === 'object' && !Array.isArray(w) ? w : (state.settings.wpos = {}); };
 function savePos() {
   const me = actor(); if (!me || !WG.pos || WG.posFor !== me) return;
   // Where you're standing is kept per phone (settings.wpos never syncs), so walking never rewrites the family document.
   wposMap()[me] = { x: WG.pos.x, y: WG.pos.y, d: WG.pos.d };
-  try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch {}
+  try { localStorage.setItem(WPOS_KEY, JSON.stringify(wposMap())); } catch {} // tiny key: walking never rewrites all the data
 }
 window.addEventListener('pagehide', () => { if (WG.layer && !WG.layer.hidden) savePos(); });
 function enterRegion(r, p) {

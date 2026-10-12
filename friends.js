@@ -804,7 +804,7 @@ afterRender = function () {
     chatBar.hidden = false;
     document.body.classList.add('chat-mode');
     seen().fchat = Date.now();
-    try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch {}
+    saveSeen();
     if (!ui.fchatRoute) scrollChat();
   }
   ui.fchatRoute = name === 'fchat';

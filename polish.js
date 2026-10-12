@@ -142,7 +142,7 @@ afterRender = function () {
   const r = currentRoute().name;
   // Remember when the collection was last looked at, so NEW badges clear next time.
   if (r === 'squishies' && seen().sqSeen == null) seen().sqSeen = Date.now();
-  if (r === 'squishies' && (ui.sqTab || 'mine') === 'mine' && (ui.sqSub || 'mine') === 'mine') { clearTimeout(ui.sqSeenT); ui.sqSeenT = setTimeout(() => { seen().sqSeen = Date.now(); try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch {} }, 1500); }
+  if (r === 'squishies' && (ui.sqTab || 'mine') === 'mine' && (ui.sqSub || 'mine') === 'mine') { clearTimeout(ui.sqSeenT); ui.sqSeenT = setTimeout(() => { seen().sqSeen = Date.now(); saveSeen(); }, 1500); }
 };
 // Inbox / other links that point at old tab names
 document.addEventListener('click', (e) => { const el = e.target.closest('[data-sq-tab]'); if (el) { ui.sqTab = el.dataset.sqTab; sqNormTab(); } }, true);

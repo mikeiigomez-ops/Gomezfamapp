@@ -16,17 +16,23 @@ const daysBetween = (a, b) => Math.round((parse(b) - parse(a)) / 864e5);
 const weekStart = (s) => addDays(s, -((parse(s).getDay() + 6) % 7)); // Monday
 const monthKey = (s) => s.slice(0, 7);
 const addMonths = (ym, n) => { const d = parse(ym + '-01'); d.setMonth(d.getMonth() + n); return iso(d).slice(0, 7); };
-const fmtDate = (s, opts = { weekday: 'short', month: 'short', day: 'numeric' }) => parse(s).toLocaleDateString(undefined, opts);
-const fmtMonth = (ym) => parse(ym + '-01').toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+// Building an Intl formatter is the slow part (~0.4 ms each on a phone), so each one is made once and reused.
+const _dtf = new Map();
+const dtf = (opts) => { const k = JSON.stringify(opts); let f = _dtf.get(k); if (!f) _dtf.set(k, (f = new Intl.DateTimeFormat(undefined, opts))); return f; };
+const fmtDate = (s, opts = { weekday: 'short', month: 'short', day: 'numeric' }) => dtf(opts).format(parse(s));
+const fmtMonth = (ym) => dtf({ month: 'long', year: 'numeric' }).format(parse(ym + '-01'));
 const fmtTime = (t) => {
   if (!t) return 'All day';
   const [h, m] = t.split(':').map(Number);
-  return new Date(2000, 0, 1, h, m).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  return dtf({ hour: 'numeric', minute: '2-digit' }).format(new Date(2000, 0, 1, h, m));
 };
 const relDays = (n) => n === 0 ? 'Today' : n === 1 ? 'Tomorrow' : n === -1 ? 'Yesterday' : n > 0 ? `in ${n} days` : `${-n} days ago`;
+const _nf = new Map();
 const money = (n, opts = {}) => {
   try {
-    return new Intl.NumberFormat(undefined, { style: 'currency', currency: state.settings.currency || 'USD', ...opts }).format(Math.round((Number(n) || 0) * 100) / 100 || 0); // never "-$0.00" from float dust
+    const cur = state.settings.currency || 'USD', k = cur + JSON.stringify(opts);
+    let f = _nf.get(k); if (!f) _nf.set(k, (f = new Intl.NumberFormat(undefined, { style: 'currency', currency: cur, ...opts })));
+    return f.format(Math.round((Number(n) || 0) * 100) / 100 || 0); // never "-$0.00" from float dust
   } catch { return '$' + (n || 0).toFixed(2); }
 };
 const sum = (arr, f) => arr.reduce((a, x) => a + (Number(f(x)) || 0), 0);
@@ -193,17 +199,26 @@ function migrate(s) {
 }
 
 let state = load();
-let saveTimer = null;
-function save() {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
-    catch (e) { toast('⚠️ Could not save — storage may be full'); }
-    if (typeof onLocalSave === 'function') onLocalSave();
-    if (typeof syncAfterSave === 'function') syncAfterSave();
-  }, 120);
+let saveTimer = null, storageFull = false;
+function writeState() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); if (storageFull) { storageFull = false; document.body.classList.remove('storage-full'); } return true; }
+  catch (e) {
+    try { localStorage.removeItem(STORE_KEY + ':broken'); localStorage.setItem(STORE_KEY, JSON.stringify(state)); return true; } catch {} // free the damaged-save copy, retry once
+    storageFull = true; document.body.classList.add('storage-full');
+    toast('⚠️ Phone storage is full — changes are NOT being saved. Settings → Back up now.');
+    return false;
+  }
 }
-window.addEventListener('pagehide', () => { clearTimeout(saveTimer); localStorage.setItem(STORE_KEY, JSON.stringify(state)); });
+function flushSave() {
+  clearTimeout(saveTimer); saveTimer = null;
+  try { if (typeof onLocalSave === 'function') onLocalSave(); } catch (e) { console.error(e); } // may add to the activity feed — saved just below
+  writeState();
+  if (typeof syncAfterSave === 'function') syncAfterSave();
+}
+function save() { clearTimeout(saveTimer); saveTimer = setTimeout(flushSave, 120); }
+window.addEventListener('pagehide', () => { if (saveTimer) flushSave(); else writeState(); });
+// iOS often closes a home-screen app in the background without pagehide: write a pending save as soon as it's hidden
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && saveTimer) flushSave(); });
 
 // Ask the browser not to evict our data.
 if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
@@ -2420,12 +2435,13 @@ const actions = {
     if (!confirm(`Erase ALL family data on this ${synced ? 'phone? Sync will be turned off on this phone first, so the family\'s shared data is NOT affected.' : 'device? This cannot be undone. (Make a backup first!)'}`)) return;
     if (synced) {
       Sync.ref = null; stopListening(); // stop pushing to the family before erasing
-      localStorage.removeItem('gomezfam:sync'); localStorage.removeItem('gomezfam:base');
+      localStorage.removeItem('gomezfam:sync'); localStorage.removeItem('gomezfam:base'); localStorage.removeItem('gomezfam:seen'); localStorage.removeItem('gomezfam:wpos');
       state = defaultState(); // pagehide re-saves `state`, so reset it too
       localStorage.setItem(STORE_KEY, JSON.stringify(state));
       location.reload();
       return;
     }
+    localStorage.removeItem('gomezfam:seen'); localStorage.removeItem('gomezfam:wpos');
     state = defaultState(); save(); applyTheme(); go('home'); toast('All data erased');
   },
 };
@@ -2502,7 +2518,8 @@ document.addEventListener('change', (e) => {
    ========================================================= */
 applyTheme();
 autopayCatchUp();
-render();
+// sync.js (the last feature script) draws the first screen; this is only a fallback.
+document.addEventListener('DOMContentLoaded', () => { if (lastRouteKey === null) render(); });
 
 // Refresh "today" if the app is left open past midnight / resumed from background.
 let lastDay = today();
@@ -2523,7 +2540,9 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   }).catch(() => {});
   let reloaded = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (!hadController || reloaded || !$('#sheet').hidden) return;
+    if (!hadController || reloaded) return;
+    // Mid-task (a form, typing, a game)? Update the next time the app goes to the background instead
+    if (!$('#sheet').hidden || document.activeElement?.matches?.('input, textarea') || document.body.classList.contains('game-mode') || document.body.classList.contains('world-mode')) { document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && !reloaded) { reloaded = true; location.reload(); } }, { once: true }); return; }
     reloaded = true;
     location.reload();
   });

@@ -274,8 +274,7 @@ onLocalSave = function () {
     if (was != null && was !== b.amount && !b.varies) { (b.priceHistory ||= []).push({ date: today(), from: was, to: b.amount }); changed = true; }
   }
   billAmounts = new Map(state.budget.bills.map((b) => [b.id, b.amount]));
-  if (changed) { try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch {} }
-  _onLocalSave();
+  _onLocalSave(); // save() writes everything right after this
 };
 const _activityResync = activityResync;
 activityResync = function () { billAmounts = new Map(state.budget.bills.map((b) => [b.id, b.amount])); _activityResync(); };

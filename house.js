@@ -620,7 +620,7 @@ const _afterRenderH = afterRender;
 afterRender = function () {
   _afterRenderH();
   const r = currentRoute();
-  if (r.name === 'house' && (!r.param || r.param === actor())) { seen().houseNotes = Date.now(); try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch {} }
+  if (r.name === 'house' && (!r.param || r.param === actor())) { seen().houseNotes = Date.now(); saveSeen(); }
   if (r.name !== 'room') { ui.hEdit = null; ui.hSel = null; ui.hUndo = {}; ui.hTry = null; ui.hTrySurf = null; }
   document.body.classList.toggle('house-editing', r.name === 'room' && !!ui.hEdit);
   if (ui.hNew) setTimeout(() => { ui.hNew = null; }, 700);

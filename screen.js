@@ -85,6 +85,7 @@ function paginate() {
   // Opening a screen starts on its first page; redrawing the same screen keeps your place.
   if (pg.key !== key) { pg.key = key; for (const k of Object.keys(pg.page)) if (k === key || k.startsWith(key + ':')) delete pg.page[k]; }
   pgReset(viewEl);
+  pg.last = null;
   document.body.classList.remove('paged');
   ctl.hidden = true;
   if (!pgOn()) return;
@@ -137,13 +138,26 @@ function paginate() {
     <span class="pg-dots" role="status" aria-label="Page ${n + 1} of ${total}">${total <= 8 ? [...Array(total)].map((_, i) => `<i class="${i === n ? 'on' : ''}"></i>`).join('') : `<b>${n + 1}</b> of ${total}`}</span>
     <button data-action="pg" data-d="1" aria-label="Next page" ${n === total - 1 ? 'disabled' : ''}>›</button>`;
   ctl.dataset.total = total;
+  pg.last = { key, units, pages, per, spread, total };
+}
+// Turning a page reuses the split already measured: one style change instead of re-measuring every page.
+function pgShow(L, n) {
+  pgApply(viewEl, L.units, L.pages, L.per === 2 ? [n * 2, n * 2 + 1] : [n], L.spread);
+  const ctl = $('#pgCtl');
+  ctl.querySelector('[data-d="-1"]').disabled = n === 0;
+  ctl.querySelector('[data-d="1"]').disabled = n === L.total - 1;
+  const dots = ctl.querySelector('.pg-dots');
+  dots.setAttribute('aria-label', `Page ${n + 1} of ${L.total}`);
+  if (L.total <= 8) dots.querySelectorAll('i').forEach((i, k) => i.classList.toggle('on', k === n));
+  else dots.querySelector('b').textContent = n + 1;
 }
 function pgGo(d, anim = true) {
   const total = Number($('#pgCtl').dataset.total || 1);
   const n = Math.max(0, Math.min(total - 1, (pg.page[pg.key] || 0) + d));
   if (n === pg.page[pg.key]) { if (anim) bump(viewEl, d); return; }
   pg.page[pg.key] = n;
-  paginate();
+  const L = pg.last;
+  if (L && L.key === pg.key && L.units.every((u) => u.el.isConnected)) pgShow(L, n); else paginate();
   if (anim) slideIn(viewEl, d);
 }
 function slideIn(el, d) {

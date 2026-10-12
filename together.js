@@ -7,6 +7,9 @@ Object.assign(TITLES, { chat: 'Family Chat', kudos: 'High-fives', checkin: 'Chec
 const kidHere = () => typeof inKidMode === 'function' && inKidMode();
 const isGrownUp = () => !kidHere() && !(actor() && member(actor()).kid);
 const seen = () => (state.settings.seen ||= {});
+// "Last looked at" times are tiny and change on every visit, so they get their own key instead of rewriting all the data.
+const saveSeen = () => { try { localStorage.setItem('gomezfam:seen', JSON.stringify(seen())); } catch {} };
+try { const x = JSON.parse(localStorage.getItem('gomezfam:seen') || 'null'); if (x) for (const [k, v] of Object.entries(x)) { const s = seen(); if (!(typeof s[k] === 'number' && s[k] >= v)) s[k] = v; } } catch {}
 const memberIds = () => state.members.map((m) => m.id);
 const isMember = (id) => state.members.some((m) => m.id === id);
 function logAct(icon, text, to = '') {
@@ -448,7 +451,7 @@ function checkKudos() {
   const fresh = state.kudos.filter((k) => k.to === me && k.at > s.kudos && k.from !== me).sort((a, b) => a.at - b.at);
   if (!fresh.length) return;
   s.kudos = Math.max(...fresh.map((k) => k.at));
-  try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch {}
+  saveSeen();
   const k = fresh.at(-1);
   const stars = sum(fresh, (x) => Number(x.stars) || 0);
   setTimeout(() => {
@@ -626,7 +629,7 @@ afterRender = function () {
   document.body.classList.toggle('chat-mode', inChat);
   if (inChat) {
     seen().chat = Date.now();
-    try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch {}
+    saveSeen();
     if (chatInput.value !== (ui.chatDraft || '') && document.activeElement !== chatInput) chatInput.value = ui.chatDraft || '';
     if (!ui.chatRoute) ui.chatStick = undefined;
     if (ui.chatStick !== false) scrollChat();

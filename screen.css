@@ -264,3 +264,5 @@ body.house-editing .h-drawer-space { display: none; }
 .tile-badge { background: var(--bad); }
 body.paged .fab { bottom: calc(var(--tabbar-h) + var(--tab-gap) + 66px); }
 #view.pg-cols .card { -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+
+body.storage-full #app::before { content: '⚠️ Storage full — changes not saved'; position: fixed; top: var(--safe-top); left: 0; right: 0; z-index: 80; background: #b42318; color: #fff; text-align: center; font: 700 13px/28px system-ui; }

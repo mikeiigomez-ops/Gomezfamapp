@@ -76,7 +76,6 @@ function onLocalSave() {
   if (!out.length) return;
   const who = meId(), at = Date.now();
   state.activity = [...out.slice(0, 6).map((x) => ({ id: uid(), at, who, ...x })), ...(state.activity || [])].slice(0, 200);
-  try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch {}
 }
 // Automatic (autopay) changes shouldn't show up as someone's action.
 const _autopay = autopayCatchUp;
@@ -769,4 +768,4 @@ homeInsights = function () {
 // Siri/Shortcut links also arrive while the app is already open.
 window.addEventListener('hashchange', () => { if (location.hash.startsWith('#add=')) handleDeepLink(); });
 if (lockCfg()?.pin) showLock();
-if (!handleDeepLink()) render();
+handleDeepLink(); // sync.js draws the first screen

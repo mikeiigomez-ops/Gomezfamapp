@@ -1,7 +1,7 @@
 // Network-first service worker: always tries for the latest version,
 // falls back to the cached copy when offline.
-const CACHE = 'gomezfam-v41';
-const SHELL = ['./', './index.html', './styles.css', './theme.css', './screen.css', './ui.js', './app.js', './extras.js', './plus.js', './kids.js', './little.js', './family.js', './together.js', './games.js', './gems.js', './squish.js', './collect.js', './friends.js', './avatar.js', './house.js', './polish.js', './screen.js', './sync.js', './live.js', './world-data.js', './world.js', './world.css', './manifest.webmanifest', './icons/apple-touch-icon.png', './icons/icon-192.png', './icons/icon-512.png'];
+const CACHE = 'gomezfam-v42';
+const SHELL = ['./', './index.html', './styles.css', './theme.css', './screen.css', './ui.js', './app.js', './extras.js', './plus.js', './kids.js', './little.js', './family.js', './together.js', './games.js', './gems.js', './squish.js', './collect.js', './friends.js', './avatar.js', './house.js', './polish.js', './screen.js', './sync.js', './live.js', './world-data.js', './world.js', './world.css', './manifest.webmanifest', './icons/apple-touch-icon.png', './icons/icon-192.png', './icons/icon-512.png', './vendor/qrcode.min.js', './vendor/jsQR.js'];
 
 self.addEventListener('install', (e) => {
   // Skip the browser's 10-minute HTTP cache so an update shows up on the next open.
@@ -19,12 +19,15 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
-  e.respondWith(
-    fetch(req, { cache: 'no-cache' })
-      .then((res) => {
-        if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req, copy)); }
-        return res;
-      })
-      .catch(() => caches.match(req).then((hit) => hit || (req.mode === 'navigate' ? caches.match('./index.html') : undefined)))
-  );
+  const net = fetch(req, { cache: 'no-cache' }).then((res) => { if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req, copy)); } return res; });
+  const cached = () => caches.match(req).then((hit) => hit || (req.mode === 'navigate' ? caches.match('./index.html') : undefined));
+  e.respondWith(new Promise((resolve) => {
+    let done = false;
+    const finish = (r) => { if (!done && r) { done = true; resolve(r); } };
+    // A slow network never strands you: after 4s open from the cache and keep refreshing in the background
+    const timer = setTimeout(() => cached().then(finish), 4000);
+    net.then((r) => { clearTimeout(timer); finish(r); })
+      .catch(() => { clearTimeout(timer); cached().then((hit) => { if (!done) { done = true; resolve(hit || Response.error()); } }); });
+  }));
+  e.waitUntil(net.catch(() => {}));
 });
