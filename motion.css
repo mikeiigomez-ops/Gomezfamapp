@@ -168,3 +168,5 @@ body.kid-mode .launch .tile:nth-child(3n) .tile-e { animation-delay: -1.8s; }
 .h-cats .art-svg, .room-tabs .art-svg { display: block; width: 1.7em; height: 1.7em; margin: -.35em -.1em; overflow: visible; }
 .dh-label .art-svg { display: inline-block; width: 1.5em; height: 1.5em; vertical-align: -.45em; margin: -.3em 0; }
 .buy-preview .art-svg { width: 100%; height: auto; display: block; }
+/* Try-before-you-buy: the "Keep it" button sizes to its label (the bar's 38px icon-button width cut it off) */
+.hsel-bar.try .try-yes { width: auto; min-width: 0; }
