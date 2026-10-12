@@ -151,3 +151,8 @@ body.kid-mode .launch .tile:nth-child(3n) .tile-e { animation-delay: -1.8s; }
 .room.editing .hi.dragging .hii { transform: translateY(-6%) scale(1.1); }
 
 @media (prefers-reduced-motion: reduce) { .wenc { animation: wfadein .2s both !important; } }
+
+/* Our own art (art.js): drawings replace emoji inside icon chips */
+.has-art { font-size: 0 !important; line-height: 0; }
+.has-art .art-svg { width: 86%; height: 86%; display: block; overflow: visible; }
+.lt-e.has-art .art-svg, .toy-chip.has-art .art-svg { width: 92%; height: 92%; }
