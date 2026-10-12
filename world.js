@@ -217,14 +217,21 @@ const regionAt = (x, y) => { const cx = Math.floor(x / RW), cy = Math.floor(y / 
 function wMe() {
   const me = actor();
   if (!me) return null;
-  state.world ||= {};
-  const p = (state.world[me] ||= {});
+  if (!state.world || typeof state.world !== 'object') state.world = {};
+  let p = state.world[me]; if (!p || typeof p !== 'object' || Array.isArray(p)) p = state.world[me] = {};
   if (!p.ch) {
     const [sx, sy] = WREG[0].start;
     Object.assign(p, { x: sx, y: sy, d: 'down', ch: 1, step: 0, cnt: 0, flags: {}, items: {}, bubbles: 5, bDay: today(), visited: {}, done: [], guide: {}, sides: {}, intro: false });
   }
-  p.flags ||= {}; p.items ||= {}; p.visited ||= {}; p.done ||= []; p.guide ||= {}; p.sides ||= {};
-  if (p.bDay !== today()) { p.bubbles = (p.bubbles || 0) + 5; p.bDay = today(); }
+  // Repair old or damaged progress so the game can always continue
+  for (const k of ['flags', 'items', 'visited', 'guide', 'sides']) if (!p[k] || typeof p[k] !== 'object') p[k] = {};
+  if (!Array.isArray(p.done)) p.done = Object.values(p.done || {}).map(Number).filter((n) => n >= 1 && n <= 8);
+  if (typeof p.ch !== 'number' || !(p.ch >= 1 && p.ch <= 9)) p.ch = Math.min(9, Math.max(1, Math.floor(Number(p.ch)) || 1));
+  if (typeof p.step !== 'number' || !(p.step >= 0)) p.step = Math.max(0, Math.floor(Number(p.step)) || 0);
+  if (p.ch <= 8 && p.step >= STORY[p.ch].length) p.step = STORY[p.ch].length - 1; // story got shorter in an update: replay its last step
+  if (!Number.isInteger(p.x) || !Number.isInteger(p.y) || p.x < 0 || p.y < 0 || p.x >= MW || p.y >= MH) [p.x, p.y] = WREG[0].start;
+  if (typeof p.bubbles !== 'number' || !(p.bubbles >= 0)) p.bubbles = 5;
+  if (p.bDay !== today()) { p.bubbles += 5; p.bDay = today(); if (WG.layer && !WG.layer.hidden) setTimeout(() => { updateHud(); floatText('+5 🫧'); save(); }); }
   return p;
 }
 const chDone = (p, ch) => (p.done || []).includes(ch) || p.ch > ch;
@@ -615,13 +622,19 @@ function arrive(dir) {
   const it = itemAt(x, y, p);
   if (it && it.group !== 'escapee') pickItem(it, p);
   for (const z of w.objs) if (z.type === 'zone' && x >= z.x && y >= z.y && x < z.x + z.w && y < z.y + z.h) { const st = curStep(p); if (st && st.reach === z.id) advance(p); }
-  if (typeof liveSend === 'function' && Date.now() - (WG.liveT || 0) > 500) { WG.liveT = Date.now(); liveSend(); } else if (typeof livePush === 'function') livePush();
-  if (Date.now() - WG.saveT > 15000) { WG.saveT = Date.now(); savePos(); }
+  if (typeof liveSend === 'function' && Date.now() - (WG.liveT || 0) > (typeof Live !== 'undefined' && Live.fallback ? 3000 : 1000)) { WG.liveT = Date.now(); liveSend(); } else if (typeof livePush === 'function') livePush();
+  if (Date.now() - WG.saveT > 3000) { WG.saveT = Date.now(); savePos(); }
   // Wild encounters in tall grass
   if ((p.bubbles || 0) > 0 && w.at(x, y) === T.TALL && !WG.path.length && WG.steps - WG.lastEnc > 2 && Math.random() < 0.13) { WG.lastEnc = WG.steps; WG.hold = null; WG.path = []; setTimeout(() => encounter(wildSid(r), {}), 120); }
   else if ((p.bubbles || 0) > 0 && w.at(x, y) === T.TALL && WG.path.length && WG.steps - WG.lastEnc > 3 && Math.random() < 0.08) { WG.lastEnc = WG.steps; WG.path = []; WG.pendingTalk = null; setTimeout(() => encounter(wildSid(r), {}), 120); }
 }
-function savePos() { const p = wMe(); if (!p || !WG.pos) return; p.x = WG.pos.x; p.y = WG.pos.y; p.d = WG.pos.d; save(); }
+function savePos() {
+  const me = actor(); if (!me || !WG.pos || WG.posFor !== me) return;
+  // Where you're standing is kept per phone (settings.wpos never syncs), so walking never rewrites the family document.
+  (state.settings.wpos ||= {})[me] = { x: WG.pos.x, y: WG.pos.y, d: WG.pos.d };
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch {}
+}
+window.addEventListener('pagehide', () => { if (WG.layer && !WG.layer.hidden) savePos(); });
 function enterRegion(r, p) {
   WG.region = r;
   if (r < 0) return;
@@ -780,10 +793,9 @@ function advance(p) {
 }
 async function completeChapter(p) {
   const ch = p.ch, R = WREG[ch - 1];
-  if (!p.done.includes(ch)) p.done.push(ch);
+  if (!p.done.includes(ch)) { p.done.push(ch); p.bubbles = (p.bubbles || 0) + 5; }
   const gems = ch === 8 ? 100 : 25;
   gemLog(actor(), gems, `Squishvale: ${R.name} star ⭐`, 'bonus', 'world:ch' + ch);
-  p.bubbles = (p.bubbles || 0) + 5;
   p.ch = ch + 1; p.step = 0; p.cnt = 0;
   save(); updateHud();
   if (typeof logAct === 'function') logAct('⭐', `won back the ${R.name} Squish Star in Squishvale!`, 'world');
@@ -1217,9 +1229,12 @@ function mount() {
   if (!me) { L.hidden = true; document.body.classList.remove('world-mode'); return; }
   const p = wMe();
   if (!WG.pos || WG.posFor !== me) {
-    WG.posFor = me; WG.others = {};
-    WG.pos = { x: p.x, y: p.y, fx: p.x, fy: p.y, d: p.d || 'down' };
-    if (blockedAt(p.x, p.y, p)) { let f = null; for (let rr = 1; rr < 8 && !f; rr++) for (let dy = -rr; dy <= rr && !f; dy++) for (let dx = -rr; dx <= rr; dx++) if (!blockedAt(p.x + dx, p.y + dy, p)) { f = [p.x + dx, p.y + dy]; break; } const [sx, sy] = f || WREG[0].start; Object.assign(WG.pos, { x: sx, y: sy, fx: sx, fy: sy }); }
+    if (WG.pos && WG.posFor && isMember(WG.posFor)) (state.settings.wpos ||= {})[WG.posFor] = { x: WG.pos.x, y: WG.pos.y, d: WG.pos.d }; // switched person: remember where the last one stood
+    WG.posFor = me; WG.others = {}; WG.move = null; WG.path = []; WG.pendingTalk = null; WG.hold = null;
+    const sp = state.settings.wpos?.[me], ok = (v, max) => Number.isInteger(v) && v >= 0 && v < max, sx0 = ok(sp?.x, MW) && ok(sp?.y, MH) ? sp.x : p.x, sy0 = ok(sp?.x, MW) && ok(sp?.y, MH) ? sp.y : p.y;
+    WG.pos = { x: sx0, y: sy0, fx: sx0, fy: sy0, d: sp?.d || p.d || 'down' };
+    const bx = WG.pos.x, by = WG.pos.y;
+    if (blockedAt(bx, by, p)) { let f = null; for (let rr = 1; rr < 8 && !f; rr++) for (let dy = -rr; dy <= rr && !f; dy++) for (let dx = -rr; dx <= rr; dx++) if (!blockedAt(bx + dx, by + dy, p)) { f = [bx + dx, by + dy]; break; } const [sx, sy] = f || WREG[0].start; Object.assign(WG.pos, { x: sx, y: sy, fx: sx, fy: sy }); }
     WG.region = -1; WG.roamers = [];
   }
   resize();
@@ -1288,3 +1303,5 @@ if (typeof ULTS !== 'undefined' && !SQ.u_ranger) {
 
 // Test hooks
 window.WorldDebug = { WG, getWorld, wMe, iceSolve, teleport: (x, y) => teleport(x, y), interact, encounter, miniGame, objById, stepTarget, blockedAt, pathTo, regionAt, MW, MH, RW, RH, REG_POS, T, completeChapter };
+// sync.js drew the first screen before this file registered the world route: draw it again if we opened on #world.
+if (currentRoute().name === 'world') render();

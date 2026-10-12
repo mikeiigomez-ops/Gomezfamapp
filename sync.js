@@ -10,7 +10,7 @@
 const SYNC_KEY = 'gomezfam:sync'; // { config, familyId, joining }
 const BASE_KEY = 'gomezfam:base'; // { rev, data } — last server copy merged into this phone
 const FIREBASE_URL = 'https://www.gstatic.com/firebasejs/10.14.1/';
-const LOCAL_ONLY = ['theme', 'accent', 'welcomeDismissed', 'whatsNewSeen', 'weather', 'me', 'homeLayout', 'kidMode', 'meBeforeKid', 'seen']; // per-phone settings that never sync
+const LOCAL_ONLY = ['theme', 'accent', 'welcomeDismissed', 'whatsNewSeen', 'weather', 'me', 'homeLayout', 'kidMode', 'meBeforeKid', 'seen', 'wpos']; // per-phone settings that never sync
 const INVITE_PREFIX = 'GFAM1.';
 
 const readJSON = (k) => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } };
@@ -32,6 +32,23 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const isIdList = (v) => Array.isArray(v) && v.every((x) => isObj(x) && typeof x.id === 'string');
 
+// merge3, plus Squishvale story progress kept whole: if one person plays on two devices at once,
+// the further-along chapter/step wins as a unit (never a mix of both), and bubbles add up.
+function mergeState(base, local, remote) {
+  const out = merge3(base, local, remote);
+  const W = out && out.world, LW = local && local.world, RW_ = remote && remote.world, BW = (base && base.world) || {};
+  if (!isObj(W) || !isObj(LW) || !isObj(RW_)) return out;
+  for (const id of Object.keys(W)) {
+    const l = LW[id], r = RW_[id], b = BW[id];
+    if (!isObj(l) || !isObj(r) || same(l, b) || same(r, b) || W[id] === l || W[id] === r) continue;
+    const rank = (q) => (Number(q.ch) || 0) * 1000 + (Number(q.step) || 0);
+    const win = rank(l) >= rank(r) ? l : r, m = W[id];
+    for (const k of ['ch', 'step', 'cnt', 'items']) if (k in win) m[k] = JSON.parse(JSON.stringify(win[k]));
+    if (Array.isArray(l.done) && Array.isArray(r.done)) m.done = [...new Set([...l.done, ...r.done])].sort((a, c) => a - c);
+    if (isObj(b) && [l.bubbles, r.bubbles, b.bubbles].every((n) => typeof n === 'number') && l.bDay === r.bDay) m.bubbles = Math.max(0, l.bubbles + r.bubbles - b.bubbles);
+  }
+  return out;
+}
 function merge3(base, local, remote) {
   if (same(local, base)) return remote; // only the server changed (or nothing did)
   if (same(remote, base)) return local; // only this phone changed
@@ -174,7 +191,7 @@ function applyRemote(remote, rev) {
   if (sheetIsOpen() || Sync.pushing) { Sync.pending = { remote, rev }; return; }
   Sync.pending = null;
   const local = shared(state);
-  const merged = Sync.base ? merge3(Sync.base.data, local, remote) : remote;
+  const merged = Sync.base ? mergeState(Sync.base.data, local, remote) : remote;
   setBase(remote, rev);
   if (!same(merged, local)) { state = adopt(merged); persistLocal(); if (typeof activityResync === 'function') activityResync(); render(); }
   if (!same(merged, remote)) schedulePush();
@@ -200,14 +217,17 @@ async function push() {
       const snap = await tx.get(Sync.ref);
       if (!snap.exists()) throw Object.assign(new Error('missing'), { code: 'not-found' });
       const d = snap.data();
-      merged = merge3(Sync.base.data, start, JSON.parse(d.data));
-      rev = (d.rev || 0) + 1;
+      const server = JSON.parse(d.data);
+      merged = mergeState(Sync.base.data, start, server);
+      rev = d.rev || 0;
+      if (same(merged, server)) return; // nothing new from this phone: skip the write
+      rev += 1;
       tx.update(Sync.ref, { data: JSON.stringify(merged), rev, updatedAt: serverTimestamp(), updatedBy: Sync.user.email });
     });
     setBase(merged, rev);
     // Fold in anything changed on this phone while the write was in flight.
     const now = shared(state);
-    const next = merge3(start, now, merged);
+    const next = mergeState(start, now, merged);
     if (!same(next, now)) { state = adopt(next); persistLocal(); if (typeof activityResync === 'function') activityResync(); render(); }
     if (!same(next, merged)) Sync.dirty = true;
     markSynced();
