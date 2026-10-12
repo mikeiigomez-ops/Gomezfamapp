@@ -41,17 +41,19 @@ function artClay(id, parts, opts = {}) {
   return `<svg class="art-svg" style="stroke:none" viewBox="0 0 128 128" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><defs>${defs}</defs><g${opts.shadow !== false ? ` filter="url(#${k}s)"` : ''}>${body}</g></svg>`;
 }
 const artCache = new Map();
+let artInst = 0;
 function artSVG(id, opts = {}) {
   if (!ART[id]) return '';
   const key = id + (opts.shadow === false ? '|n' : '');
   let s = artCache.get(key);
   if (!s) { s = artClay(id, ART[id], opts); artCache.set(key, s); }
-  return s;
+  // Each copy gets its own gradient ids: a copy on a hidden page would otherwise blank out the others
+  return s.replace(/ar-/g, `a${++artInst}-`);
 }
 const artForEmoji = (e) => ART_EMOJI[String(e || '').trim()] || ART_EMOJI[String(e || '').trim().replace(/️/g, '')] || '';
 
 /* Swap emoji for drawings wherever the app shows an emoji as artwork. */
-const ART_SLOTS = '.tile-e, .lt-e, .toy-chip, .art-slot';
+const ART_SLOTS = '.tile-e, .lt-e, .toy-chip, .art-slot, .kt';
 function artSwap(root) {
   if (typeof document === 'undefined' || !root?.querySelectorAll) return;
   const els = root.matches?.(ART_SLOTS) ? [root, ...root.querySelectorAll(ART_SLOTS)] : root.querySelectorAll(ART_SLOTS);
