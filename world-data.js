@@ -124,7 +124,7 @@ const WREG = [
   },
   { key: 'peaks', ch: 6, name: 'Cloud Peaks', town: 'Skyview', title: 'Above the Clouds', emoji: '☁️',
     ground: 'GRASS', wall: 'ROCK', sets: ['dream'], hub: [24, 14], blocker: 'fog', chasm: [13, 17],
-    pal: { g1: '#cdebc4', g2: '#bfe2b6', tall: '#8fc7e8', tall2: '#b6dcf2', path: '#f1e7d0', path2: '#e2d6b8', leaf: '#6fbf8a', leaf2: '#97d8a8', water: '#7cc6f0', flower: ['#ffffff', '#ffc9de', '#d0bfff'] },
+    pal: { g1: '#c6e8b8', g2: '#b4ddaa', tall: '#8fc7e8', tall2: '#b6dcf2', path: '#f1e7d0', path2: '#e2d6b8', leaf: '#6fbf8a', leaf2: '#97d8a8', water: '#7cc6f0', flower: ['#ffffff', '#ffc9de', '#d0bfff'] },
     buildings: [{ kind: 'observatory', x: 24, y: 2, w: 5, h: 4, label: '' }],
     grass: 6, trees: 4, rocks: 7,
     npcs: [
