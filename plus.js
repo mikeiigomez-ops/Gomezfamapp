@@ -99,7 +99,7 @@ views.activity = () => {
 };
 actions['act-more'] = () => { ui.actN = (ui.actN || 60) + 60; render(); };
 function whoAmICard() {
-  return `<div class="card whoami"><h3>👋 Who's using this phone?</h3>
+  return `<div class="card whoami"><h3>👋 Who's using this ${matchMedia('(min-width: 1000px)').matches ? 'device' : 'phone'}?</h3>
     <div class="whoami-row">${state.members.map((m) => `<button data-action="set-me" data-id="${m.id}">${avatar(m)}<span>${esc(m.name)}</span></button>`).join('')}</div>
     <div class="small muted">So the family feed shows who did what. Only asked once per phone.</div></div>`;
 }

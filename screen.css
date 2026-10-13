@@ -476,3 +476,39 @@ body.sync-offline .sync-note .sn-err, body.sync-error .sync-note .sn-off { displ
   .segmented { margin-bottom: 10px; }
   .month-nav { margin-bottom: 8px; }
 }
+
+/* ---------- Grown-up look (body.pro): calm cards, line icons, lighter type. Kid Mode & Play keep the clay style ---------- */
+body.pro .launch .tile {
+  background: var(--surface); border-radius: 18px; gap: 6px;
+  box-shadow: 0 1px 2px rgba(30, 24, 20, .05), 0 6px 18px -12px rgba(30, 24, 20, .18), inset 0 0 0 1px var(--line);
+}
+body.pro .launch .tile b { font-weight: 650; font-size: 14.5px; }
+body.pro .launch .tile small { font-weight: 500; }
+body.pro .tile-e.has-line, body.pro .lt-e.has-line {
+  width: 46px; height: 46px; border-radius: 13px; font-size: 0; color: color-mix(in srgb, var(--t, var(--accent)) 82%, var(--text));
+  background: color-mix(in srgb, var(--t, var(--accent)) 13%, var(--surface));
+}
+.pro-i { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+body.pro .tile-e.has-line .pro-i { width: 25px; height: 25px; }
+body.pro .row > .avatar.has-line { color: var(--accent-ink, var(--accent)); background: var(--accent-soft); font-size: 0; }
+body.pro .row > .avatar.has-line .pro-i { width: 20px; height: 20px; }
+body.pro .insight .ii.has-line { font-size: 0; color: currentColor; }
+body.pro .insight .ii.has-line .pro-i { width: 18px; height: 18px; }
+body.pro .card.empty > .big.has-line { font-size: 0; color: var(--muted); }
+body.pro .card.empty > .big.has-line .pro-i { width: 40px; height: 40px; stroke-width: 1.5; }
+body.pro .mini-tile .emoji.has-line .pro-i { width: 24px; height: 24px; }
+body.pro .tile-badge { box-shadow: none; }
+@media (prefers-reduced-motion: no-preference) { body.pro .launch .tile:active { transform: scale(.97); } }
+
+/* ---------- Desktop Home: a real dashboard — Add anything across the top, your day on the left, shortcuts on the right ---------- */
+@media (min-width: 1000px) {
+  body[data-route="home"]:not(.kid-mode) main#view { grid-template-columns: minmax(320px, 400px) 1fr; column-gap: 24px; row-gap: 0; grid-auto-flow: row dense; }
+  body[data-route="home"]:not(.kid-mode) main#view > * { margin: 0 0 14px; }
+  body[data-route="home"]:not(.kid-mode) main#view > :not(.home-magic):not(.launch) { grid-column: 1; }
+  body[data-route="home"]:not(.kid-mode) main#view > .home-magic { grid-column: 1 / -1; grid-row: 1; }
+  body[data-route="home"]:not(.kid-mode) main#view > .launch { grid-column: 2; grid-row: 2 / span 8; align-self: start; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  body[data-route="home"]:not(.kid-mode) .home-hi { min-height: 0; padding: 26px 26px 22px; }
+  body[data-route="home"]:not(.kid-mode) .home-today { flex-direction: column; }
+  body[data-route="home"]:not(.kid-mode) .home-today > * { width: 100%; max-width: none; }
+  body.pro[data-route="home"] .launch .tile { aspect-ratio: auto; height: 150px; }
+}

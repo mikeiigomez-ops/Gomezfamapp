@@ -53,6 +53,8 @@ function paintNav() {
     if (typeof moveTabInk === 'function') moveTabInk();
   }
   if (!kid && (isChip(name) || name === h.to)) navLast[hid] = location.hash.slice(1) || name;
+  // Grown-up screens get the clean line-icon look; Kid Mode and Play keep the playful clay art
+  document.body.classList.toggle('pro', !kid && hid !== 'play');
   const show = !kid && isChip(name) && !document.body.classList.contains('game-mode');
   document.body.classList.toggle('has-subnav', show);
   subnavEl.hidden = !show;
