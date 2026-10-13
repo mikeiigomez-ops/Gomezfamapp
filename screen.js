@@ -11,7 +11,7 @@
    ========================================================= */
 // Screens that manage their own space (they never get the page controls).
 // Money screens are long reports you read top to bottom: they scroll instead of paging.
-const PG_SCROLL = new Set(['budget', 'goals', 'goal', 'debts', 'subs']);
+const PG_SCROLL = new Set(['budget', 'goals', 'goal', 'debts', 'subs', 'notify']);
 const PG_SKIP = new Set(['chat', 'fchat', 'room', 'word', 'memory', 'c4', 'trivia', 'wrapped', 'avatar']);
 // Wide screens show two pages side by side, except these, which have their own wide layout.
 const PG_NO_SPREAD = new Set(['home', 'kid', 'more', 'house', 'fhouse', 'town', 'squishy']);

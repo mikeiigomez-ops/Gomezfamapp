@@ -1,0 +1,48 @@
+# Phone notifications: every ~30 minutes, work out each person's summaries and alerts and send them (Web Push).
+# Does nothing until the secrets are added (see tools/notify/send.cjs and Settings → Notifications in the app).
+name: Notifications
+on:
+  schedule:
+    - cron: '7,37 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: notify
+  cancel-in-progress: false
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Check setup
+        id: chk
+        env:
+          FSA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          VPRIV: ${{ secrets.VAPID_PRIVATE_KEY }}
+        run: |
+          if [ -z "$FSA" ] || [ -z "$VPRIV" ]; then echo "Notifications aren't set up yet (secrets missing)"; echo "skip=1" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/checkout@v4
+        if: steps.chk.outputs.skip != '1'
+      - uses: actions/setup-node@v4
+        if: steps.chk.outputs.skip != '1'
+        with:
+          node-version: 20
+      - name: Cache browser
+        if: steps.chk.outputs.skip != '1'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-chromium-1.47.2
+      - name: Install
+        if: steps.chk.outputs.skip != '1'
+        run: |
+          npm install --prefix tools/notify --no-audit --no-fund
+          node tools/notify/node_modules/playwright/cli.js install --with-deps chromium
+      - name: Send
+        if: steps.chk.outputs.skip != '1'
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+        run: node tools/notify/send.cjs

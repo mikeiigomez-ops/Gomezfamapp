@@ -1,0 +1,10 @@
+{
+  "name": "gomezfam-notify",
+  "private": true,
+  "description": "Scheduled phone notifications for the Gomez Family Hub (run by .github/workflows/notify.yml)",
+  "dependencies": {
+    "firebase-admin": "12.7.0",
+    "playwright": "1.47.2",
+    "web-push": "3.6.7"
+  }
+}
