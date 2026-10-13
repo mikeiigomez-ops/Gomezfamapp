@@ -528,7 +528,7 @@ function catPace(ym) {
     const rate = usualE !== null ? usualE / dim : day ? every / day : 0;
     const likely = past ? all : all + rate * left + billLeft;
     const cap = lim || usual || 0;
-    const overB = !!lim && likely > lim + 0.5, overU = usual !== null && likely > usual * 1.05 + 5;
+    const overB = !!lim && likely > lim + Math.max(5, lim * 0.02), overU = usual !== null && likely > usual * 1.05 + 5;
     const level = (cap && all > cap + 0.5) || (overB && (usual === null || overU)) ? 'bad'
       : overB || (!lim && overU) || (cur && should !== null && all - should > Math.max(10, cap * 0.1)) ? 'warn' : '';
     return { key, spent: r(all), every: r(every), lim, usual: usual === null ? null : r(usual), should: should === null ? null : r(should), likely: r(likely), ahead: should === null ? null : r(all - should), cap, level };
