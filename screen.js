@@ -491,7 +491,7 @@ views.kid = () => {
   const todo = myChores.filter((c) => !choreDone(c)).length;
   const rs = state.routines.filter((r) => r.memberId === id);
   const rsLeft = rs.filter((r) => !routineComplete(r)).length;
-  const evs = eventsOn(today()).filter((e) => e.kind === 'event' && (!e.who?.id || e.who.id === id) || e.kind === 'birthday');
+  const evs = eventsOn(today()).filter((e) => e.kind === 'event' && (!e.who?.id || (e.whoIds || [e.who.id]).includes(id)) || e.kind === 'birthday');
   const unread = state.chat.filter((x) => x.at > (seen().chat || 0) && x.who !== id).length;
   const poll = state.board.find((b) => b.type === 'poll' && !b.closed && !b.votes?.[id]);
   const n = new Set(myItems(id).map((i) => i.sid)).size;

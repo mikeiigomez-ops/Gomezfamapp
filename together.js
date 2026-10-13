@@ -447,7 +447,7 @@ function inboxItems() {
 function inboxUtility(me) {
   const out = [], t = today(), now = new Date(), hm = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
   const soon = new Date(now.getTime() + 2 * 3600000), soonHm = soon.getDate() === now.getDate() ? `${pad(soon.getHours())}:${pad(soon.getMinutes())}` : '24:00';
-  for (const e of eventsOn(t).filter((e) => e.kind === 'event' && e.time && e.time >= hm && e.time <= soonHm && (!e.whoIds?.length || e.whoIds.includes(me))))
+  for (const e of eventsOn(t).filter((e) => e.kind === 'event' && e.time && e.time >= hm && e.time <= soonHm && (isGrownUp() || !e.whoIds?.length || e.whoIds.includes(me))))
     out.push({ n: 1, util: true, icon: '⏰', title: `${e.title} at ${fmtTime(e.time)}`, sub: ['Coming up in the next 2 hours', e.location ? `📍 ${e.location}` : ''].filter(Boolean).join(' · '), to: 'calendar' });
   for (const x of state.todos.filter((x) => !x.done && x.due && x.due <= t && (x.for === me || x.claimedBy === me)))
     out.push({ n: 1, util: true, icon: x.due < t ? '🔴' : '✅', title: x.text, sub: x.due < t ? `Overdue · was due ${fmtDate(x.due, { weekday: 'short', month: 'short', day: 'numeric' })}` : 'To-do due today', to: 'todos' });

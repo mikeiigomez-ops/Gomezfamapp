@@ -300,7 +300,7 @@ views.kid = () => {
   const myChores = state.chores.filter((c) => c.memberId === id || !c.memberId);
   const todo = myChores.filter((c) => !choreDone(c)), done = myChores.filter((c) => choreDone(c));
   const rs = state.routines.filter((r) => r.memberId === id);
-  const evs = eventsOn(today()).filter((e) => e.kind === 'event' && (!e.who?.id || e.who.id === id) || e.kind === 'birthday' || e.kind === 'holiday');
+  const evs = eventsOn(today()).filter((e) => e.kind === 'event' && (!e.who?.id || (e.whoIds || [e.who.id]).includes(id)) || e.kind === 'birthday' || e.kind === 'holiday');
   const poll = state.board.find((b) => b.type === 'poll' && !b.closed);
   const hr = new Date().getHours();
   const syncWait = typeof Sync !== 'undefined' && Sync.cfg?.kid && Sync.status !== 'synced' && Sync.status !== 'offline';

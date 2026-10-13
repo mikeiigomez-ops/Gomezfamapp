@@ -755,6 +755,7 @@ function magicEvent(text, memberId) {
     detail: [`${fmtDate(date, { weekday: 'long', month: 'short', day: 'numeric' })}${w.time ? ' · ' + fmtTime(w.time) : ''}`, w.repeat ? `🔁 ${REPEAT_LABEL[w.repeat]}` : '', whoLabel(memberId)].filter(Boolean).join(' · ') };
 }
 function magicTodo(text, memberId) {
+  text = text.replace(/^(?:(?:to-?\s?do|task)\s*[:\s]\s*|remind me to\s+)/i, '');
   const w = magicWhen(text, memberId);
   const repeat = ['daily', 'weekly', 'monthly'].includes(w.repeat) ? w.repeat : w.repeat === 'biweekly' ? 'weekly' : '';
   const title = cap((w.rest || text).trim());
