@@ -941,7 +941,7 @@ homeInsights = function () {
   }
   const s = safeToSpend();
   if (s) {
-    const c = `<button class="insight ${s.safe < 0 ? 'bad' : s.stale > 7 ? 'warn' : 'good'}" data-action="${s.stale > 7 ? 'edit-balance' : 'go'}" data-to="budget" data-btab="overview"><span class="ii">💳</span><b>${money(s.safe, { maximumFractionDigits: 0 })} safe to spend</b><small>${s.stale > 7 ? `Balance is ${s.stale} days old — tap to update` : `until payday ${dueLabel(s.pay.date)} · about ${money(Math.max(0, s.perDay), { maximumFractionDigits: 0 })}/day`}</small></button>`;
+    const c = `<button class="insight ${s.safe < 0 ? 'bad' : s.stale > 7 || s.tight ? 'warn' : 'good'}" data-action="${s.stale > 7 ? 'edit-balance' : 'go'}" data-to="budget" data-btab="overview"><span class="ii">${s.tight ? '⚠️' : '💳'}</span><b>${money(s.safe, { maximumFractionDigits: 0 })} safe to spend</b><small>${s.stale > 7 ? `Balance is ${s.stale} days old — tap to update` : s.tight ? `tight until payday ${dueLabel(s.tight.until)} · hold back ${money(s.tight.by, { maximumFractionDigits: 0 })}` : `${s.mode === 'month' ? 'this month' : `until payday ${dueLabel(s.pay.date)}`} · about ${money(Math.max(0, s.perDay), { maximumFractionDigits: 0 })}/day`}</small></button>`;
     html = html ? html.replace('<div class="insights">', '<div class="insights">' + c) : `<div class="insights">${c}</div>`;
   }
   const pts = forecastSeries();

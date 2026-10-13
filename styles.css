@@ -466,3 +466,4 @@ button.wk-day:active span { background: var(--accent-soft, var(--line)); }
 .home-today .home-ins.good { border-left-color: var(--good, #2f8a5b); }
 .home-today .home-ins.warn { border-left-color: #e0a800; }
 .home-today .home-ins.bad { border-left-color: var(--bad); }
+.mini-btn.on { background: var(--accent-fill, var(--accent)); color: #fff; }

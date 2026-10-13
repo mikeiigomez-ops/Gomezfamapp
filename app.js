@@ -815,34 +815,56 @@ function paycheckPlanCard() {
       <div class="bar" style="margin:2px 0 8px"><i class="${levelCls(p.amount ? p.out / p.amount : 1)}" style="width:${Math.min(100, p.amount ? (p.out / p.amount) * 100 : 100)}%"></i></div>`).join('')}
     <div class="small muted">${plan.some((p) => p.left < 0) ? '⚠️ A paycheck doesn’t cover the bills due before the next one — move a due date or hold money back from the paycheck before it.' : 'Each paycheck covers the bills due before the next one.'}</div></div>`;
 }
-// Safe to spend until the next payday: estimated balance − overdue bills − bills due before payday
-// − the everyday (category) budget still planned for those days. The one number Budget and Home both show.
-function safeToSpend() {
+// Safe to spend. 'month' (default) budgets the whole month across every paycheck in it:
+//   balance + paychecks still coming this month − overdue/unpaid bills due this month − everyday budget left.
+// 'pay' looks only until the next payday. In month mode we still check that first stretch: if the bills due before
+// the next paycheck need more than you have, `tight` says how much to hold back until then.
+function safeToSpend(mode = state.settings.stsMode || 'month') {
   const bal = balanceNow(), t = today();
-  const pay = recurringBetween(t, addDays(t, 60), 'income')[0];
-  if (bal == null || !pay) return null;
-  const overdue = overdueBills(t), bills = [...overdue, ...recurringBetween(t, addDays(pay.date, -1), 'bill').filter((x) => !isPaid(x.b, x.date))];
-  const owed = Math.round(sum(bills, (x) => x.amount) * 100) / 100, flex = flexUntil(pay.date, t);
-  const safe = Math.round((bal - owed - flex) * 100) / 100;
-  return { safe, bal, owed, flex, bills, overdue: overdue.length, pay, perDay: safe / Math.max(1, daysBetween(t, pay.date)), stale: daysBetween(state.settings.balanceDate || t, t) };
+  const pay = recurringBetween(t, addDays(t, 60), 'income').find((x) => !isPaid(x.b, x.date));
+  if (bal == null) return null;
+  const overdue = overdueBills(t);
+  const period = () => {
+    if (!pay) return null;
+    const bills = [...overdue, ...recurringBetween(t, addDays(pay.date, -1), 'bill').filter((x) => !isPaid(x.b, x.date))];
+    const owed = Math.round(sum(bills, (x) => x.amount) * 100) / 100, flex = flexUntil(pay.date, t);
+    return { safe: Math.round((bal - owed - flex) * 100) / 100, owed, flex, bills };
+  };
+  const base = { bal, overdue: overdue.length, pay, stale: daysBetween(state.settings.balanceDate || t, t) };
+  if (mode === 'pay') {
+    const p = period(); if (!p) return null;
+    return { ...base, ...p, mode, inc: 0, incs: [], perDay: p.safe / Math.max(1, daysBetween(t, pay.date)) };
+  }
+  const end = dayInMonth(31, monthKey(t));
+  const incs = recurringBetween(t, end, 'income').filter((x) => !isPaid(x.b, x.date));
+  const inc = Math.round(sum(incs, (x) => x.amount) * 100) / 100;
+  const bills = [...overdue, ...recurringBetween(t, end, 'bill').filter((x) => !isPaid(x.b, x.date))];
+  const owed = Math.round(sum(bills, (x) => x.amount) * 100) / 100, flex = flexUntil(addDays(end, 1), t);
+  const safe = Math.round((bal + inc - owed - flex) * 100) / 100;
+  const p = pay && pay.date <= end ? period() : null;
+  const tight = p && p.safe < 0 ? { by: -p.safe, until: pay.date } : null;
+  return { ...base, mode, safe, owed, flex, bills, inc, incs, end, tight, perDay: safe / Math.max(1, daysBetween(t, end) + 1) };
 }
 // Budget Overview hero: safe to spend with a tap-to-expand breakdown.
 function safeHero() {
-  const s = safeToSpend(), t = today();
+  const s = safeToSpend(), t = today(), month = (state.settings.stsMode || 'month') === 'month';
   if (!s) {
-    const pay = recurringBetween(t, addDays(t, 60), 'income')[0];
-    return pay ? `<div class="card sts-hero"><div class="stat-label">Safe to spend</div><p class="small muted" style="margin:4px 0 10px">Enter your checking balance to see what’s safe to spend until payday ${esc(fmtDate(pay.date, { weekday: 'short', month: 'short', day: 'numeric' }))}.</p><button class="btn secondary block" data-action="edit-balance">Enter checking balance</button></div>` : '';
+    return `<div class="card sts-hero"><div class="stat-label">Safe to spend</div><p class="small muted" style="margin:4px 0 10px">Enter your checking balance to see what’s safe to spend ${month ? 'for the rest of the month, counting every paycheck' : 'until payday'}.</p><button class="btn secondary block" data-action="edit-balance">Enter checking balance</button></div>`;
   }
-  const day = fmtDate(s.pay.date, { weekday: 'short', month: 'short', day: 'numeric' });
+  const when = s.mode === 'month' ? `through ${fmtDate(s.end, { month: 'short', day: 'numeric' })}` : `until payday ${fmtDate(s.pay.date, { weekday: 'short', month: 'short', day: 'numeric' })}`;
+  const mode = (m, l) => `<button class="mini-btn${(state.settings.stsMode || 'month') === m ? ' on' : ''}" data-action="sts-mode" data-m="${m}" aria-pressed="${(state.settings.stsMode || 'month') === m}">${l}</button>`;
   return `<details class="card sts-hero"${ui.stsOpen ? ' open' : ''}>
-    <summary data-action="sts-toggle"><div class="stat-label">Safe to spend</div>
+    <summary data-action="sts-toggle"><div class="stat-label">Safe to spend${s.mode === 'month' ? ' this month' : ''}</div>
       <div class="stat" style="color:${s.safe < 0 ? 'var(--bad)' : 'var(--good)'}">${moneyW(s.safe)}</div>
-      <div class="small muted">until payday ${esc(day)}${s.safe > 0 ? ` · about ${moneyW(s.perDay)}/day` : ''} · <span class="sts-more">${ui.stsOpen ? 'hide' : 'how?'}</span></div></summary>
+      <div class="small muted">${esc(when)}${s.safe > 0 ? ` · about ${moneyW(s.perDay)}/day` : ''} · <span class="sts-more">${ui.stsOpen ? 'hide' : 'how?'}</span></div>
+      ${s.tight ? `<div class="small" style="color:var(--bad);font-weight:650;margin-top:4px">⚠️ Tight until payday ${esc(fmtDate(s.tight.until, { weekday: 'short' }))}: bills due first need ${moneyW(s.tight.by)} more than you have</div>` : ''}</summary>
     <div class="kv"><span class="muted">Checking balance${(state.settings.balanceDate || t) < t ? ' (est. today)' : ''}</span><b>${moneyW(s.bal)}</b></div>
-    <div class="kv"><span class="muted">Bills before payday (${s.bills.length}${s.overdue ? `, ${s.overdue} overdue` : ''})</span><b>−${moneyW(s.owed)}</b></div>
+    ${s.mode === 'month' ? `<div class="kv"><span class="muted">Paychecks still coming (${s.incs.length})</span><b style="color:var(--good)">+${moneyW(s.inc)}</b></div>` : ''}
+    <div class="kv"><span class="muted">Bills ${s.mode === 'month' ? 'still due this month' : 'before payday'} (${s.bills.length}${s.overdue ? `, ${s.overdue} overdue` : ''})</span><b>−${moneyW(s.owed)}</b></div>
     <div class="kv"><span class="muted">Planned everyday spending</span><b>−${moneyW(s.flex)}</b></div>
     <div class="kv" style="border-top:1px solid var(--line);margin-top:6px;padding-top:8px"><span>Safe to spend</span><b>${moneyW(s.safe)}</b></div>
-    <div class="btn-row" style="margin:8px 0 0"><button class="mini-btn" data-action="edit-balance">Update balance</button><span class="small muted" style="align-self:center">Updated ${relDays(-s.stale).toLowerCase()}</span></div>
+    <div class="btn-row" style="margin:8px 0 0;flex-wrap:wrap"><span class="small muted" style="align-self:center">Plan by</span>${mode('month', 'Whole month')}${mode('pay', 'Next paycheck')}</div>
+    <div class="btn-row" style="margin:6px 0 0"><button class="mini-btn" data-action="edit-balance">Update balance</button><span class="small muted" style="align-self:center">Updated ${relDays(-s.stale).toLowerCase()}</span></div>
   </details>`;
 }
 // Yearly bills: how much to set aside each month so they're not a surprise.
@@ -917,7 +939,7 @@ function recurringView() {
   const pay = recurringBetween(t, addDays(t, 60), 'income')[0];
   let payCard = '';
   if (pay) {
-    const sts = safeToSpend();
+    const sts = safeToSpend('pay');
     const before = sts ? sts.bills : [...overdue, ...recurringBetween(t, addDays(pay.date, -1), 'bill').filter((x) => !isPaid(x.b, x.date))];
     const owed = sum(before, (x) => x.amount);
     const bal = sts?.bal;
@@ -2560,6 +2582,7 @@ const actions = {
   'recur-tab': (el) => { ui.recurTab = el.dataset.tab; render(); },
   'recur-day': (el) => recurDaySheet(el.dataset.date),
   'sts-toggle': () => { ui.stsOpen = !ui.stsOpen; render(); },
+  'sts-mode': (el, e) => { e?.stopPropagation?.(); state.settings.stsMode = el.dataset.m; save(); render(); },
   'tx-type': (el) => { const f = el.closest('.tx-type'); f.querySelector('input').value = el.dataset.v; f.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b === el)); },
   'import-csv': () => pickBankCsv(),
   'bulk-bills': () => bulkBillsForm(),
