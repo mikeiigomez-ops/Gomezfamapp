@@ -174,7 +174,10 @@ window.notifyPlan = notifyPlan;
 function deviceId() { let id = ''; try { id = localStorage.getItem('gomezfam:device') || ''; if (!id) { id = 'dev-' + uid(); localStorage.setItem('gomezfam:device', id); } } catch { id = 'dev-tmp'; } return id; }
 const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
-const mySub = () => (state.notify?.subs || []).find((s) => s.id === deviceId());
+// A device's records: older ones used the device id itself, newer ones "<device id>~<time>" (one record per subscription,
+// so a mark another phone made on an old subscription can't land on the new one). The newest is the live one.
+const npIsMine = (s) => s.id === deviceId() || s.dev === deviceId() || String(s.id).startsWith(deviceId() + '~');
+const mySub = () => (state.notify?.subs || []).filter(npIsMine).sort((a, b) => (b.at || 0) - (a.at || 0))[0];
 async function pushOn() {
   const me = actor();
   if (!me) { toast('Pick who uses this phone first (Settings)'); return; }
@@ -190,14 +193,14 @@ async function pushOn() {
     if (sub) { await sub.unsubscribe().catch(() => {}); sub = null; }
     sub ||= await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: unb64u(key) });
     const j = sub.toJSON(), cfg = notifyCfg();
-    cfg.subs = (cfg.subs || []).filter((s) => s.id !== deviceId() && s.endpoint !== j.endpoint);
-    cfg.subs.push({ id: deviceId(), key: key.slice(0, 16), member: me, kid: typeof inKidMode === 'function' && inKidMode(), endpoint: j.endpoint, keys: j.keys, tz: Intl.DateTimeFormat().resolvedOptions().timeZone, device: /iPhone/.test(navigator.userAgent) ? 'iPhone' : /iPad/.test(navigator.userAgent) ? 'iPad' : /Android/.test(navigator.userAgent) ? 'Android' : 'Computer', added: today() });
+    cfg.subs = (cfg.subs || []).filter((s) => !npIsMine(s) && s.endpoint !== j.endpoint);
+    cfg.subs.push({ id: deviceId() + '~' + Date.now(), dev: deviceId(), at: Date.now(), key: key.slice(0, 16), member: me, kid: typeof inKidMode === 'function' && inKidMode(), endpoint: j.endpoint, keys: j.keys, tz: Intl.DateTimeFormat().resolvedOptions().timeZone, device: /iPhone/.test(navigator.userAgent) ? 'iPhone' : /iPad/.test(navigator.userAgent) ? 'iPad' : /Android/.test(navigator.userAgent) ? 'Android' : 'Computer', added: today() });
     save(); render(); toast('Notifications on for this phone ✓');
   } catch (e) { toast('Couldn’t turn on notifications: ' + (e.message || e)); }
 }
 async function pushOff() {
   try { const reg = await navigator.serviceWorker.ready; const sub = await reg.pushManager.getSubscription(); if (sub) await sub.unsubscribe(); } catch { /* already gone */ }
-  const cfg = notifyCfg(); cfg.subs = (cfg.subs || []).filter((s) => s.id !== deviceId());
+  const cfg = notifyCfg(); cfg.subs = (cfg.subs || []).filter((s) => !npIsMine(s));
   save(); render(); toast('Notifications off for this phone');
 }
 // The subscription follows "who uses this phone"
@@ -239,7 +242,7 @@ views.notify = () => {
     ? `<div class="card"><h3>Set up once for the family</h3><p class="small muted" style="margin-top:0">Phone notifications need a one-time setup (about 5 minutes) on a computer or phone with your GitHub account.</p><button class="btn block" data-action="np-keys">Start setup</button></div>`
     : `<div class="card"><h3>This phone</h3>${sub
       ? (sub.stale || !sub.key || sub.key !== cfg.vapid.slice(0, 16)
-        ? `<p class="small" style="margin-top:0;color:var(--bad)">This phone was set up with an older key. Turn notifications on again so it gets them.</p><button class="btn block" data-action="np-on">Turn on again</button>`
+        ? `<p class="small" style="margin-top:0;color:var(--bad)">${sub.stale ? 'The last notification to this phone was turned down.' : 'This phone was set up with an older key.'} Turn notifications on again so it gets them.</p><p class="small muted" style="margin-top:-4px">Phone key ${esc(String(sub.key || 'none').slice(0, 8))}… · app key ${esc(String(cfg.vapid).slice(0, 8))}…${sub.stale ? ' · turned down' : ''}</p><button class="btn block" data-action="np-on">Turn on again</button>`
         : `<div class="kv"><span>🔔 On for <b>${esc(who(sub.member))}</b></span><button class="mini-btn" data-action="np-off">Turn off</button></div>`)
       : `<p class="small muted" style="margin-top:0">${pushSupported() ? 'Get your summaries and alerts here, even when the app is closed.' : /iPhone|iPad/.test(navigator.userAgent) ? 'On iPhone, notifications work from the Home Screen app: Share → <b>Add to Home Screen</b>, then open it from there.' : 'This browser can’t show notifications.'}</p>${pushSupported() ? '<button class="btn block" data-action="np-on">Turn on notifications</button>' : ''}`}
       ${subs.length ? `<div class="small muted" style="margin-top:8px">On for: ${subs.map((s) => `${esc(who(s.member))} (${esc(s.device || 'phone')})${s.stale || !s.key || s.key !== String(cfg.vapid).slice(0, 16) ? ' ⚠️ needs “Turn on again”' : ''}`).join(', ')}</div>` : ''}</div>`;
@@ -366,7 +369,7 @@ const tzMins = (tz) => { try { const [h, m] = new Intl.DateTimeFormat('en-US', {
 // Which phones should get this one, by each person's own settings and quiet hours (in their time zone)
 function relayTargets(e) {
   return (state.notify?.subs || []).filter((s) => {
-    if (!e.to.includes(s.member) || !s.endpoint) return false;
+    if (!e.to.includes(s.member) || !s.endpoint || s.stale) return false;
     const P = notifyPrefs(s.member);
     if (!P.family.on || P.family[e.pref] === false) return false;
     return !(P.quiet.on && npQuiet(tzMins(s.tz), P.quiet));

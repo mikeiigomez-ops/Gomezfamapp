@@ -61,7 +61,7 @@ async function families() {
   let sent = 0;
   try {
     for (const fam of await families()) {
-      const S = fam.state, log = fam.log, subs = (S.notify.subs || []).filter((s) => s.endpoint && !log['dead:' + hashKey(s.endpoint)]);
+      const S = fam.state, log = fam.log, subs = (S.notify.subs || []).filter((s) => s.endpoint && !s.stale && !log['dead:' + hashKey(s.endpoint)]);
       if (!DRY && S.notify.vapid && S.notify.vapid !== process.env.VAPID_PUBLIC_KEY) { console.log(`family ${fam.id}: the app's push key doesn't match VAPID_PUBLIC_KEY; redo setup or update the secret`); continue; }
       // One headless page per time zone, so "8:30 pm" means each person's 8:30 pm
       const byTz = {};
