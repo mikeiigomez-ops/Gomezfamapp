@@ -202,7 +202,7 @@ main { padding: 4px 16px calc(var(--tabbar-h) + var(--safe-bottom) + 96px); outl
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   padding: 11px 16px; border-radius: 12px; font-weight: 650; font-size: 15px;
-  background: var(--accent); color: #fff;
+  background: var(--accent-fill, var(--accent)); color: #fff;
 }
 .btn.secondary { background: var(--surface-2); color: var(--text); }
 .btn.danger { background: var(--bad-soft); color: var(--bad); }
@@ -218,7 +218,7 @@ main { padding: 4px 16px calc(var(--tabbar-h) + var(--safe-bottom) + 96px); outl
 .fab {
   position: fixed; z-index: 25; right: max(16px, calc(50% - 304px));
   bottom: calc(var(--tabbar-h) + var(--safe-bottom) + 16px);
-  width: 56px; height: 56px; border-radius: 50%; background: var(--accent); color: #fff;
+  width: 56px; height: 56px; border-radius: 50%; background: var(--accent-fill, var(--accent)); color: #fff;
   display: grid; place-items: center; box-shadow: 0 6px 20px rgba(200, 87, 61, .4);
 }
 .fab svg { width: 28px; height: 28px; stroke-width: 2.5; }
@@ -387,3 +387,82 @@ a.btn { text-decoration: none; }
 .recipe-list li { padding: 3px 0; }
 .recipe-list.steps li { padding: 6px 0; }
 .recipe-list.steps li::marker { font-weight: 700; color: var(--accent-ink, var(--accent)); }
+
+/* ---------- Money: safe-to-spend hero, tappable bill days, ghost bar, tx type toggle ---------- */
+.sts-hero summary { list-style: none; cursor: pointer; }
+.sts-hero summary::-webkit-details-marker { display: none; }
+.sts-hero .stat { font-size: 34px; margin: 2px 0; }
+.sts-hero[open] summary { margin-bottom: 10px; }
+.sts-more { color: var(--accent-ink, var(--accent)); font-weight: 600; }
+button.wk-day { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+button.wk-day:active span { background: var(--accent-soft, var(--line)); }
+.ghost-key { display: inline-block; width: 10px; height: 10px; border: 1.5px dashed var(--accent); border-radius: 3px; vertical-align: middle; margin-right: 2px; opacity: .7; }
+.segmented.tx-type { margin: 0 0 14px; }
+
+/* ---------- Plan v2: Magic Add kinds, calendar week fold, home today row, meals, to-dos, event form ---------- */
+.chip.on, .magic-kinds .chip.on, .who-chips .chip.on { background: var(--accent-fill, var(--accent)); color: var(--on-accent, #fff); }
+.magic-kinds { margin: 10px 0 0; gap: 6px; }
+.magic-kinds .chip { padding: 6px 10px; font-size: 13px; }
+.who-chips { margin: 0; }
+.who-chips .chip { position: relative; cursor: pointer; }
+.who-chips input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+.who-chips .chip:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.more-opts { margin: 4px 0 12px; }
+.more-opts > summary { cursor: pointer; padding: 10px 4px; font-weight: 700; color: var(--accent-ink, var(--accent)); list-style: none; }
+.more-opts > summary::-webkit-details-marker { display: none; }
+.more-opts > summary::before { content: '▸ '; }
+.more-opts[open] > summary::before { content: '▾ '; }
+.cal-fold { display: block; width: 100%; margin-top: 4px; padding: 6px; font-size: 13px; font-weight: 700; color: var(--accent-ink, var(--accent)); background: none; border: 0; }
+.home-today { display: flex; gap: 6px; margin: 0 0 10px; overflow: hidden; }
+.home-today button { flex: 1 1 auto; min-width: 0; max-width: 60%; display: flex; align-items: baseline; gap: 5px; padding: 7px 10px; border-radius: 12px; background: var(--surface); box-shadow: var(--shadow); border-left: 4px solid var(--c, var(--accent)); text-align: left; font-size: 13px; }
+.home-today b { flex: none; font-size: 12px; color: var(--muted); }
+.home-today span { min-width: 0; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Home is a launcher: hero, Magic Add, today's events and all tiles share one phone screen */
+@media (max-width: 699px) {
+  body[data-route="home"] .home-hi { padding: 10px 14px; margin-bottom: 10px; }
+  body[data-route="home"] .hh-greet { font-size: 22px; }
+  body[data-route="home"] .hh-facts { margin-top: 8px; max-height: 62px; overflow: hidden; }
+  body[data-route="home"] .home-magic { padding: 8px 12px; margin-bottom: 10px; }
+  body[data-route="home"] .home-magic .spark { width: 28px; height: 28px; font-size: 15px; }
+  body[data-route="home"] .launch { gap: 8px; }
+  body[data-route="home"] .launch .tile { aspect-ratio: 1 / .7; border-radius: 20px; padding: 4px; gap: 1px; }
+  body[data-route="home"] .launch .tile-e { width: 42px; height: 42px; font-size: 26px; border-radius: 14px; }
+  body[data-route="home"] .launch .tile b, body[data-route="home"] .launch .tile small { line-height: 1.15; }
+}
+@media (max-height: 640px) {
+  body[data-route="home"] .home-today { display: none; }
+  body[data-route="home"] .hh-greet { font-size: 19px; }
+  body[data-route="home"] .hh-facts span:nth-child(n+2) { display: none; }
+  body[data-route="home"] .home-magic { padding: 6px 10px; }
+  body[data-route="home"] .launch .tile { aspect-ratio: auto; }
+  body[data-route="home"] .launch .tile-e { width: 32px; height: 32px; font-size: 20px; border-radius: 10px; }
+  body[data-route="home"] .launch .tile b { font-size: 12.5px; }
+  body[data-route="home"] .launch .tile small { font-size: 11px; }
+}
+/* iPad landscape keeps greeting | tiles side by side; Magic Add and today's row run across the top */
+@media (min-width: 1000px) { body[data-route="home"]:not(.kid-mode) main#view > .home-magic, body[data-route="home"]:not(.kid-mode) main#view > .home-today, body[data-route="home"]:not(.kid-mode) main#view > .welcome-card { order: -1; } }
+.welcome-card { display: grid; gap: 4px; }
+.meal-day.row { min-height: 38px; padding-top: 6px; padding-bottom: 6px; }
+.meal-earlier.row { min-height: 30px; padding-top: 4px; padding-bottom: 4px; }
+@media (max-width: 699px) {
+  body[data-route="meals"] .plan-cta { padding-top: 8px; padding-bottom: 8px; margin-bottom: 10px; }
+  body[data-route="meals"] .plan-cta small { display: none; }
+  body[data-route="meals"] .month-nav { margin-bottom: 6px; }
+}
+.meal-day .day-label { width: 64px; flex-basis: 64px; white-space: nowrap; }
+.meal-day .day-label span { color: var(--text); font-size: 15px; margin-left: 2px; }
+.meal-day .title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.quick-add .shop-go { padding: 0 12px; white-space: nowrap; font-size: 14px; }
+.added-by { flex: 0 0 auto; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; font-size: 11px; font-weight: 800; color: #fff; background: var(--c, var(--muted)); }
+.inbox-row.util .title { font-weight: 700; }
+.cal-todo .time-col { font-size: 11px; }
+.cal-todo.done .title { text-decoration: line-through; color: var(--muted); }
+.quick-row:has(> .chip:nth-child(5)) { grid-template-columns: repeat(5, 1fr); }
+.wk.compact { padding: 4px 4px 2px; row-gap: 0; }
+.wk.compact .wk-day { padding: 1px 0; }
+.wk.compact .wk-day span { width: 28px; height: 28px; }
+.wk.compact .wk-day em { top: -2px; }
+.home-today .home-ins { border-left-color: var(--accent); }
+.home-today .home-ins.good { border-left-color: var(--good, #2f8a5b); }
+.home-today .home-ins.warn { border-left-color: #e0a800; }
+.home-today .home-ins.bad { border-left-color: var(--bad); }

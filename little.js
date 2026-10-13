@@ -42,7 +42,7 @@ function simpleHome(id) {
     </section>
     <div class="little-grid">
       <button class="lt" data-action="go" data-to="chores" style="--t:#3b82f6"><span class="lt-e">🧹</span><b>My jobs</b><small>${left ? `${left} to do` : 'All done! 🎉'}</small></button>
-      <button class="lt" data-action="go" data-to="routines" style="--t:#f59e0b"><span class="lt-e">${esc(now?.emoji || '🌅')}</span><b>My routine</b><small>${now ? (routineComplete(now) ? 'Done! ⭐' : `${steps} of ${now.steps.length}`) : 'None yet'}</small></button>
+      <button class="lt" data-action="go" data-to="routines" style="--t:#f59e0b"><span class="lt-e">${esc(now?.emoji || '🌅')}</span><b>My routine</b><small>${now ? (routineComplete(now) ? 'Done! ✅' : `${steps} of ${now.steps.length}`) : 'None yet'}</small></button>
       <button class="lt" data-action="go" data-to="treats" style="--t:#ec4899"><span class="lt-e">🎁</span><b>Treats</b><small>⭐ ${stars}</small></button>
       <button class="lt" data-action="go" data-to="wishes" style="--t:#8b5cf6"><span class="lt-e">💖</span><b>My wishes</b><small>${state.wishes.filter((w) => w.memberId === id).length}</small></button>
       ${money !== 'none' ? `<button class="lt" data-action="go" data-to="piggy" style="--t:#e85d8a"><span class="lt-e">🐷</span><b>My piggy</b><small>${money === 'one' ? (piggyTotal(id) || piggyOf(id).allowance ? money_(piggyTotal(id)) : 'Coming soon') : 'Jars'}</small></button>` : ''}
@@ -56,10 +56,15 @@ const money_ = (v) => money(v, { maximumFractionDigits: v % 1 ? 2 : 0 });
 /* ---------- Simple jobs (chores) ---------- */
 function simpleJobs(id) {
   const jobs = state.chores.filter((c) => c.memberId === id || !c.memberId);
-  const todo = jobs.filter((c) => !choreDone(c)), done = jobs.filter((c) => choreDone(c));
-  const tile = (c) => { const d = choreDone(c); return `<div class="job${d ? ' done' : ''}">
-      <button class="job-main" data-action="toggle-chore" data-id="${c.id}"><span class="check${d ? ' on' : ''}">${ICON.check}</span><b>${esc(c.title)}</b><span class="job-stars">${'⭐'.repeat(Math.min(5, Number(c.points) || 1))}</span></button>
-      ${sayBtn(id, c.title)}</div>`; };
+  const todo = jobs.filter((c) => !choreDone(c)), done = kidChoreList(jobs.filter((c) => choreDone(c)));
+  kidCheers(id);
+  const tile = (c) => {
+    const k = kidChoreState(c, id), stars = `<span class="job-stars">${'⭐'.repeat(Math.min(5, Number(c.points) || 1))}</span>`;
+    if (k.done && !k.mine) { const by = k.by ? member(k.by) : null; return `<div class="job done other"><div class="job-main"><span class="chore-pic">${esc(choreEmoji(c))}</span><b>${esc(c.title)}<small class="job-by">${by ? `${esc(by.name)} did it 🙌` : 'Already done 🙌'}</small></b>${by ? avatar(by, true) : ''}</div></div>`; }
+    return `<div class="job${k.done ? ' done' : ''}">
+      <button class="job-main" data-action="toggle-chore" data-id="${c.id}"><span class="chore-pic">${esc(choreEmoji(c))}</span><b>${esc(c.title)}${k.wait ? '<small class="job-by"><span class="wait-chip">⏳ Waiting for OK</span></small>' : ''}</b>${k.wait ? '' : stars}<span class="check${k.done ? ' on' : ''}">${ICON.check}</span></button>
+      ${sayBtn(id, c.title)}</div>`;
+  };
   return `${todo.map(tile).join('') || '<div class="card empty"><span class="big">🎉</span>All your jobs are done!</div>'}
     ${done.length ? `<div class="section-title">Done</div>${done.map(tile).join('')}` : ''}`;
 }
@@ -72,14 +77,14 @@ views.treats = () => {
   const pending = (state.redemptions || []).filter((r) => r.memberId === id && r.status === 'pending');
   return `<div class="card star-bank"><span class="art-slot" data-art-id="cur_star">⭐</span><b>${stars}</b><small>stars to spend</small></div>
     ${pending.map((r) => `<div class="card little-wait">⏳ Waiting for Mom or Dad: <b>${esc(state.rewards.find((x) => x.id === r.rewardId)?.name || 'treat')}</b></div>`).join('')}
-    <div class="treat-grid">${state.rewards.slice().sort((a, b) => a.cost - b.cost).map((r) => {
-      const can = stars >= r.cost;
+    ${rewardsFor(id).length ? `<div class="treat-grid">${rewardsFor(id).map((r) => {
+      const cost = rewardCost(r, id), can = stars >= cost;
       return `<button class="treat${can ? ' can' : ''}" data-action="treat-ask" data-id="${r.id}">
         <span class="t-e">${esc(r.emoji || '🎁')}</span><b>${esc(r.name)}</b>
-        <span class="t-cost">⭐ ${r.cost}</span>
-        ${can ? '<span class="t-go">I want this!</span>' : `<span class="t-need"><i style="width:${Math.min(100, (stars / r.cost) * 100)}%"></i></span><small>${r.cost - stars} more ⭐</small>`}
+        <span class="t-cost">⭐ ${cost}</span>
+        ${can ? '<span class="t-go">I want this!</span>' : `<span class="t-need"><i style="width:${Math.min(100, (stars / cost) * 100)}%"></i></span><small>${cost - stars} more ⭐</small>`}
       </button>`;
-    }).join('') || '<div class="card empty">No treats yet — ask a grown-up!</div>'}</div>`;
+    }).join('')}</div>` : inKidMode() ? askTreatsCard(id) : '<div class="card empty">No treats yet.</div>'}`;
 };
 
 /* ---------- One-step-at-a-time routine ---------- */
@@ -88,7 +93,7 @@ function focusRoutine(r, id) {
   const next = r.steps.find((s) => !done[s.id]);
   const n = r.steps.filter((s) => done[s.id]).length;
   if (!next) {
-    return `<div class="card focus done"><div class="focus-emoji">${(r.stars || {})[today()] ? '⭐' : '🎉'}</div><div class="focus-text">You did it!</div><div class="small muted">${esc(r.name)} is all done${(r.stars || {})[today()] ? ' — on time!' : ''}</div>
+    return `<div class="card focus done"><div class="focus-emoji">${(r.stars || {})[today()] ? '✅' : '🎉'}</div><div class="focus-text">You did it!</div><div class="small muted">${esc(r.name)} is all done${(r.stars || {})[today()] ? ' — <span class="ontime-chip">✅ On time!</span>' : ''}</div>
       <button class="mini-btn" data-action="routine-undo" data-r="${r.id}">Oops, undo</button></div>`;
   }
   return `<div class="card focus">
@@ -96,7 +101,7 @@ function focusRoutine(r, id) {
     <div class="focus-emoji">${esc(next.emoji)}</div>
     <div class="focus-text">${esc(next.text)} ${sayBtn(id, next.text)}</div>
     <button class="btn block focus-done" data-action="routine-step" data-r="${r.id}" data-s="${next.id}">Done! ✓</button>
-    <div class="small muted" style="text-align:center;margin-top:8px">Step ${n + 1} of ${r.steps.length}${r.by ? ` · finish by ${fmtTime(r.by)} for a ⭐` : ''}</div>
+    <div class="small muted" style="text-align:center;margin-top:8px">Step ${n + 1} of ${r.steps.length}${r.by ? ` · finish by ${fmtTime(r.by)} to be on time` : ''}</div>
   </div>`;
 }
 
@@ -211,13 +216,16 @@ function kidSettingsSheet(id) {
   const m = member(id);
   openSheet({
     title: `⚙️ ${m.name}'s settings`,
-    values: { simple: !!m.simple, money: moneyMode(id), readAloud: m.readAloud !== false },
+    values: { simple: !!m.simple, money: moneyMode(id), readAloud: m.readAloud !== false, choreOk: m.choreOk || 'off', playLock: !!m.playLock, weeklyGoal: m.weeklyGoal || '' },
     fields: [
       { name: 'simple', label: 'Simple mode', type: 'checkbox', hint: 'For younger kids (about 4–8): big buttons, ⭐ stars, one step at a time, stickers' },
       { name: 'money', label: 'Money', type: 'select', options: [{ value: 'none', label: '🚫 No money — just stars & treats' }, { value: 'one', label: '🐷 One piggy bank' }, { value: 'jars', label: '🫙 Save / Spend / Give jars' }] },
       { name: 'readAloud', label: '🔊 Read-aloud buttons', type: 'checkbox', hint: 'Taps read jobs and routine steps out loud' },
+      { name: 'choreOk', label: '✅ Chores need my OK', type: 'select', options: [{ value: 'off', label: 'Off — stars right away' }, { value: 'big', label: 'Big chores only (3+ ⭐)' }, { value: 'all', label: 'All chores' }] },
+      { name: 'playLock', label: '🔒 Play unlocks after today’s jobs', type: 'checkbox', hint: 'Games, Squishies & the Dream House open once their own chores are done' },
+      { name: 'weeklyGoal', label: '🎯 Weekly star goal', type: 'number', placeholder: `${weekGoal(id)} (from their chores)` },
     ],
-    onSave(v) { Object.assign(m, { simple: v.simple, money: v.money, readAloud: v.readAloud }); toast(`${m.name}'s settings saved`); },
+    onSave(v) { Object.assign(m, { simple: v.simple, money: v.money, readAloud: v.readAloud, choreOk: v.choreOk, playLock: v.playLock, weeklyGoal: v.weeklyGoal > 0 ? Math.round(v.weeklyGoal) : null }); toast(`${m.name}'s settings saved`); },
   });
 }
 
@@ -231,10 +239,11 @@ Object.assign(actions, {
   'wish-new': (el) => (simpleKid() ? littleWishForm(simpleKid()) : _wishNew(el)),
   'treat-ask': (el) => {
     const id = kidModeId(), r = findIn(state.rewards, el.dataset.id);
-    const stars = pointsBalance(id);
-    if (stars < r.cost) { toast(`You need ${r.cost - stars} more ⭐ — keep going!`); speak(`You need ${r.cost - stars} more stars. Keep going!`); return; }
+    if (!r || !rewardFor(r, id)) return;
+    const stars = pointsBalance(id), cost = rewardCost(r, id);
+    if (stars < cost) { toast(`You need ${cost - stars} more ⭐ — keep going!`); speak(`You need ${cost - stars} more stars. Keep going!`); return; }
     if ((state.redemptions || []).some((x) => x.memberId === id && x.rewardId === r.id && x.status === 'pending')) { toast('Already asked — waiting for Mom or Dad'); return; }
-    (state.redemptions ||= []).push({ id: uid(), rewardId: r.id, memberId: id, cost: r.cost, at: Date.now(), status: 'pending' });
+    (state.redemptions ||= []).push({ id: uid(), rewardId: r.id, memberId: id, cost, at: Date.now(), status: 'pending' });
     save(); render(); confetti();
     celebrate('🙌 Asked!', `Mom or Dad will say yes to “${r.name}” soon.`);
   },

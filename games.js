@@ -3,9 +3,19 @@
 'use strict';
 
 Object.assign(TITLES, { games: 'Games', c4: 'Connect Four', word: 'Family Word', memory: 'Memory Match', trivia: 'Family Trivia' });
-const BOT = 'bot';
-const playerName = (id) => (id === BOT ? 'Robot' : whoName(id));
-const playerEmoji = (id) => (id === BOT ? '🤖' : isMember(id) ? member(id).emoji : '👤');
+const BOT = 'bot', P2 = 'p2'; // P2: a friend playing on this phone (pass the phone)
+const playerName = (id) => (id === BOT ? 'Robot' : id === P2 ? 'Player 2' : whoName(id));
+const playerEmoji = (id) => (id === BOT ? '🤖' : id === P2 ? '🙂' : isMember(id) ? member(id).emoji : '👤');
+const gBuzz = () => { try { if (typeof haptic === 'function') haptic(); } catch { /* no haptics */ } };
+// A small Gem reward for games: +2 a win / finish, at most 3 times a day per person (shown on the end card)
+const GAME_GEM = 2, GAME_GEM_DAY = 3;
+function gameGem(who, note) {
+  if (!who || !isMember(who) || typeof gemLog !== 'function') return 0;
+  const n = state.gems.log.filter((l) => l.who === who && l.kind === 'game' && iso(new Date(l.at)) === today()).length;
+  if (n >= GAME_GEM_DAY) return -1;
+  return gemLog(who, GAME_GEM, note, 'game', `game:${today()}:${n}`) ? GAME_GEM : 0;
+}
+const gameGemNote = (n, who) => (n > 0 ? `<div class="gm-gem">+${n} 💎${who ? ` for ${esc(playerName(who))}` : ''}</div>` : n < 0 ? '<div class="gm-gem off">Game Gems are done for today — more tomorrow!</div>' : '');
 const thisMonth = (at) => monthKey(iso(new Date(at))) === monthKey(today());
 
 /* =========================================================
@@ -60,6 +70,11 @@ function botMove(g) {
   const pool = safe.length ? safe : legal;
   return Math.random() < 0.7 ? pool[0] : pool[Math.floor(Math.random() * pool.length)];
 }
+// Easy robot: a random legal move 40% of the time, otherwise its usual self
+function botPlay(g) {
+  const legal = [...Array(C4_COLS).keys()].filter((c) => c4Grid(g.moves)[c].length < C4_ROWS);
+  return g.lvl === 'easy' && Math.random() < 0.4 ? legal[Math.floor(Math.random() * legal.length)] : botMove(g);
+}
 function c4Card(g) {
   const st = c4Status(g), me = actor();
   const vs = g.a === me ? g.b : g.b === me ? g.a : null;
@@ -79,33 +94,38 @@ views.c4 = (id) => {
     : `${playerEmoji(st.turn)} ${playerName(st.turn)}’s turn`;
   const player = (pid, cls) => `<div class="c4-player ${cls}${!st.over && st.turn === pid ? ' turn' : ''}"><span class="disc ${cls}"></span><b>${esc(playerEmoji(pid))} ${esc(playerName(pid))}</b></div>`;
   return `<div class="c4-players">${player(g.a, 'red')}<span class="small muted">vs</span>${player(g.b, 'yellow')}</div>
-    <div class="c4-status${st.over ? ' over' : ''}">${esc(status)}</div>
+    <div class="c4-status${st.over ? ' over' : ''}">${esc(status)}</div>${st.over && g.gem && (g.gem > 0 || g.winner === me) ? gameGemNote(g.gem, g.gem > 0 ? g.winner : '') : ''}
     <div class="game-stage"><div class="c4-board${can ? ' live' : ''}">${[...Array(C4_COLS)].map((_, c) => `<button class="c4-col" data-action="c4-drop" data-id="${g.id}" data-c="${c}" ${can && grid[c].length < C4_ROWS ? '' : 'disabled'} aria-label="Column ${c + 1}">
       ${[...Array(C4_ROWS)].map((_, k) => { const r = C4_ROWS - 1 - k; const p = grid[c][r]; return `<span class="c4-cell">${p !== undefined ? `<span class="disc ${p ? 'yellow' : 'red'}${c === lastCol && r === lastRow ? ' drop' : ''}${winSet.has(`${c},${r}`) ? ' win' : ''}" style="--fall:${k + 1}"></span>` : ''}</span>`; }).join('')}
     </button>`).join('')}</div></div>
     ${g.mode === 'remote' && !st.over ? `<p class="small muted" style="text-align:center;margin:10px 0">${st.turn === me ? 'Tap a column to drop your piece.' : `${playerName(st.turn)} plays on their phone — you’ll get a 🔔 when it’s your turn.`}</p>` : ''}
     <div class="btn-row">${st.over ? `<button class="btn" data-action="c4-rematch" data-id="${g.id}">🔁 Rematch</button>` : g.mode !== 'remote' && g.moves.length ? `<button class="btn secondary" data-action="c4-undo" data-id="${g.id}">↩️ Undo</button>` : ''}<button class="btn secondary" data-action="c4-del" data-id="${g.id}">${st.over ? 'Remove' : 'Quit game'}</button></div>`;
 };
-function c4New(opp, mode) {
+function c4New(opp, mode, lvl) {
   const me = actor();
-  const g = { id: uid(), type: 'c4', a: me, b: opp, mode, moves: [], at: Date.now() };
+  const g = { id: uid(), type: 'c4', a: me, b: opp, mode, moves: [], at: Date.now(), ...(opp === BOT ? { lvl: lvl || 'easy' } : {}) };
   state.games.push(g);
   save();
   go('c4/' + g.id);
 }
+// New game: big buttons, no form. Robot (Easy/Hard), pass the phone, or a family member (on their own phone when sync is on).
 function c4NewSheet() {
   const me = actor();
   const others = state.members.filter((m) => m.id !== me);
   if (!me && state.members.length > 1) { toast('Pick who you are first'); return; }
+  const synced = typeof Sync !== 'undefined' && !!Sync.ref;
+  const online = (id) => typeof Live !== 'undefined' && Live.all?.[id] && Date.now() - (Live.all[id].at || 0) < 90000;
+  const lvl = ui.c4lvl || 'easy';
   openSheet({
-    title: '🔴 New Connect Four',
-    saveLabel: 'Play',
-    values: { opp: BOT, mode: 'remote' },
-    fields: [
-      { name: 'opp', label: 'Play against', type: 'select', options: [{ value: BOT, label: '🤖 The robot' }, ...others.map((m) => ({ value: m.id, label: `${m.emoji} ${m.name}` }))] },
-      { name: 'mode', label: 'How?', type: 'select', options: [{ value: 'remote', label: '📱 Each on our own phone — take turns' }, { value: 'local', label: '🤝 Pass this phone back and forth' }], hint: 'Own-phone games need family sync turned on' },
-    ],
-    onSave(v) { setTimeout(() => c4New(v.opp, v.opp === BOT ? 'bot' : v.mode)); },
+    title: '🔴 Connect Four',
+    saveLabel: 'Cancel',
+    fields: [{ type: 'html', html: `<div class="c4q">
+      <div class="c4q-row"><button type="button" class="c4q-btn bot" data-action="c4-quick" data-opp="${BOT}"><span>🤖</span><b>Robot</b></button>
+        <div class="c4q-lvl" role="group" aria-label="Robot level">${['easy', 'hard'].map((k) => `<button type="button" class="${lvl === k ? 'on' : ''}" data-action="c4-lvl" data-l="${k}">${k === 'easy' ? '🙂 Easy' : '😎 Hard'}</button>`).join('')}</div></div>
+      <button type="button" class="c4q-btn" data-action="c4-quick" data-opp="${P2}"><span>📱</span><b>Pass the phone</b><small>Two players, one phone</small></button>
+      ${others.map((m) => `<button type="button" class="c4q-btn" data-action="c4-quick" data-opp="${m.id}" style="--c:${m.color || '#dc2626'}"><span>${esc(m.emoji)}</span><b>${esc(m.name)}</b><small>${synced ? (online(m.id) ? '<i class="live-dot"></i> Online now · their phone' : 'On their own phone') : 'Take turns on this phone'}</small></button>`).join('')}
+    </div>` }],
+    onSave() {},
   });
 }
 function c4Finish(g) {
@@ -117,6 +137,7 @@ function c4Finish(g) {
     const loser = st.winner === g.a ? g.b : g.a;
     logAct('🔴', `${st.winner === actor() ? 'won' : 'played'} Connect Four ${st.winner === actor() ? `vs ${playerName(loser)}` : `— ${playerName(st.winner)} won`}`, 'games');
     if (st.winner !== BOT) setTimeout(() => { confetti(); }, 500);
+    if (isMember(st.winner)) g.gem = gameGem(st.winner, 'Connect Four win 🔴');
   }
 }
 
@@ -196,7 +217,7 @@ function wordKey(k) {
     cur = '';
     if (rec.done) {
       logAct('🔤', rec.won ? `solved the Family Word in ${rec.g.length}` : 'played the Family Word', 'word');
-      if (rec.won) setTimeout(confetti, 700);
+      if (rec.won) { setTimeout(confetti, 700); gBuzz(); }
       if (rec.won && typeof isSimple === 'function' && isSimple(me) && readAloudOn(me)) speak(`You got it! The word was ${w}.`);
     }
     save();
@@ -242,7 +263,7 @@ views.memory = () => {
   return `<div class="segmented">${Object.entries(MEM_LEVELS).map(([k, [, l]]) => `<button class="${m.level === k ? 'active' : ''}" data-action="mem-level" data-l="${k}">${l}</button>`).join('')}</div>
     <div class="mem-stats"><span>🃏 <b class="mem-moves">${m.moves}</b> moves</span><span>✅ <b class="mem-pairs">${m.matched.length / 2}</b>/${m.cards.length / 2}</span></div>
     <div class="game-stage">${board}
-    ${m.done ? `<div class="game-over"><div class="card wd-result"><div class="wd-big">🎉 You matched them all!</div><div>${m.moves} moves · ${secs}s</div><div class="btn-row"><button class="btn" data-action="mem-level" data-l="${m.level}">Play again</button></div>
+    ${m.done ? `<div class="game-over"><div class="card wd-result"><div class="wd-big">🎉 You matched them all!</div><div>${m.moves} moves · ${secs}s</div>${gameGemNote(m.gem)}<div class="btn-row"><button class="btn" data-action="mem-level" data-l="${m.level}">Play again</button></div>
     ${best.length ? `<div class="go-best"><b>Family best · ${MEM_LEVELS[m.level][1]}</b>${best.slice(0, 3).map((s, i) => `<div>${['🥇', '🥈', '🥉'][i]} ${esc(playerEmoji(s.who))} ${esc(playerName(s.who))} · <b>${s.moves}</b> moves</div>`).join('')}</div>` : ''}</div></div>` : ''}</div>
     ${!m.done && best.length ? `<div class="section-title game-extra">Family best · ${MEM_LEVELS[m.level][1]}</div><div class="card flush game-extra">${best.map((s, i) => `<div class="row"><div class="avatar">${['🥇', '🥈', '🥉', '4', '5'][i]}</div><div class="grow"><div class="title">${esc(playerEmoji(s.who))} ${esc(playerName(s.who))}</div><div class="sub">${timeAgo(s.at)}</div></div><span class="small"><b>${s.moves}</b> moves · ${s.secs}s</span></div>`).join('')}</div>` : ''}`;
 };
@@ -258,7 +279,7 @@ function memFlip(i) {
   const mv = viewEl.querySelector('.mem-moves'); if (mv) mv.textContent = m.moves;
   const [a, b] = m.up;
   if (m.cards[a] === m.cards[b]) {
-    m.matched.push(a, b); m.up = [];
+    m.matched.push(a, b); m.up = []; gBuzz();
     setTimeout(() => { btn(a)?.classList.add('got'); btn(b)?.classList.add('got'); }, 250);
     const pr = viewEl.querySelector('.mem-pairs'); if (pr) pr.textContent = m.matched.length / 2;
     if (m.matched.length === m.cards.length) {
@@ -267,6 +288,7 @@ function memFlip(i) {
       if (me) {
         const prev = memBest(m.level).find((s) => s.who === me);
         state.scores.push({ id: uid(), game: 'memory', level: m.level, who: me, moves: m.moves, secs: m.secs, at: Date.now() });
+        m.gem = gameGem(me, 'Memory Match finished 🃏');
         state.scores = state.scores.slice(-300);
         if (!prev || m.moves < prev.moves) logAct('🃏', `got a new Memory Match best: ${m.moves} moves (${MEM_LEVELS[m.level][1]})`, 'memory');
         save();
@@ -337,7 +359,7 @@ views.trivia = () => {
       <div class="trv-choices">${q.choices.map((c, k) => { const st = t.picked == null ? '' : c === q.a ? ' right' : c === t.picked ? ' wrong' : ' dim'; return `<button class="trv-choice${st}" data-action="trivia-pick" data-k="${k}" ${t.picked != null ? 'disabled' : ''}>${esc(c)}</button>`; }).join('')}</div>
       ${t.picked != null ? `<div class="trv-verdict">${t.picked === q.a ? '🎉 Correct!' : `😅 It’s <b>${esc(q.a)}</b>`}</div><button class="btn block" data-action="trivia-next">${t.i === t.qs.length - 1 ? 'See my score' : 'Next question →'}</button>` : ''}`;
   }
-  return `${t && t.qs.length ? `<div class="card wd-result"><div class="wd-big">${t.score === t.qs.length ? '🧠 Perfect!' : t.score >= t.qs.length / 2 ? '🎉 Nice!' : '🙂 Good try!'}</div><div>You got ${t.score} of ${t.qs.length}</div></div>` : ''}
+  return `${t && t.qs.length ? `<div class="card wd-result"><div class="wd-big">${t.score === t.qs.length ? '🧠 Perfect!' : t.score >= t.qs.length / 2 ? '🎉 Nice!' : '🙂 Good try!'}</div><div>You got ${t.score} of ${t.qs.length}</div>${gameGemNote(t.gem)}</div>` : ''}
     <button class="card trv-hero" data-action="trivia-play"><span>🧠</span><b>${t ? 'Play again' : 'Play a round'}</b><small>${triviaWaiting(me).length ? `${triviaWaiting(me).length} new question${triviaWaiting(me).length > 1 ? 's' : ''} from the family` : '5 questions about the family'}</small></button>
     <button class="btn secondary block" data-action="trivia-new">✏️ Write a question about me</button>
     ${lb.length ? `<div class="section-title">Who knows us best · this month</div><div class="card flush">${lb.map(([m, n], i) => `<div class="row"><div class="avatar">${['🥇', '🥈', '🥉'][i] || i + 1}</div><div class="grow"><div class="title">${esc(m.emoji)} ${esc(m.name)}</div></div><b>${n}</b></div>`).join('')}</div>` : ''}
@@ -401,21 +423,27 @@ views.games = () => {
    Wiring: kid mode, actions, migrations
    ========================================================= */
 KID_ROUTES.push('games', 'c4', 'word', 'memory', 'trivia');
-for (const a of ['c4-new', 'c4-drop', 'c4-rematch', 'c4-undo', 'c4-del', 'word-key', 'word-share', 'word-hint', 'mem-flip', 'mem-level', 'trivia-open', 'trivia-play', 'trivia-pick', 'trivia-next', 'trivia-new', 'trivia-del']) KID_ACTIONS.add(a);
+for (const a of ['c4-new', 'c4-quick', 'c4-lvl', 'c4-drop', 'c4-rematch', 'c4-undo', 'c4-del', 'word-key', 'word-share', 'word-hint', 'mem-flip', 'mem-level', 'trivia-open', 'trivia-play', 'trivia-pick', 'trivia-next', 'trivia-new', 'trivia-del']) KID_ACTIONS.add(a);
 
 Object.assign(actions, {
   'c4-new': () => c4NewSheet(),
+  'c4-lvl': (el) => { ui.c4lvl = el.dataset.l; el.parentElement.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b === el)); },
+  'c4-quick': (el) => {
+    const opp = el.dataset.opp, synced = typeof Sync !== 'undefined' && !!Sync.ref;
+    closeSheet();
+    setTimeout(() => c4New(opp, opp === BOT ? 'bot' : opp === P2 || !synced ? 'local' : 'remote', ui.c4lvl || 'easy'));
+  },
   'c4-drop': (el) => {
     const g = findIn(state.games, el.dataset.id), c = Number(el.dataset.c);
     if (!c4CanMove(g) || c4Grid(g.moves)[c].length >= C4_ROWS) return;
-    g.moves = [...g.moves, c];
+    g.moves = [...g.moves, c]; gBuzz();
     c4Finish(g);
     save(); render();
     if (g.mode === 'bot' && !c4Status(g).over) {
       setTimeout(() => {
         const gg = state.games.find((x) => x.id === g.id);
         if (!gg || c4Status(gg).over || c4Turn(gg) !== BOT) return;
-        gg.moves = [...gg.moves, botMove(gg)];
+        gg.moves = [...gg.moves, botPlay(gg)];
         c4Finish(gg);
         save(); if (currentRoute().name === 'c4') render();
       }, 650);
@@ -425,12 +453,12 @@ Object.assign(actions, {
     const g = findIn(state.games, el.dataset.id);
     if (g.mode === 'remote' || !g.moves.length || c4Status(g).over && g.mode !== 'local') return;
     g.moves = g.moves.slice(0, g.mode === 'bot' && g.moves.length >= 2 ? -2 : -1);
-    delete g.endAt; delete g.winner;
+    delete g.endAt; delete g.winner; delete g.gem;
     save(); render();
   },
   'c4-rematch': (el) => {
     const g = findIn(state.games, el.dataset.id);
-    const ng = { id: uid(), type: 'c4', a: g.b === BOT ? g.a : g.b, b: g.b === BOT ? BOT : g.a, mode: g.mode, moves: [], at: Date.now() };
+    const ng = { id: uid(), type: 'c4', a: g.b === BOT || g.b === P2 ? g.a : g.b, b: g.b === BOT || g.b === P2 ? g.b : g.a, mode: g.mode, moves: [], at: Date.now(), ...(g.lvl ? { lvl: g.lvl } : {}) };
     state.games.push(ng);
     state.games = state.games.filter((x) => x.type !== 'c4' || !x.endAt || Date.now() - x.endAt < 14 * 86400000 || x.id === ng.id);
     save(); go('c4/' + ng.id);
@@ -466,6 +494,7 @@ Object.assign(actions, {
       state.scores.push({ id: uid(), game: 'trivia', who: actor(), score: t.score, of: t.qs.length, at: Date.now() });
       state.scores = state.scores.slice(-300);
       logAct('🧠', `scored ${t.score}/${t.qs.length} in Family Trivia`, 'trivia');
+      if (t.score >= 3) t.gem = gameGem(actor(), 'Family Trivia: 3+ right 🧠');
       save();
       if (t.score === t.qs.length) setTimeout(confetti, 150);
     }

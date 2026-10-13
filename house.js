@@ -39,6 +39,9 @@ const FURN_LIST = [
   ['trophy', '🏆', 'Gold Trophy', 'earned', 0, 13, 'any', { unlock: 'chores50' }], ['medal', '🏅', 'Routine Medal', 'earned', 0, 10, 'wall', { unlock: 'routines20' }],
   ['crownd', '👑', 'Royal Crown', 'earned', 0, 11, 'any', { unlock: 'todos25' }], ['gemstone', '💎', 'Giant Gem', 'earned', 0, 12, 'any', { unlock: 'unique50', glow: 1 }],
   ['glowstar', '🌟', 'Streak Star', 'earned', 0, 12, 'wall', { unlock: 'streak14', glow: 1 }], ['heartbox', '💝', 'Kindness Gift', 'earned', 0, 11, 'any', { unlock: 'kudos10' }],
+  // Squishvale: one trophy for every chapter's Squish Star
+  ...[['🌼', 'Meadow Star'], ['🐚', 'Shore Star Shell'], ['🍰', 'Sugarplum Cake'], ['🐮', 'Moo-sic Box'], ['🎡', 'Boardwalk Wheel'], ['☁️', 'Cloud Star'], ['🏮', 'Hollow Lantern'], ['🏰', 'Crumble Castle']]
+    .map(([e, name], i) => ['wtrophy' + (i + 1), e, name, 'earned', 0, 11, 'any', { unlock: 'world:ch' + (i + 1), glow: i === 7 ? 1 : 0 }]),
 ];
 const FURN = Object.fromEntries(FURN_LIST.map(([id, e, name, cat, price, z, place = 'floor', extra = {}]) => [id, { id, e, name, cat, price, z, place, ...extra }]));
 const WALLS = {
@@ -97,7 +100,10 @@ function ensureHouse(mid) {
 }
 const findRoom = (roomId) => { for (const [mid, h] of Object.entries(state.houses)) { const r = h.rooms.find((x) => x.id === roomId); if (r) return { mid, h, r }; } return null; };
 const canEdit = (mid) => mid && mid === actor();
-const isUnlocked = (f, mid) => !f.unlock || (typeof ULTS !== 'undefined' && ULTS[f.unlock] && ULTS[f.unlock].prog(mid) >= ULTS[f.unlock].goal);
+const worldCh = (f) => /^world:ch(\d)$/.exec(f.unlock || '')?.[1];
+const isUnlocked = (f, mid) => !f.unlock || (worldCh(f) ? (state.world?.[mid]?.done || []).includes(Number(worldCh(f))) || (state.world?.[mid]?.ch || 0) > Number(worldCh(f))
+  : typeof ULTS !== 'undefined' && ULTS[f.unlock] && ULTS[f.unlock].prog(mid) >= ULTS[f.unlock].goal);
+const unlockHow = (f) => (worldCh(f) ? `Win the ${typeof WREG !== 'undefined' ? WREG[worldCh(f) - 1].name : 'Squishvale'} star in Squishvale 🗺️` : ULTS[f.unlock]?.how || 'Keep going');
 const placedCount = (h, fid) => sum(h.rooms, (r) => r.items.filter((i) => i.f === fid).length);
 const owned = (h, fid) => (h.inv[fid] || 0) + placedCount(h, fid);
 
@@ -525,7 +531,7 @@ Object.assign(actions, {
   'h-pick': (el) => {
     const found = curRoom(); if (!found || !canEdit(found.mid)) return;
     const f = FURN[el.dataset.f], h = found.h;
-    if (f.unlock && !isUnlocked(f, found.mid)) { toast(`🔒 ${ULTS[f.unlock]?.how || 'Keep going'} to earn this!`); return; }
+    if (f.unlock && !isUnlocked(f, found.mid)) { toast(`🔒 ${unlockHow(f)} to earn this!`); return; }
     if (h.inv[f.id] > 0) { pushUndo(found.r); h.inv[f.id]--; placeItem(found.r, f); save(); render(); return; }
     if (!f.price) { pushUndo(found.r); placeItem(found.r, f); save(); render(); return; }
     // Try before you buy: a see-through preview you can drag around, then Keep it or ✕.

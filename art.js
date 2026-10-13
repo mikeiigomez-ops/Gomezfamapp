@@ -53,7 +53,8 @@ function artSVG(id, opts = {}) {
 const artForEmoji = (e) => ART_EMOJI[String(e || '').trim()] || ART_EMOJI[String(e || '').trim().replace(/️/g, '')] || '';
 
 /* Swap emoji for drawings wherever the app shows an emoji as artwork. */
-const ART_SLOTS = '.tile-e, .lt-e, .toy-chip, .art-slot, .kt';
+// (List icons too: mini tiles, row avatars and the big emoji on empty states, when a drawing exists for them.)
+const ART_SLOTS = '.tile-e, .lt-e, .toy-chip, .art-slot, .kt, .mini-tile .emoji, .row > .avatar, .empty .big';
 function artSwap(root) {
   if (typeof document === 'undefined' || !root?.querySelectorAll) return;
   const els = root.matches?.(ART_SLOTS) ? [root, ...root.querySelectorAll(ART_SLOTS)] : root.querySelectorAll(ART_SLOTS);

@@ -212,6 +212,27 @@ const WG = { world: null, cv: null, ctx: null, layer: null, raf: 0, ts: 40, dpr:
 // Busy = a story step is running or any overlay (dialogue, catch, game, card, menu) is open.
 Object.defineProperty(WG, 'busy', { get: () => WG.lockN > 0 || !!WG.layer?.querySelector('.wdlg, .wenc, .wgame, .wcard, .wmenu') });
 const wLock = () => { WG.lockN++; }, wUnlock = () => { WG.lockN = Math.max(0, WG.lockN - 1); };
+const wBuzz = () => { try { if (typeof haptic === 'function') haptic(); } catch { /* no haptics */ } };
+// Little world sounds (same WebAudio idea as sqSound, and quiet when sound is off): a grass rustle, a two-note "!" sting
+function wSound(kind) {
+  if (state.settings.sound === false) return;
+  try {
+    actx ||= new (window.AudioContext || window.webkitAudioContext)();
+    const t = actx.currentTime, out = actx.createGain(); out.connect(actx.destination);
+    if (kind === 'rustle') {
+      const n = Math.floor(actx.sampleRate * 0.18), buf = actx.createBuffer(1, n, actx.sampleRate), d = buf.getChannelData(0);
+      for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n) * (0.6 + 0.4 * Math.sin(i / 90));
+      const src = actx.createBufferSource(), f = actx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 2600; f.Q.value = 0.7;
+      src.buffer = buf; out.gain.setValueAtTime(0.07, t); out.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+      src.connect(f).connect(out); src.start(t); src.stop(t + 0.2); return;
+    }
+    for (const [k, fq] of [[0, 784], [0.12, 1175]]) {
+      const o = actx.createOscillator(), gn = actx.createGain(); o.type = 'square'; o.frequency.setValueAtTime(fq, t + k);
+      gn.gain.setValueAtTime(0.0001, t + k); gn.gain.exponentialRampToValueAtTime(0.07, t + k + 0.015); gn.gain.exponentialRampToValueAtTime(0.0001, t + k + 0.13);
+      o.connect(gn).connect(out); o.start(t + k); o.stop(t + k + 0.15);
+    }
+  } catch { /* no audio */ }
+}
 const getWorld = () => (WG.world ||= buildWorld());
 const regionAt = (x, y) => { const cx = Math.floor(x / RW), cy = Math.floor(y / RH); return REG_POS.findIndex(([a, b]) => a === cx && b === cy); };
 function wMe() {
@@ -220,8 +241,8 @@ function wMe() {
   if (!state.world || typeof state.world !== 'object' || Array.isArray(state.world)) state.world = {};
   let p = state.world[me]; if (!p || typeof p !== 'object' || Array.isArray(p)) p = state.world[me] = {};
   if (!p.ch) {
-    const [sx, sy] = WREG[0].start;
-    Object.assign(p, { x: sx, y: sy, d: 'down', ch: 1, step: 0, cnt: 0, flags: {}, items: {}, bubbles: 5, bDay: today(), visited: {}, done: [], guide: {}, sides: {}, intro: false });
+    const ml = (WREG[0].npcs || []).find((n) => n.id === 'mallow'), [sx, sy] = ml ? [ml.x, ml.y + 2] : WREG[0].start; // a new Ranger starts right in front of Professor Mallow
+    Object.assign(p, { x: sx, y: sy, d: 'up', ch: 1, step: 0, cnt: 0, flags: {}, items: {}, bubbles: 5, bDay: today(), visited: {}, done: [], guide: {}, sides: {}, intro: false });
   }
   // Repair old or damaged progress so the game can always continue
   for (const k of ['flags', 'items', 'visited', 'guide', 'sides']) if (!p[k] || typeof p[k] !== 'object') p[k] = {};
@@ -957,9 +978,11 @@ function drawBlocker(g, o, s, cam) {
 function resize() {
   const cv = WG.cv; if (!cv) return;
   const r = WG.layer.getBoundingClientRect();
-  WG.dpr = Math.min(2, window.devicePixelRatio || 1);
+  // Slower phones (≤4 cores or ≤4 GB) draw at 1.5× instead of 2×: less to paint, hardly any visible difference
+  const weak = (navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 8) <= 4;
+  WG.dpr = Math.min(weak ? 1.5 : 2, window.devicePixelRatio || 1);
   const want = Math.max(32, Math.min(58, Math.floor(Math.min(r.width / 11, r.height / 12))));
-  if (want !== WG.ts) { WG.ts = want; for (const c of WG.chunks.values()) c.width = c.height = 0; WG.chunks.clear(); clearSprites(); for (const c of WG.tspr.values()) c.width = 0; WG.tspr.clear(); }
+  if (want !== WG.ts) { WG.ts = want; WG.warm = true; for (const c of WG.chunks.values()) c.width = c.height = 0; WG.chunks.clear(); clearSprites(); for (const c of WG.tspr.values()) c.width = 0; WG.tspr.clear(); }
   cv.width = Math.round(r.width * WG.dpr); cv.height = Math.round(r.height * WG.dpr);
   cv.style.width = r.width + 'px'; cv.style.height = r.height + 'px';
   WG.vw = r.width; WG.vh = r.height;
@@ -979,7 +1002,13 @@ function draw() {
   g.fillStyle = wDk(R.pal.leaf, 0.35); g.fillRect(0, 0, WG.vw, WG.vh);
   const x0 = Math.floor(cam.x / CH), y0 = Math.floor(cam.y / CH), x1 = Math.floor((cam.x + WG.vw / s) / CH), y1 = Math.floor((cam.y + WG.vh / s) / CH);
   WG.built = false;
-  for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) { if (cx * CH >= MW || cy * CH >= MH) continue; g.drawImage(chunk(cx, cy), (cx * CH - cam.x) * s, (cy * CH - cam.y) * s, CH * s, CH * s); }
+  let cold = null; // first entry: chunks are painted a layer at a time over a few frames (plain ground until then), never all in one long frame
+  for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
+    if (cx * CH >= MW || cy * CH >= MH) continue;
+    if (WG.warm && !WG.chunks.has(chunkKey(cx, cy))) { cold ||= [cx, cy]; const RR = WREG[Math.max(0, regionAt(Math.min(MW - 1, cx * CH + 8), Math.min(MH - 1, cy * CH + 8)))] || WREG[0]; g.fillStyle = RR.pal.g1; g.fillRect((cx * CH - cam.x) * s, (cy * CH - cam.y) * s, CH * s + 1, CH * s + 1); continue; }
+    g.drawImage(chunk(cx, cy), (cx * CH - cam.x) * s, (cy * CH - cam.y) * s, CH * s, CH * s);
+  }
+  if (WG.warm) { if (cold) { const t0 = performance.now(); do chunkAhead(...cold); while (performance.now() - t0 < 10 && !WG.chunks.has(chunkKey(...cold))); } else WG.warm = false; WG.built = true; }
   // Paint the next chunk you're about to walk into ahead of time (one per quiet frame, never more than the cache holds)
   if (!WG.built) {
     const m = 5, ax0 = Math.max(0, Math.floor((cam.x - m) / CH)), ay0 = Math.max(0, Math.floor((cam.y - m) / CH)), ax1 = Math.min(Math.ceil(MW / CH) - 1, Math.floor((cam.x + WG.vw / s + m) / CH)), ay1 = Math.min(Math.ceil(MH / CH) - 1, Math.floor((cam.y + WG.vh / s + m) / CH));
@@ -1036,6 +1065,19 @@ function draw() {
   }
   WG.marks = [];
   drawGuide(g, p, cam, s, now);
+  if (WG.alert) { // "!" pop over you + shaking grass, just before an encounter
+    const k = Math.min(1, (performance.now() - WG.alert.t) / 350), [ax, ay] = WG.alert.at, Rg = WREG[regionAt(ax, ay)] || R;
+    for (const [dx, dy] of [[0, 0], [-1, 0], [1, 0], [0, -1], [0, 1]]) {
+      const tx = ax + dx, ty = ay + dy; if (w.at(tx, ty) !== T.TALL) continue;
+      const X = (tx - cam.x + 0.5) * s, Y = (ty - cam.y + 0.95) * s, wob = Math.sin(now * 40 + dx * 2 + dy) * s * 0.09 * (1 - k * 0.5);
+      g.beginPath(); for (let i = 0; i < 4; i++) ell(g, X - s * 0.3 + i * s * 0.2 + wob, Y - s * 0.22, s * 0.08, s * 0.26, (i - 1.5) * 0.25 + wob / s); fillOutline(g, Rg.pal.tall2, wRGBA(Rg.pal.tall, 0.8), 1);
+    }
+    const sc = k < 0.4 ? k / 0.4 * 1.25 : 1.25 - (k - 0.4) * 0.4, X = (px - cam.x + 0.5) * s, Y = (py - cam.y + 1) * s - s * 2.2;
+    g.save(); g.translate(X, Y); g.scale(sc, sc);
+    g.beginPath(); g.moveTo(-s * 0.12, s * 0.28); g.lineTo(0, s * 0.48); g.lineTo(s * 0.12, s * 0.28); g.closePath(); g.arc(0, 0, s * 0.36, 0, 7);
+    fillEdge(g, '#ffffff', '#e8590c', 3); g.fillStyle = '#e8590c'; g.font = `900 ${s * 0.5}px system-ui`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('!', 0, s * 0.02); g.textBaseline = 'alphabetic';
+    g.restore();
+  }
   // Floating text (+1, ! …)
   WG.parts = WG.parts.filter((pt) => now - pt.t < 1.2);
   for (const pt of WG.parts) { const k = (now - pt.t) / 1.2; g.globalAlpha = 1 - k; g.font = `900 ${s * 0.45}px system-ui`; g.textAlign = 'center'; g.fillStyle = '#fff'; g.strokeStyle = 'rgba(0,0,0,.4)'; g.lineWidth = 3; const X = (pt.x - cam.x + 0.5) * s, Y = (pt.y - cam.y - k) * s; g.strokeText(pt.text, X, Y); g.fillText(pt.text, X, Y); g.globalAlpha = 1; }
@@ -1174,10 +1216,32 @@ function worldBump(x, y, p) {
   if (getWorld().at(x, y) === T.CLOUD && !hasCloud(p)) { toast('☁️ The cloud bridge blew away! Maybe someone can call it back…'); return; }
   if (o && o.type === 'blocker' && objVisible(o, p)) { toast(BLOCKER_TEXT[o.kind] || 'The way is blocked.'); return; }
   const r = WG.roamers.find((q) => q.on && q.x === x && q.y === y);
-  if (r) { encounter(r.sid, { roamer: r, shiny: r.shiny }); return; }
+  if (r) { faceTo(x, y); wildIntro(r.sid, { roamer: r, shiny: r.shiny }, [x, y]); return; }
   const it = itemAt(x, y, p);
   if (it && it.group === 'escapee') { interact(it); return; }
-  if (o && objVisible(o, p) && o.type !== 'bld') interact(o);
+  // Squish Stops and signs only open with A or a tap: walking past one never stops you with a menu
+  if (o && objVisible(o, p) && !NO_BUMP.has(o.type)) { faceTo(x, y); interact(o); }
+}
+const NO_BUMP = new Set(['bld', 'stop', 'sign', 'zone']);
+// Something you can talk to / catch / pick up by walking into it
+function bumpable(x, y, p) {
+  const o = getWorld().occ.get(x + ',' + y);
+  if (o && objVisible(o, p) && !NO_BUMP.has(o.type) && o.type !== 'blocker') return true;
+  if (WG.roamers.some((q) => q.on && q.x === x && q.y === y)) return true;
+  return itemAt(x, y, p)?.group === 'escapee';
+}
+// Pushing the stick toward someone (straight or at an angle) while something stops you: talk to whoever is best lined up with the push
+function nearBump(v, p, hits) {
+  const cx = WG.pos.fx, cy = WG.pos.fy, len = Math.hypot(v.x, v.y) || 1;
+  let best = null, bd = 0.3, wall = null, wd = -2;
+  for (const [x, y] of hits) {
+    if (Math.abs(x - WG.pos.x) > 1 || Math.abs(y - WG.pos.y) > 1) continue; // only the 8 tiles around you
+    const dx = x - cx, dy = y - cy, dot = (dx * v.x + dy * v.y) / len / (Math.hypot(dx, dy) || 1);
+    if (bumpable(x, y, p)) { if (dot > bd) { bd = dot; best = [x, y]; } } else if (dot > wd) { wd = dot; wall = [x, y]; }
+  }
+  const t = best || (Math.abs(v.x) > 0.6 || Math.abs(v.y) > 0.6 ? wall : null);
+  if (t) worldBump(t[0], t[1], p);
+  return !!best;
 }
 function update(dt) {
   const p = wMe(); if (!p) return;
@@ -1207,7 +1271,7 @@ function update(dt) {
     const o = WG.pendingTalk; WG.pendingTalk = null;
     if (Math.abs(o.x - WG.pos.x) + Math.abs(o.y - WG.pos.y) > 1) return; // it moved
     faceTo(o.x, o.y);
-    if (o.sid && o.on !== undefined) { if (o.on) encounter(o.sid, { roamer: o, shiny: o.shiny }); } else interact(o);
+    if (o.sid && o.on !== undefined) { if (o.on) wildIntro(o.sid, { roamer: o, shiny: o.shiny }, [o.x, o.y]); } else interact(o);
     return;
   }
   if (WG.hold) analogStep(dt, p);
@@ -1220,10 +1284,10 @@ const BODY = 0.3;   // half the width of your feet, in tiles
 const cardinal = (vx, vy) => (Math.abs(vx) > Math.abs(vy) ? (vx > 0 ? 'right' : 'left') : vy > 0 ? 'down' : 'up');
 function boxTiles(cx, cy) { const out = new Set(); for (const ox of [-BODY, BODY]) for (const oy of [-BODY, BODY]) out.add(Math.round(cx + ox) + ',' + Math.round(cy + oy)); return out; }
 // Only tiles you'd newly step into can stop you, so you can always walk out of a spot
-function boxFree(nx, ny, ox, oy, p) {
+function boxFree(nx, ny, ox, oy, p, hits) {
   const was = boxTiles(ox, oy);
-  for (const k of boxTiles(nx, ny)) { if (was.has(k)) continue; const [x, y] = k.split(',').map(Number); if (blockedAt(x, y, p)) return false; }
-  return true;
+  for (const k of boxTiles(nx, ny)) { if (was.has(k)) continue; const [x, y] = k.split(',').map(Number); if (blockedAt(x, y, p)) { if (!hits) return false; hits.push([x, y]); } }
+  return !hits || !hits.length;
 }
 function analogStep(dt, p) {
   const v = WG.hold, w = getWorld();
@@ -1231,19 +1295,22 @@ function analogStep(dt, p) {
   if (w.at(WG.pos.x, WG.pos.y) === T.ICE) { tryStep(cardinal(v.x, v.y)); return; }
   const fx = WG.pos.fx, fy = WG.pos.fy, sp = WALK * v.m * Math.min(dt, 0.05);
   let nx = fx, ny = fy;
+  const hits = []; // tiles that stopped you this frame
   const axis = (dx, dy, along) => {
     // Try the move; if a wall's in the way, ease toward the open lane next to it (doors and paths are one tile wide)
-    if (boxFree(nx + dx, ny + dy, nx, ny, p)) { nx += dx; ny += dy; return; }
+    if (boxFree(nx + dx, ny + dy, nx, ny, p, hits)) { nx += dx; ny += dy; return; }
     const sgn = Math.sign(dx || dy), lane = along ? Math.round(ny) : Math.round(nx);
     const ahead = along ? [Math.round(nx + sgn * (BODY + 0.5)), lane] : [lane, Math.round(ny + sgn * (BODY + 0.5))];
     const off = along ? ny - lane : nx - lane, main = along ? Math.abs(v.x) : Math.abs(v.y);
     if (!blockedAt(ahead[0], ahead[1], p) && Math.abs(off) > 0.001) {
       const step = Math.min(Math.abs(off), Math.abs(dx || dy)) * -Math.sign(off);
       if (along && boxFree(nx, ny + step, nx, ny, p)) ny += step; else if (!along && boxFree(nx + step, ny, nx, ny, p)) nx += step;
-    } else if (main > 0.6 && blockedAt(ahead[0], ahead[1], p)) worldBump(ahead[0], ahead[1], p); // walked into someone or something
+    } else if (main > 0.6 && blockedAt(ahead[0], ahead[1], p)) hits.push(ahead); // walked into someone or something, in your lane
   };
   if (Math.abs(v.x) > 0.01) axis(v.x * sp, 0, true);
   if (Math.abs(v.y) > 0.01) axis(0, v.y * sp, false);
+  // Bumped into something (straight or at an angle): whoever you can talk to and is best lined up with the push, else the wall
+  if (hits.length && v.m > 0.45) nearBump(v, p, hits);
   if (WG.busy || WG.move) return; // bumping started a chat or an encounter
   WG.pos.d = cardinal(v.x, v.y);
   WG.walking = Math.abs(nx - fx) + Math.abs(ny - fy) > 1e-4;
@@ -1266,9 +1333,21 @@ function arrive(dir) {
   if (typeof liveSend === 'function' && Date.now() - (WG.liveT || 0) > (typeof Live !== 'undefined' && Live.fallback ? 3000 : 1000)) { WG.liveT = Date.now(); clearTimeout(Live.timer); liveSend(); } else if (typeof livePush === 'function') livePush();
   if (Date.now() - WG.saveT > 3000) { WG.saveT = Date.now(); savePos(); }
   // Wild encounters in tall grass
+  const tall = w.at(x, y) === T.TALL, wasTall = WG.inTall; WG.inTall = tall;
+  if (tall && !wasTall && performance.now() - (WG.rustleT || 0) > 300) { WG.rustleT = performance.now(); wSound('rustle'); }
   const canEnc = (p.bubbles || 0) > 0 || !!curStep(p)?.catch;
-  if (canEnc && w.at(x, y) === T.TALL && !WG.path.length && WG.steps - WG.lastEnc > 2 && Math.random() < 0.13) { WG.lastEnc = WG.steps; WG.hold = null; WG.queue = null; WG.path = []; setTimeout(() => encounter(wildSid(r), {}), 120); }
-  else if (canEnc && w.at(x, y) === T.TALL && WG.path.length && WG.steps - WG.lastEnc > 3 && Math.random() < 0.08) { WG.lastEnc = WG.steps; WG.path = []; WG.pendingTalk = null; setTimeout(() => encounter(wildSid(r), {}), 120); }
+  // Out of bubbles: say once (a day) why nothing pops out of the grass
+  if (tall && !canEnc && p.flags.noBub !== today()) { p.flags.noBub = today(); save(); toast('🫧 No bubbles left, so squishies stay hidden. Get more at a Bubble Shop, by helping people, or 5 free tomorrow!'); }
+  if (canEnc && tall && !WG.path.length && WG.steps - WG.lastEnc > 2 && Math.random() < 0.13) { WG.lastEnc = WG.steps; WG.hold = null; WG.queue = null; WG.path = []; wildIntro(wildSid(r), {}, [x, y]); }
+  else if (canEnc && tall && WG.path.length && WG.steps - WG.lastEnc > 3 && Math.random() < 0.08) { WG.lastEnc = WG.steps; WG.path = []; WG.pendingTalk = null; wildIntro(wildSid(r), {}, [x, y]); }
+}
+// Before a wild squishy appears: a "!" pops over you and the grass shakes for a moment, then the cut to the encounter
+function wildIntro(sid, opt, at) {
+  if (WG.busy || !WG.layer || WG.layer.hidden) return;
+  const ep = WG.epoch; wLock();
+  WG.alert = { t: performance.now(), at: at || [WG.pos.x, WG.pos.y] };
+  wSound('sting'); wBuzz();
+  setTimeout(() => { WG.alert = null; if (ep !== WG.epoch) return; wUnlock(); encounter(sid, opt); }, 350);
 }
 const WPOS_KEY = 'gomezfam:wpos';
 try { const x = JSON.parse(localStorage.getItem(WPOS_KEY) || 'null'); if (x && typeof x === 'object' && !Array.isArray(x)) state.settings.wpos = { ...(state.settings.wpos && typeof state.settings.wpos === 'object' ? state.settings.wpos : {}), ...x }; } catch {}
@@ -1281,13 +1360,17 @@ function savePos() {
 }
 window.addEventListener('pagehide', () => { if (WG.layer && !WG.layer.hidden) savePos(); });
 function enterRegion(r, p) {
+  const changed = r !== WG.region;
   WG.region = r;
   if (r < 0) return;
+  if (!changed) { updateHud(); return; } // a hop inside the same region: keep its squishies, no title card
   const R = WREG[r];
   if (!p.visited[r]) p.visited[r] = 1;
   WG.roamers = [];
   for (let i = 0; i < 4; i++) { const q = { region: r, on: false, back: 0 }; spawnRoamer(q); WG.roamers.push(q); }
-  titleCard(R);
+  if (!WG.introOn) titleCard(R);
+  // No bubbles at all: one free practice bubble when you arrive somewhere (once a day per region)
+  if (!(p.bubbles > 0) && p.intro && p.flags['pb' + r] !== today()) { p.flags['pb' + r] = today(); p.bubbles = 1; save(); setTimeout(() => { if (!WG.layer?.hidden) toast('🫧 Here’s a free practice bubble — try the tall grass!'); }, 900); }
   updateHud();
 }
 function spawnRoamer(q) {
@@ -1341,7 +1424,7 @@ function onTap(e) {
   if (!o || !objVisible(o, p) || o.type === 'bld') o = WG.roamers.find((q) => q.on && q.x === tx && q.y === ty) || itemAt(tx, ty, p) || (o && o.type === 'bld' ? null : o);
   if (o && o.type === 'bld') o = null;
   if (o && objVisible(o, p) && o.type !== 'zone') {
-    if (Math.abs(o.x - WG.pos.x) + Math.abs(o.y - WG.pos.y) === 1) { faceTo(o.x, o.y); if (o.sid && o.on) encounter(o.sid, { roamer: o, shiny: o.shiny }); else interact(o); return; }
+    if (Math.abs(o.x - WG.pos.x) + Math.abs(o.y - WG.pos.y) === 1) { faceTo(o.x, o.y); if (o.sid && o.on) wildIntro(o.sid, { roamer: o, shiny: o.shiny }, [o.x, o.y]); else interact(o); return; }
     const path = pathTo(o.x, o.y, true);
     if (path) { WG.path = path; WG.pendingTalk = o; }
     return;
@@ -1366,7 +1449,7 @@ function pressA() {
   if (WG.busy) return;
   const o = frontObj();
   if (!o) { WG.parts.push({ x: WG.pos.x, y: WG.pos.y, text: '?', t: performance.now() / 1000 }); return; }
-  if (o.sid && o.on !== undefined) encounter(o.sid, { roamer: o, shiny: o.shiny }); else interact(o);
+  if (o.sid && o.on !== undefined) wildIntro(o.sid, { roamer: o, shiny: o.shiny }, [o.x, o.y]); else interact(o);
 }
 
 /* =========================================================
@@ -1412,6 +1495,7 @@ async function runStep(p, st, o) {
       const ok = await miniGame({ ...st.game, art: o.type === 'guardian' ? squishySVG(guardianSid(o)) : o.type === 'special' ? squishySVG(specialSid(o)) : '', who: o.id });
       if (!live()) return;
       if (!ok) { if (st.lose) await dialog(st.lose); return; }
+      { const q = wMe(); if (q) { q.bubbles = (q.bubbles || 0) + 3; floatText('+3 🫧'); updateHud(); save(); } } // winning a game always pays a few bubbles
       if (st.win) await dialog(st.win);
       if (!live()) return;
       p = wMe(); if (!p || curStep(p) !== st) return; // state was replaced and the step already moved on
@@ -1543,7 +1627,7 @@ function titleCard(R) {
   setTimeout(() => t.classList.add('out'), 2200); setTimeout(() => t.remove(), 2900);
 }
 const chapterCard = (R) => cardOverlay(`<div class="wc-art">${R.emoji}</div><div class="wc-kick">Chapter ${R.ch}</div><h2>${esc(R.title)}</h2><p>${R.ch === 1 ? `Your adventure starts in <b>${esc(R.name)}</b>!` : `The road to <b>${esc(R.name)}</b> is open!`}</p>`, 'Let’s go!');
-const starCard = (ch, gems) => cardOverlay(`<div class="wc-art star">⭐</div><div class="wc-kick">Chapter ${ch} complete!</div><h2>${esc(WREG[ch - 1].name)} Star</h2><p>${ch} of 8 Squish Stars found</p><div class="wc-stars">${[1, 2, 3, 4, 5, 6, 7, 8].map((k) => `<i class="${k <= ch ? 'on' : ''}">★</i>`).join('')}</div><p class="wc-rew">+${gems} ${GEM} · +5 🫧</p>`, 'Yay!');
+const starCard = (ch, gems) => cardOverlay(`<div class="wc-art star">⭐</div><div class="wc-kick">Chapter ${ch} complete!</div><h2>${esc(WREG[ch - 1].name)} Star</h2><p>${ch} of 8 Squish Stars found</p><div class="wc-stars">${[1, 2, 3, 4, 5, 6, 7, 8].map((k) => `<i class="${k <= ch ? 'on' : ''}">★</i>`).join('')}</div><p class="wc-rew">+${gems} ${GEM} · +5 🫧</p><p class="small">🏆 A new trophy is waiting in your Dream House (Earned)!</p>`, 'Yay!');
 function celebrateJoin(sid, isNew, nick) { sqSound('win'); setTimeout(() => toast(`💖 ${nick && nick !== SQ[sid].name ? nick + ' the ' + SQ[sid].name : SQ[sid].name} joined your collection!${isNew ? ' (New!)' : ''}`), 200); }
 const endingCard = () => cardOverlay(`<div class="wc-art">🎉</div><div class="wc-kick">The End… for now!</div><h2>The Great Squish Festival</h2><p>All eight Squish Stars shine over Squishvale. The squishies are soft and happy, the Baron runs the best cookie stand in town, and you are a true <b>Squish Ranger</b>.</p><p class="wc-rew">👑 Star Ranger unlocked!</p><p class="small">Keep exploring, catch every squishy, and play together with your family!</p>`, 'Keep playing');
 function floatText(text) { if (WG.pos) WG.parts.push({ x: WG.pos.x, y: WG.pos.y, text, t: performance.now() / 1000 }); }
@@ -1569,17 +1653,20 @@ async function encounter(sid, opt = {}) {
     <div class="we-stage"><svg class="we-ring" viewBox="-50 -50 100 100"><circle class="we-zone" r="${(0.45 * 46).toFixed(1)}" stroke-width="${(zone * 46).toFixed(1)}"/><circle class="we-cur" r="40"/></svg><div class="we-sq">${squishySVG(sid, { shiny: opt.shiny })}</div></div>
     <div class="we-msg">${simple ? 'Tap 🫧 when the ring is GREEN!' : 'Toss when the ring turns GREEN!'}</div>
     <div class="we-btns"><button class="we-throw">🫧 Toss <small>${p.bubbles || 0}</small></button><button class="we-run">🏃 Run</button></div>`);
-  sqSound('pop');
-  const cur = d.querySelector('.we-cur'), msg = d.querySelector('.we-msg'), sqEl = d.querySelector('.we-sq');
-  let t0 = performance.now(), raf = 0, misses = 0, done = false, lock = false;
+  sqSound('pop'); wBuzz();
+  const cur = d.querySelector('.we-cur'), zEl = d.querySelector('.we-zone'), msg = d.querySelector('.we-msg'), sqEl = d.querySelector('.we-sq');
+  let t0 = performance.now(), raf = 0, misses = 0, done = false, lock = false, was = false;
   const rad = () => { const ph = ((performance.now() - t0) / 1000 / speed) % 2; return ph < 1 ? 1 - ph * 0.85 : 0.15 + (ph - 1) * 0.85; };
   const inZone = (r) => Math.abs(r - 0.45) <= zone / 2;
-  const tick = () => { if (!d.isConnected) return; const r = rad(); cur.setAttribute('r', (r * 46).toFixed(1)); cur.classList.toggle('in', inZone(r)); raf = requestAnimationFrame(tick); };
+  // The ring turns green inside the zone, the zone lights up, and the phone gives a tiny tap as it enters
+  const tick = () => { if (!d.isConnected) return; const r = rad(), on = inZone(r); cur.setAttribute('r', (r * 46).toFixed(1)); cur.classList.toggle('in', on); zEl.classList.toggle('hot', on); if (on && !was && !done && !lock) wBuzz(); was = on; raf = requestAnimationFrame(tick); };
   tick();
   const finish = (caught) => new Promise((res) => {
     done = true; cancelAnimationFrame(raf);
+    d.querySelectorAll('.we-btns button').forEach((b) => (b.disabled = true));
     setTimeout(() => { d.remove(); res(caught); }, caught ? 1400 : 700);
   });
+  const toss = () => { const ball = document.createElement('div'); ball.className = 'we-ball'; d.querySelector('.we-stage').appendChild(ball); setTimeout(() => ball.remove(), 450); };
   return new Promise((resolve) => {
     d.querySelector('.we-run').onclick = async () => { if (done) return; msg.textContent = 'You got away safely.'; resolve(await finish(false)); };
     d.querySelector('.we-throw').onclick = async () => {
@@ -1590,8 +1677,9 @@ async function encounter(sid, opt = {}) {
       lock = true;
       p.bubbles--; d.querySelector('.we-throw small').textContent = p.bubbles;
       const hit = WG.debug.autoWin || inZone(rad());
-      sqEl.classList.add(hit ? 'caught' : 'dodge');
+      toss(); setTimeout(() => sqEl.classList.add(hit ? 'caught' : 'dodge'), 260); // the bubble flies, then lands (or misses)
       if (hit) {
+        done = true; d.querySelectorAll('.we-btns button').forEach((b) => (b.disabled = true)); wBuzz();
         sqSound('win'); msg.innerHTML = `<b>Gotcha!</b> ${esc(s.name)} is in your bubble! 🫧`;
         const { isNew } = giveSquishy(actor(), sid, 'wild', opt.shiny ? { shiny: true } : {});
         const dust = isNew ? 0 : (typeof DUST !== 'undefined' ? DUST[s.r] || 1 : 0);
@@ -1605,10 +1693,10 @@ async function encounter(sid, opt = {}) {
         resolve(await finish(true));
         return;
       }
-      sqSound('goo'); misses++;
+      sqSound('goo'); wBuzz(); misses++;
       if (misses >= flee) { msg.textContent = `${s.name} bounced away into the grass!`; if (opt.roamer) { opt.roamer.on = false; opt.roamer.back = performance.now() + 15000; } save(); resolve(await finish(false)); return; }
       msg.textContent = ['So close! Try again!', 'It wiggled free!', 'Almost! Watch the ring…'][(misses - 1) % 3];
-      setTimeout(() => { sqEl.classList.remove('dodge'); lock = false; }, 600);
+      setTimeout(() => { sqEl.classList.remove('dodge'); lock = false; }, 860);
       save();
     };
   });
@@ -1764,6 +1852,8 @@ function travelMenu(o) {
   const p = wMe();
   if (o) { p.visited[o.c] = 1; save(); }
   const stops = WREG.map((R, c) => ({ R, c, ok: p.visited[c] }));
+  // Only one town so far: nowhere to hop to yet, so no menu
+  if (o && stops.filter((x) => x.ok).length <= 1) { sqSound('pop'); wBuzz(); toast('Squish Stop saved! ⭐ Find more stops to hop between towns.'); return; }
   const d = wEl('wcard', `<div class="wc-in"><div class="wc-art">⭐</div><h2>Squish Stops</h2><p>Hop to any town you’ve visited.</p><div class="wt-list">${stops.map(({ R, c, ok }) => `<button class="wt-stop" data-c="${c}" ${ok ? '' : 'disabled'}><span>${ok ? R.emoji : '🔒'}</span><b>${ok ? esc(R.name) : '???'}</b></button>`).join('')}</div><button class="btn block secondary wc-go">Close</button></div>`);
   d.querySelectorAll('.wt-stop').forEach((b) => (b.onclick = () => { const st = getWorld().objs.find((x) => x.type === 'stop' && x.c === Number(b.dataset.c)); d.remove(); teleport(st.x, st.y + 1); }));
   d.querySelector('.wc-go').onclick = () => d.remove();
@@ -1909,18 +1999,20 @@ function mount() {
     if (blockedAt(bx, by, p)) { let f = null; for (let rr = 1; rr < 8 && !f; rr++) for (let dy = -rr; dy <= rr && !f; dy++) for (let dx = -rr; dx <= rr; dx++) if (!blockedAt(bx + dx, by + dy, p)) { f = [bx + dx, by + dy]; break; } const [sx, sy] = f || WREG[0].start; Object.assign(WG.pos, { x: sx, y: sy, fx: sx, fy: sy }); }
     WG.region = -1; WG.roamers = [];
   }
+  if (!WG.chunks.size) WG.warm = true;
+  if (!p.intro) WG.introOn = true; // no region title card under the opening slides
   resize();
   if (WG.region < 0) enterRegion(regionAt(WG.pos.x, WG.pos.y), p);
   updateHud();
   if (!WG.raf) { let last = performance.now(); const loop = (t) => { WG.raf = requestAnimationFrame(loop); const dt = Math.min(0.05, (t - last) / 1000); last = t; try { syncOthers(); update(dt); draw(); arrowUpdate(); if (t - (WG.readyT || 0) > 200) { WG.readyT = t; WG.layer.querySelector('.wh-a')?.classList.toggle('ready', !WG.busy && !WG.move && !!frontObj()); } } catch (e) { console.error(e); } }; WG.raf = requestAnimationFrame(loop); }
-  if (!p.intro) { p.intro = true; save(); setTimeout(() => introSlides().then(() => { if (WG.region >= 0 && !WG.layer.hidden) titleCard(WREG[WG.region]); }), 300); }
+  if (!p.intro) { p.intro = true; WG.introOn = true; save(); setTimeout(() => introSlides().then(() => { WG.introOn = false; if (WG.region >= 0 && !WG.layer.hidden) titleCard(WREG[WG.region]); }), 300); }
 }
 function unmount() {
   if (!WG.layer || WG.layer.hidden) return;
   savePos();
   WG.layer.hidden = true; document.body.classList.remove('world-mode');
   cancelAnimationFrame(WG.raf); WG.raf = 0; WG.hold = null; WG.queue = null; WG.path = [];
-  WG.layer.querySelectorAll('.wdlg, .wenc, .wgame, .wcard, .wmenu').forEach((x) => x.remove()); WG.lockN = 0; WG.epoch++;
+  WG.layer.querySelectorAll('.wdlg, .wenc, .wgame, .wcard, .wmenu').forEach((x) => x.remove()); WG.lockN = 0; WG.epoch++; WG.introOn = false; WG.alert = null;
 }
 function syncOthers() {
   if (typeof Live === 'undefined') return;
@@ -1967,9 +2059,30 @@ afterRender = function () {
 };
 // Entry tiles: Play screen and kid homes
 const _playView = views.play;
-views.play = () => _playView().replace('<div class="launch">', `<div class="launch"><button class="tile tile-world" data-action="go" data-to="world" style="--t:#22b8cf"><span class="tile-e">🗺️</span><b>Squishvale</b><small>${wStatus(actor())}</small></button>`);
+views.play = () => _playView().replace('<div class="launch">', playHero(actor()) + '<div class="launch">');
+// Play launcher hero: where you are in Squishvale, plus a free box / your turn when there is one
+function playHero(id) {
+  const q = id && state.world?.[id], ch = q?.ch || 0, done = Array.isArray(q?.done) ? q.done.length : 0;
+  const goal = !ch ? 'Start your adventure with Professor Mallow!' : (q.step >= 0 && ch <= 8 && STORY[ch]?.[q.step] ? goalText({ items: {}, ...q }) : '') || (ch > 8 ? 'All 8 stars home! Keep catching squishies 📖' : 'Keep exploring!');
+  const pct = Math.round(Math.min(1, (done + (ch && ch <= 8 && STORY[ch] ? (q.step || 0) / STORY[ch].length : 0)) / 8) * 100);
+  const free = id && typeof sqBankOf === 'function' && (state.squish.free[id] !== today() || sqBankOf(id) > 0);
+  const turns = id && typeof myTurnGames === 'function' ? myTurnGames().length : 0;
+  const chips = (free ? '<button class="ph-chip" data-action="go" data-to="squishies">🎁 Free box!</button>' : '') + (turns ? `<button class="ph-chip hot" data-action="go" data-to="games">🔴 Your turn${turns > 1 ? ` (${turns})` : ''}</button>` : '');
+  return `<section class="play-hero"><button class="ph-main" data-action="go" data-to="world"><span class="ph-e">🗺️</span><span class="ph-txt"><b>Squishvale <small>${ch ? (ch > 8 ? '⭐ 8/8' : `⭐ ${done}/8 · Ch. ${ch}`) : 'New!'}</small></b><span class="ph-goal">${esc(goal)}</span><i class="ph-bar"><b style="width:${pct}%"></b></i></span><span class="ph-go">▶</span></button>${chips ? `<div class="ph-chips">${chips}</div>` : ''}</section>`;
+}
+// Where a squishy lives in the wild (first region whose grass has it), for the collection book
+function wildWhere(sid) {
+  if (WG.wildDay !== today()) { WG.wildDay = today(); WG.wildAt = {}; for (let r = WREG.length - 1; r >= 0; r--) for (const s of wildPool(r)) WG.wildAt[s.id] = r; }
+  return WG.wildAt[sid] ?? -1;
+}
 const _kidWorld = views.kid;
-views.kid = () => _kidWorld().replace('<div class="launch', `<div class="launch-pre"></div><div class="launch`).replace('<div class="launch-pre"></div><div class="launch big">', '<div class="launch big"><button class="tile" data-action="go" data-to="world" style="--t:#22b8cf"><span class="tile-e">🗺️</span><b>Adventure</b><small>Squishvale</small></button>').replace('<div class="launch-pre"></div><div class="launch">', `<div class="launch"><button class="tile" data-action="go" data-to="world" style="--t:#22b8cf"><span class="tile-e">🗺️</span><b>Squishvale</b><small>${wStatus(kidModeId())}</small></button>`);
+// Squishvale sits with the other play tiles (after jobs, routine and rewards), locked like them until today's jobs are done.
+views.kid = () => {
+  const html = _kidWorld(), big = html.includes('<div class="launch big">'), id = kidModeId();
+  const t0 = { to: 'world', e: '🗺️', label: big ? 'Adventure' : 'Squishvale', sub: big ? 'Squishvale' : wStatus(id), color: '#22b8cf' };
+  const t = tileHTML(typeof lockTile === 'function' ? lockTile(t0, id) : t0);
+  return html.includes('<i class="play-at" hidden></i>') ? html.replace('<i class="play-at" hidden></i>', t) : html.replace(/<div class="launch( big)?">/, (m) => m + t);
+};
 function wStatus(id) { const q = id && state.world?.[id]; return q?.ch ? (q.ch > 8 ? '⭐ 8/8 · Free roam' : `⭐ ${q.done?.length || 0}/8 · Ch. ${q.ch}`) : 'New adventure!'; }
 if (typeof PG_SKIP !== 'undefined') PG_SKIP.add('world');
 
@@ -1982,6 +2095,6 @@ if (typeof ULTS !== 'undefined' && !SQ.u_ranger) {
 }
 
 // Test hooks
-window.WorldDebug = { WG, getWorld, wMe, iceSolve, teleport: (x, y) => teleport(x, y), interact, encounter, miniGame, objById, stepTarget, tryStep, blockedAt, pathTo, regionAt, MW, MH, RW, RH, REG_POS, T, completeChapter };
+window.WorldDebug = { WG, getWorld, wMe, iceSolve, teleport: (x, y) => teleport(x, y), interact, encounter, miniGame, objById, stepTarget, tryStep, blockedAt, pathTo, regionAt, MW, MH, RW, RH, REG_POS, T, completeChapter, wildIntro, arrive };
 // sync.js drew the first screen before this file registered the world route: draw it again if we opened on #world.
 if (currentRoute().name === 'world') render();

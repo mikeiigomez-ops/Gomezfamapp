@@ -14,7 +14,7 @@ const gemsStart = () => (state.gems.start ||= today());
 function gemDayEarnings(id) {
   const cfg = gemsCfg(), start = gemsStart(), days = {};
   const add = (d, n, what) => { if (!d || d < start || !n) return; const x = (days[d] ||= { n: 0, items: [] }); x.n += n; x.items.push([what, n]); };
-  for (const c of state.chores) for (const l of c.log || []) if (l.memberId === id) add(l.date, (Number(c.points) || 1) * cfg.perPoint, c.title);
+  for (const c of state.chores) for (const l of c.log || []) if (l.memberId === id && logOk(l)) add(l.date, (Number(c.points) || 1) * cfg.perPoint, c.title);
   for (const r of state.routines) if (r.memberId === id) for (const [d, on] of Object.entries(r.stars || {})) if (on) add(d, cfg.routine, `${r.name} on time`);
   for (const k of state.kudos || []) if (k.to === id && k.stars) add(iso(new Date(k.at)), k.stars * cfg.kudos, `High-five from ${whoName(k.from)}`);
   for (const [d, xs] of Object.entries(state.wordle || {})) if (xs[id]?.won) add(d, cfg.word, 'Family Word solved');
@@ -22,7 +22,7 @@ function gemDayEarnings(id) {
   for (const x of Object.values(days)) x.capped = Math.min(x.n, cfg.dailyCap);
   // Chore streak bonus, on top of the daily max: day 2 of a streak = +2, day 3 = +3 … up to +5.
   if (cfg.streak) {
-    const choreDays = [...new Set(state.chores.flatMap((c) => (c.log || []).filter((l) => l.memberId === id).map((l) => l.date)))].filter((d) => d && d >= start).sort();
+    const choreDays = [...new Set(state.chores.flatMap((c) => (c.log || []).filter((l) => l.memberId === id && logOk(l)).map((l) => l.date)))].filter((d) => d && d >= start).sort();
     let run = 0, prev = '';
     for (const d of choreDays) {
       const y = parse(d); y.setDate(y.getDate() - 1);
@@ -109,9 +109,9 @@ function gemsWallet(id, mine) {
     ${pend.map((r) => `<div class="card small">⏳ Waiting for a grown-up: $${r.dollars} → ${r.gems} ${GEM}</div>`).join('')}
     <div class="section-title">How to earn</div>
     <div class="card earn-list">
-      <div><span>🧹</span>Each chore point<b>+${cfg.perPoint}</b></div>
+      <div><span>🧹</span>Each chore ⭐ star<b>+${cfg.perPoint}</b></div>
       ${cfg.routine ? `<div><span>🌅</span>Routine done on time<b>+${cfg.routine}</b></div>` : ''}
-      ${cfg.kudos ? `<div><span>🙌</span>Each bonus ⭐ in a high-five<b>+${cfg.kudos}</b></div>` : ''}
+      ${cfg.kudos ? `<div><span>🙌</span>Each bonus star in a high-five<b>+${cfg.kudos}</b></div>` : ''}
       ${cfg.word ? `<div><span>🔤</span>Solve the Family Word<b>+${cfg.word}</b></div>` : ''}
       ${cfg.checkin ? `<div><span>😊</span>Daily check-in<b>+${cfg.checkin}</b></div>` : ''}
       ${canExchange(id) ? `<div><span>🐷</span>$1 from the piggy bank<b>+${cfg.rate}</b></div>` : ''}
@@ -139,9 +139,9 @@ function gemRulesSheet() {
     title: `⚙️ Gem rules`,
     values: Object.fromEntries(Object.entries(c).map(([k, v]) => [k, typeof v === 'boolean' ? v : String(v)])),
     fields: [
-      { type: 'html', html: '<p class="small muted" style="margin:0 4px 10px">Gems are only for in-app play (Squishies and more). Chore points & ⭐ for real rewards don’t change.</p>' },
-      { row: [{ name: 'perPoint', label: '💎 per chore point', type: 'number' }, { name: 'dailyCap', label: 'Daily max', type: 'number' }] },
-      { row: [{ name: 'routine', label: 'On-time routine', type: 'number' }, { name: 'kudos', label: 'Per bonus ⭐', type: 'number' }] },
+      { type: 'html', html: '<p class="small muted" style="margin:0 4px 10px">Gems are only for in-app play (Squishies and more). Chore ⭐ stars for real rewards don’t change.</p>' },
+      { row: [{ name: 'perPoint', label: '💎 per chore ⭐', type: 'number' }, { name: 'dailyCap', label: 'Daily max', type: 'number' }] },
+      { row: [{ name: 'routine', label: 'On-time routine', type: 'number' }, { name: 'kudos', label: 'Per bonus star', type: 'number' }] },
       { row: [{ name: 'word', label: 'Family Word win', type: 'number' }, { name: 'checkin', label: 'Check-in', type: 'number' }] },
       { name: 'streak', label: '🔥 Chore streak bonus (× day, max 5)', type: 'number', hint: '1 = day 2 of a streak earns +2, day 5+ earns +5. Not counted toward the daily max. 0 turns it off.' },
       { row: [{ name: 'sqEvery', label: '🤏 Squishes per free box', type: 'number' }, { name: 'sqDaily', label: 'Max boxes a day', type: 'number' }] },

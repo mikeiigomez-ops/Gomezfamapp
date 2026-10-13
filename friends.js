@@ -12,30 +12,43 @@ const RULE_DEFAULTS = { on: false, chat: 'preset', trade: 'approve', hearts: tru
 const CIRCLE_RULES = `rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    function signedIn() { return request.auth != null && request.auth.token.email_verified; }
+    function me() { return request.auth.token.email; }
+    function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
     match /families/{familyId} {
-      function signedIn() { return request.auth != null && request.auth.token.email_verified; }
-      function isMember() { return signedIn() && request.auth.token.email in resource.data.emails; }
+      function isMember() { return signedIn() && me() in resource.data.emails; }
       // Kid logins (listed in "kids") can sync app data but never change who has access or delete the family
-      function isKid() { return request.auth.token.email in resource.data.get('kids', []); }
+      function isKid() { return me() in resource.data.get('kids', []); }
+      // Every write is signed with the writer's own email and moves the revision forward by one
+      function honest() {
+        return (!changed().hasAny(['updatedBy']) || request.resource.data.updatedBy == me())
+          && (!changed().hasAny(['rev']) || request.resource.data.rev == resource.data.get('rev', 0) + 1);
+      }
       allow read: if isMember();
-      allow update: if isMember() && (!isKid()
-        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['data', 'rev', 'updatedAt', 'updatedBy', 'live']));
+      allow update: if isMember() && honest() && (!isKid()
+        || changed().hasOnly(['data', 'rev', 'updatedAt', 'updatedBy', 'live']));
       allow delete: if isMember() && !isKid();
-      allow create: if signedIn() && request.auth.token.email in request.resource.data.emails;
+      allow create: if signedIn() && me() in request.resource.data.emails
+        && request.resource.data.get('kids', []).size() == 0;
     }
     // Live visits: each person's spot in Dream House or Squishvale, readable by the family
     match /families/{familyId}/live/{memberId} {
-      allow read, write: if request.auth != null
-        && request.auth.token.email_verified
-        && request.auth.token.email in get(/databases/$(database)/documents/families/$(familyId)).data.emails;
+      allow read, write: if signedIn()
+        && me() in get(/databases/$(database)/documents/families/$(familyId)).data.emails;
     }
+    // Friends Circles: only the family that started the circle ("owners") can remove people or change owners.
+    // Other families can add emails (their own partner/kids) but never take anyone off the list.
     match /circles/{circleId} {
-      allow read, update: if request.auth != null
-        && request.auth.token.email_verified
-        && request.auth.token.email in resource.data.emails;
-      allow create: if request.auth != null
-        && request.auth.token.email_verified
-        && request.auth.token.email in request.resource.data.emails;
+      function inCircle() { return signedIn() && me() in resource.data.emails; }
+      function isOwner() { return me() in resource.data.get('owners', []); }
+      allow read: if inCircle();
+      allow update: if inCircle() && (isOwner() || (
+        request.resource.data.emails.hasAll(resource.data.emails)
+        && (!changed().hasAny(['owners']) || !('owners' in resource.data))
+        && !changed().hasAny(['createdAt'])));
+      allow create: if signedIn()
+        && me() in request.resource.data.emails
+        && me() in request.resource.data.get('owners', [me()]);
     }
   }
 }`;
@@ -131,6 +144,18 @@ function circleEmails(d) {
   for (const e of Object.keys(d.invites || {})) set.add(e.toLowerCase());
   return [...set];
 }
+// The circle's access fields. Only the starting family ("owners") may take emails off; others only add (see CIRCLE_RULES).
+const circleOwners = () => { const kidE = new Set(Object.values(state.kidAccounts || {}).map((a) => String(a?.email || '').toLowerCase())); return myFamEmails().filter((e) => !kidE.has(e)); };
+function circleAccess(doc, d) {
+  const me = String(Sync.user?.email || '').toLowerCase(), emails = circleEmails(d);
+  if (Array.isArray(doc.owners)) {
+    if (!doc.owners.includes(me)) return { emails: [...new Set([...(doc.emails || []), ...emails])] };
+    const owners = [...new Set([...doc.owners, ...circleOwners()])]; // e.g. a partner who joined the family later
+    return owners.length > doc.owners.length ? { emails, owners } : { emails };
+  }
+  // Older circle without owners: the starting family claims it; anyone else only adds
+  return d.owner === famId() ? { emails, owners: circleOwners() } : { emails: [...new Set([...(doc.emails || []), ...emails])] };
+}
 function stopCircle() { if (Circle.unsub) { Circle.unsub(); Circle.unsub = null; } Circle.ref = null; }
 function resetCircle() { stopCircle(); Object.assign(Circle, { id: '', local: null, base: null, status: 'off', err: '' }); persistCircle(); }
 function ensureCircle() {
@@ -193,7 +218,7 @@ async function circlePushNow() {
       const d = snap.data();
       merged = normCircle(merge3(Circle.base.data, start, normCircle(JSON.parse(d.data))));
       rev = (d.rev || 0) + 1;
-      tx.update(Circle.ref, { data: JSON.stringify(merged), rev, emails: circleEmails(merged), updatedAt: serverTimestamp(), updatedBy: Sync.user.email });
+      tx.update(Circle.ref, { data: JSON.stringify(merged), rev, ...circleAccess(d, merged), updatedAt: serverTimestamp(), updatedBy: Sync.user.email });
     });
     Circle.base = { rev, data: clone(merged) };
     const next = normCircle(merge3(start, Circle.local, merged));
@@ -290,7 +315,7 @@ async function createCircle(v) {
   data.fams[f] = { name: v.famName, emoji: v.famEmoji || '🏡', emails: myFamEmails(), at: Date.now() };
   const { doc, setDoc, serverTimestamp } = Sync.fb.fs;
   try {
-    await setDoc(doc(Sync.fb.db, 'circles', id), { data: JSON.stringify(data), rev: 1, emails: circleEmails(data), createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+    await setDoc(doc(Sync.fb.db, 'circles', id), { data: JSON.stringify(data), rev: 1, emails: circleEmails(data), owners: circleOwners(), createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
   } catch (e) {
     console.error(e);
     if (String(e?.code || '').includes('permission')) { ui.showRules = true; toast('Update your Firebase rules first (see below)'); render(); }
@@ -676,7 +701,7 @@ views.fcontrols = () => {
     <button class="btn secondary block" data-action="fr-presets">✏️ Edit preset messages (${presets().length})</button>
     ${Object.keys(state.friends.muted).length ? `<div class="section-title">Muted</div><div class="card flush">${Object.keys(state.friends.muted).map((k) => `<div class="row"><div class="grow"><div class="title">${esc(k.includes(':') ? pName(k) : famName(k))}</div></div><button class="mini-btn" data-action="fr-unmute" data-k="${esc(k)}">Unmute</button></div>`).join('')}</div>` : ''}
     ${recent.length ? `<div class="section-title">Kids’ recent activity</div><div class="card flush">${recent.map((x) => `<div class="row">${avatar(member(x.who), true)}<div class="grow"><div class="title" style="white-space:normal">${esc(x.text)}</div><div class="sub">${esc(whoName(x.who))} · ${timeAgo(x.at)}</div></div></div>`).join('')}</div>` : ''}
-    ${d ? `<div class="section-title">Families</div><div class="card flush">${Object.entries(d.fams).map(([id, x]) => `<div class="row"><div class="avatar">${esc(x.emoji)}</div><div class="grow"><div class="title">${esc(x.name)}${id === f ? ' (you)' : ''}${id === d.owner ? ' · 👑' : ''}</div></div>${id !== f ? `<button class="mini-btn" data-action="fr-mute-fam" data-k="${id}">${state.friends.muted[id] ? 'Unmute' : 'Mute'}</button>${d.owner === f ? `<button class="mini-btn" style="color:var(--bad)" data-action="fr-remove" data-k="${id}">Remove</button>` : ''}` : ''}</div>`).join('')}</div>
+    ${d ? `<div class="section-title">Families</div><div class="card flush">${Object.entries(d.fams).map(([id, x]) => `<div class="row"><div class="avatar">${esc(x.emoji)}</div><div class="grow"><div class="title">${esc(x.name)}${id === f ? ' (you)' : ''}${id === d.owner ? ' · 👑' : ''}</div></div>${id !== f ? `<button class="mini-btn" data-action="fr-mute-fam" data-k="${esc(id)}">${state.friends.muted[id] ? 'Unmute' : 'Mute'}</button>${d.owner === f ? `<button class="mini-btn" style="color:var(--bad)" data-action="fr-remove" data-k="${esc(id)}">Remove</button>` : ''}` : ''}</div>`).join('')}</div>
       <div class="btn-row"><button class="btn secondary" data-action="fr-family-name">✏️ Our family name</button><button class="btn danger" data-action="fr-leave">Leave circle</button></div>` : ''}
     ${rulesHelp()}`;
 };

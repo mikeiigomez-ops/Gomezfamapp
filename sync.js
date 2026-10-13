@@ -10,7 +10,9 @@
 const SYNC_KEY = 'gomezfam:sync'; // { config, familyId, joining }
 const BASE_KEY = 'gomezfam:base'; // { rev, data } — last server copy merged into this phone
 const FIREBASE_URL = 'https://www.gstatic.com/firebasejs/10.14.1/';
-const LOCAL_ONLY = ['theme', 'accent', 'welcomeDismissed', 'whatsNewSeen', 'weather', 'me', 'homeLayout', 'kidMode', 'meBeforeKid', 'seen', 'wpos']; // per-phone settings that never sync
+const LOCAL_ONLY = ['theme', 'accent', 'welcomeDismissed', 'whatsNewSeen', 'weather', 'me', 'homeLayout', 'kidMode', 'meBeforeKid', 'seen', 'wpos', 'syncRev']; // per-phone settings that never sync
+// syncRev: the server revision this phone's saved state already includes. Saved inside the main state record, so it
+// is always in step with it: if it disagrees with the saved base copy (a write failed), we merge without deletions.
 const INVITE_PREFIX = 'GFAM1.';
 
 const readJSON = (k) => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } };
@@ -22,14 +24,17 @@ const Sync = {
   fb: null, user: null, ref: null, unsub: null,
   status: 'off', message: '', emails: [], lastSynced: 0,
   pending: null, pushing: false, dirty: false, pushTimer: null, sizeWarned: false,
+  recover: false, retryN: 0, retryTimer: null, listenRetryN: 0, firstSnap: true,
 };
 const saveCfg = () => writeJSON(SYNC_KEY, Sync.cfg);
-const setBase = (data, rev) => { Sync.base = { rev, data }; writeJSON(BASE_KEY, Sync.base); };
+// persist=false: this phone's state couldn't be saved, so the saved base must not run ahead of it
+const setBase = (data, rev, persist = true) => { Sync.base = { rev, data }; if (persist) writeJSON(BASE_KEY, Sync.base); };
 const connected = () => Sync.status === 'synced' || Sync.status === 'offline';
 
 /* ---------- Three-way merge ---------- */
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+const canon = (v) => JSON.stringify(v, (k, x) => (isObj(x) ? Object.fromEntries(Object.keys(x).sort().map((q) => [q, x[q]])) : x)); // key order doesn't matter
 const isIdList = (v) => Array.isArray(v) && v.every((x) => isObj(x) && typeof x.id === 'string');
 
 // merge3, plus Squishvale story progress kept whole: if one person plays on two devices at once,
@@ -60,6 +65,23 @@ function mergeWorld(base, local, remote) {
     }
   }
   return out;
+}
+// No trustworthy base (lost, damaged, or out of step with the saved state): never treat a missing record as a
+// deletion. Keys/records on either side are kept; where both have one, the server copy wins.
+function mergeUnion(local, remote) {
+  if (same(local, remote)) return remote;
+  if (isIdList(local) && isIdList(remote)) {
+    const L = new Map(local.map((x) => [x.id, x])), R = new Set(remote.map((x) => x.id));
+    const out = remote.map((r) => (L.has(r.id) ? mergeUnion(L.get(r.id), r) : r));
+    local.forEach((l) => { if (!R.has(l.id)) out.push(l); });
+    return out;
+  }
+  if (isObj(local) && isObj(remote)) {
+    const out = {};
+    for (const k of new Set([...Object.keys(remote), ...Object.keys(local)])) out[k] = !(k in remote) ? local[k] : !(k in local) ? remote[k] : mergeUnion(local[k], remote[k]);
+    return out;
+  }
+  return remote;
 }
 function merge3(base, local, remote) {
   if (same(local, base)) return remote; // only the server changed (or nothing did)
@@ -104,16 +126,27 @@ function mergeList(base, local, remote) {
 function shared(s) {
   const c = JSON.parse(JSON.stringify(s));
   for (const k of LOCAL_ONLY) delete c.settings[k];
+  for (const a of Object.values(c.kidAccounts || {})) if (a && typeof a === 'object') delete a.pw; // kid passwords stay on this phone
   return c;
 }
 function adopt(data) {
   const keep = {};
   for (const k of LOCAL_ONLY) keep[k] = state.settings[k];
   const s = migrate(JSON.parse(JSON.stringify(data)));
+  if (typeof stashKidPw === 'function') stashKidPw(s); // from an older phone: keep it here, never re-share it
   Object.assign(s.settings, keep);
   return s;
 }
-function persistLocal() { try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch {} }
+// true when saved. writeState (app.js) shows the storage-full banner when it isn't.
+function persistLocal() { if (typeof writeState === 'function') return writeState(); try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); return true; } catch { return false; } }
+// Take on a merged copy (next = new state, or null when nothing changed here) that includes server revision rev.
+// The base copy is only saved once the state that includes it is saved.
+function commitMerged(next, baseData, rev) {
+  if (next) state = next;
+  state.settings.syncRev = rev;
+  setBase(baseData, rev, persistLocal());
+  if (next) { if (typeof activityResync === 'function') activityResync(); renderRemote(); }
+}
 const sheetIsOpen = () => !document.getElementById('sheet').hidden;
 
 /* ---------- Firebase plumbing ---------- */
@@ -126,6 +159,8 @@ async function loadFirebase(config) {
 function setStatus(status, message = '') {
   Sync.status = status;
   Sync.message = message;
+  document.body.classList.toggle('sync-offline', status === 'offline');
+  document.body.classList.toggle('sync-error', status === 'error');
   if (['settings', 'kid'].includes(currentRoute().name)) render();
 }
 
@@ -177,7 +212,9 @@ function listen() {
   const { doc, onSnapshot } = Sync.fb.fs;
   Sync.ref = doc(Sync.fb.db, 'families', Sync.cfg.familyId);
   setStatus('connecting');
+  Sync.firstSnap = true;
   Sync.unsub = onSnapshot(Sync.ref, async (snap) => {
+    Sync.listenRetryN = 0;
     if (!snap.exists()) return setStatus('error', 'That family wasn\'t found. Check the invite code.');
     const d = snap.data();
     Sync.emails = d.emails || [];
@@ -186,22 +223,35 @@ function listen() {
     if (!Sync.cfg.kid && kidEmails.some((e) => !(d.kids || []).includes(e))) Sync.fb.fs.updateDoc(Sync.ref, { kids: Sync.fb.fs.arrayUnion(...kidEmails) }).catch(() => {});
     if (typeof liveFromDoc === 'function') liveFromDoc(d.live);
     // Our own write echoing back (or a live-spot update): nothing new to read
-    if (!Sync.cfg.joining && Sync.base && (d.rev || 0) <= Sync.base.rev) { markSynced(); return; }
+    const upToDate = () => !Sync.cfg.joining && !Sync.recover && Sync.base && (d.rev || 0) <= Sync.base.rev;
+    if (upToDate()) { markSynced(); afterFirstSnap(); return; }
     let remote;
     try { remote = await unpackData(d.data); } catch { return setStatus('error', 'The shared data looks damaged.'); }
     const rev = d.rev || 0;
-    if (!Sync.cfg.joining && Sync.base && rev <= Sync.base.rev) { markSynced(); return; } // a newer copy landed while unpacking
+    if (upToDate()) { markSynced(); afterFirstSnap(); return; } // a newer copy landed while unpacking
     if (Sync.cfg.joining) {
-      state = adopt(remote);
-      setBase(remote, rev);
-      Sync.cfg.joining = false;
-      saveCfg(); persistLocal(); applyTheme(); if (typeof activityResync === 'function') activityResync(); render();
+      Sync.cfg.joining = false; Sync.recover = false;
+      saveCfg();
+      commitMerged(adopt(remote), remote, rev); applyTheme(); render();
       toast('Connected to the family ✓');
+    } else if (Sync.recover) {
+      // This phone's saved copy and its base disagree (or the base is gone): keep everything from both sides
+      Sync.recover = false;
+      const local = shared(state), merged = dedupeGems(mergeUnion(local, remote));
+      commitMerged(same(merged, local) ? null : adopt(merged), remote, rev);
+      if (!same(merged, remote)) schedulePush(300);
     } else {
       applyRemote(remote, rev);
     }
     markSynced();
-  }, (err) => syncError(err));
+    afterFirstSnap();
+  }, (err) => { Sync.unsub = null; syncError(err, 'listen'); });
+}
+// Edits saved here but never sent (app closed within a second, or made offline): send them now.
+function afterFirstSnap() { if (Sync.firstSnap) { Sync.firstSnap = false; checkUnpushed(); } }
+function checkUnpushed() {
+  if (!Sync.ref || !Sync.base || Sync.pushing || Sync.cfg?.joining || Sync.recover) return;
+  if (Sync.dirty || canon(shared(state)) !== canon(Sync.base.data)) schedulePush(300);
 }
 
 // Redraw after another phone's change without wiping what you're typing in a field on screen
@@ -235,10 +285,9 @@ function applyRemote(remote, rev) {
   if (sheetIsOpen() || Sync.pushing) { Sync.pending = { remote, rev }; return; }
   Sync.pending = null;
   const local = shared(state);
-  const merged = Sync.base ? mergeState(Sync.base.data, local, remote) : remote;
+  const merged = Sync.base ? mergeState(Sync.base.data, local, remote) : dedupeGems(mergeUnion(local, remote));
   const next = same(merged, local) ? null : adopt(merged); // may throw: then the baseline stays put
-  setBase(remote, rev);
-  if (next) { state = next; persistLocal(); if (typeof activityResync === 'function') activityResync(); renderRemote(); }
+  commitMerged(next, remote, rev);
   if (!same(merged, remote)) schedulePush();
 }
 
@@ -271,18 +320,18 @@ async function push() {
       if (new Blob([dataStr]).size > 1000000) throw Object.assign(new Error('Family data is over Firebase’s 1 MB limit'), { code: 'too-big' });
       tx.update(Sync.ref, { data: dataStr, rev, updatedAt: serverTimestamp(), updatedBy: Sync.user.email });
     });
-    setBase(merged, rev);
     // Fold in anything changed on this phone while the write was in flight.
     const now = shared(state);
     const next = mergeState(start, now, merged);
-    if (!same(next, now)) { state = adopt(next); persistLocal(); if (typeof activityResync === 'function') activityResync(); renderRemote(); }
+    commitMerged(same(next, now) ? null : adopt(next), merged, rev);
     if (!same(next, merged)) Sync.dirty = true;
+    Sync.retryN = 0;
     markSynced();
     const size = JSON.stringify(merged).length;
     if (size > 800000 && !Sync.sizeWarned) { Sync.sizeWarned = true; toast('Shared data is getting large — consider clearing old transactions'); }
   } catch (e) {
     Sync.dirty = true;
-    syncError(e);
+    syncError(e, 'push');
   } finally {
     Sync.pushing = false;
     if (Sync.pending) { const p = Sync.pending; applyRemote(p.remote, p.rev); }
@@ -296,17 +345,30 @@ function markSynced() {
   else if (['settings', 'kid'].includes(currentRoute().name)) render();
 }
 
-function syncError(e) {
+// Brief server/network trouble: try again after 2s, 5s, 15s, then every minute
+const TRANSIENT = ['aborted', 'deadline-exceeded', 'resource-exhausted', 'unavailable', 'internal'];
+const BACKOFF = [2000, 5000, 15000, 60000];
+const isTransient = (code) => TRANSIENT.some((t) => code === t || code.endsWith('/' + t));
+function syncError(e, from) {
   console.error('sync', e);
   const code = e?.code || '';
+  if (isTransient(code) || (!navigator.onLine && from)) {
+    if (from === 'push') {
+      clearTimeout(Sync.retryTimer);
+      Sync.retryTimer = setTimeout(() => { Sync.dirty = true; push(); }, BACKOFF[Math.min(Sync.retryN++, BACKOFF.length - 1)]);
+    } else if (from === 'listen') {
+      clearTimeout(Sync.listenTimer);
+      Sync.listenTimer = setTimeout(relisten, BACKOFF[Math.min(Sync.listenRetryN++, BACKOFF.length - 1)]);
+    }
+  }
   if (code.includes('permission-denied')) {
     stopListening();
     setStatus('denied');
   } else if (code === 'too-big') {
     Sync.tooBigAt = Date.now();
     setStatus('error', 'Shared data is too big to sync. Make a backup in Settings, then remove old history.');
-  } else if (code.includes('unavailable') || !navigator.onLine) {
-    setStatus('offline', 'Offline — changes are saved on this phone and will sync later.');
+  } else if (isTransient(code) || !navigator.onLine) {
+    setStatus('offline', navigator.onLine ? 'Having trouble reaching the family copy — trying again…' : 'Offline — changes are saved on this phone and will sync later.');
   } else {
     setStatus('error', e?.message || 'Something went wrong with sync.');
   }
@@ -318,8 +380,23 @@ function syncAfterSheet() {
   if (Sync.pending) { const p = Sync.pending; applyRemote(p.remote, p.rev); }
   if (Sync.dirty) schedulePush(300);
 }
-window.addEventListener('online', () => { if (Sync.status === 'offline') { Sync.status = 'synced'; } if (Sync.dirty) schedulePush(300); });
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Sync.dirty) schedulePush(300); });
+// The listener stopped (error while offline / in the background): start it again
+function relisten() {
+  clearTimeout(Sync.listenTimer);
+  if (Sync.unsub || !Sync.fb || !Sync.user?.emailVerified || !Sync.cfg?.familyId || Sync.status === 'denied') return;
+  listen();
+}
+function wakeSync() {
+  if (!Sync.unsub) return relisten();
+  if (Sync.status === 'offline') setStatus('synced');
+  checkUnpushed();
+}
+// Going to the background / closing: send waiting edits now instead of after the debounce
+function flushPush() { if (Sync.pushTimer && Sync.dirty) { clearTimeout(Sync.pushTimer); Sync.pushTimer = null; push(); } }
+window.addEventListener('online', wakeSync);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') wakeSync(); else flushPush(); });
+window.addEventListener('pagehide', flushPush);
+window.addEventListener('unhandledrejection', (e) => console.error('unhandled rejection', e.reason));
 
 /* ---------- Setup helpers ---------- */
 function parseFirebaseConfig(text) {
@@ -511,7 +588,7 @@ Object.assign(actions, {
       await setDoc(doc(Sync.fb.db, 'families', familyId), { data: JSON.stringify(data), rev: 1, emails: [email], createdBy: email, updatedBy: email, updatedAt: serverTimestamp() });
       Sync.cfg.familyId = familyId;
       saveCfg();
-      setBase(data, 1);
+      commitMerged(null, data, 1);
       listen();
       toast('Sync is on ✓ Now add your family under Who has access');
     } catch (e) { syncError(e); }
@@ -557,6 +634,12 @@ Object.assign(actions, {
 (function bootSync() {
   // This phone's saved data couldn't be read: take the family copy instead of pushing an empty one
   if (typeof loadFailed !== 'undefined' && loadFailed && Sync.cfg?.familyId) { Sync.cfg.joining = true; saveCfg(); }
+  // The saved base copy is missing/damaged or out of step with the saved state (a write failed, e.g. storage full):
+  // merging against it would treat records as deleted, so do one merge that keeps everything instead
+  else if (Sync.cfg?.familyId && !Sync.cfg.joining) {
+    const b = Sync.base, sr = state.settings.syncRev;
+    if (!b || !isObj(b.data) || typeof b.rev !== 'number' || (sr != null && sr !== b.rev)) { Sync.recover = true; if (b && !isObj(b.data)) Sync.base = null; }
+  }
   // Opened from an invite link (…/#join=GFAM1.xxxx): go straight to the join sheet.
   const m = location.hash.match(/^#join=(.+)$/);
   if (m) {
