@@ -521,3 +521,22 @@ body:not(.paged) .budget-tabs { position: sticky; top: -6px; z-index: 6; transit
 .budget-tabs .seg-month { display: none; align-self: center; padding: 0 8px 0 6px; font-size: 13px; font-weight: 750; color: var(--text); }
 .budget-tabs.stuck { box-shadow: 0 6px 16px rgba(0, 0, 0, .12); background: var(--surface-2); border-radius: 0 0 14px 14px; }
 .budget-tabs.stuck .seg-month { display: block; }
+/* Trends: performance vs plan */
+.chart .chart-plan { stroke: var(--text); stroke-width: 1.5; opacity: .55; }
+.chart .chart-plan-lbl { fill: var(--muted); font-size: 10.5px; font-weight: 700; }
+.chart .chart-inc { stroke: var(--good); stroke-width: 2; stroke-dasharray: 3 2; opacity: .8; }
+.chart .chart-st { font-size: 11px; font-weight: 900; }
+.chart .chart-st.st-good { fill: var(--good); }
+.chart .chart-st.st-warn { fill: var(--warn); }
+.chart .chart-st.st-bad { fill: var(--bad); }
+.trend-score { font-size: 14px; color: var(--muted); margin: -4px 0 4px; }
+.trend-score b { color: var(--text); }
+.chart-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 14px; font-size: 12px; color: var(--muted); margin: 2px 0 6px; }
+.chart-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.chart-legend .lg-dot { width: 15px; height: 15px; border-radius: 4px; display: inline-grid; place-items: center; font-style: normal; font-size: 10px; font-weight: 900; color: #fff; }
+.chart-legend .lg-dot.st-good { background: var(--good); }
+.chart-legend .lg-dot.st-warn { background: var(--warn); }
+.chart-legend .lg-dot.st-bad { background: var(--bad); }
+.chart-legend .lg-line { width: 16px; height: 0; border-top: 1.5px solid var(--text); opacity: .55; }
+.chart-legend .lg-line.inc { border-top: 2px dashed var(--good); opacity: .8; }
+.ghost-key { border-color: var(--muted); }

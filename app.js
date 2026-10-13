@@ -1128,27 +1128,43 @@ function trendsView(ym) {
   // Projected month-end for the current month (ghost bar)
   const t = today(), curI = months.indexOf(monthKey(t));
   const proj = curI >= 0 ? projectedSpend(months[curI], t) : 0;
+  // Performance: each month against the plan (bills' monthly amount + everyday budget) and what came in.
+  // Green = at or under plan · yellow = over plan but under income · red = spent more than came in.
+  const planM = Math.round(sum(state.budget.bills.filter((b) => b.type !== 'income'), perMonth) + sum(everydayCats(), (c) => Number(c.limit) || 0));
+  const incomeOf = (m, i) => sum(monthTx(m).filter((x) => x.type === 'income'), (x) => x.amount)
+    + (i === curI ? sum(recurringBetween(t, dayInMonth(31, m), 'income').filter((x) => !isPaid(x.b, x.date)), (x) => x.amount) : 0);
+  const incomes = months.map(incomeOf);
+  const judged = months.map((m, i) => (i === curI ? Math.max(proj, totals[i]) : totals[i]));
+  const status = (v, inc) => (!v ? '' : planM && v <= planM ? 'good' : inc && v > inc ? 'bad' : planM || inc ? 'warn' : '');
+  const ST = { good: ['✓', 'Under plan'], warn: ['!', 'Over plan'], bad: ['✕', 'Spent more than came in'] };
   // Chart geometry (viewBox units)
-  const W = 340, H = 170, top = 22, bottom = 26, left = 4, right = 4;
+  const W = 340, H = 186, top = 30, bottom = 26, left = 4, right = 4;
   const plotH = H - top - bottom, colW = (W - left - right) / 6, barW = Math.min(30, colW * 0.5);
-  const max = niceMax(Math.max(...totals, avg, proj));
+  const max = niceMax(Math.max(...totals, proj, planM, ...incomes));
   const y = (v) => top + plotH - (v / max) * plotH;
+  const fill = (st) => (st ? `var(--${st})` : 'var(--accent)');
   const bars = months.map((m, i) => {
-    const v = totals[i];
+    const v = totals[i], st = status(judged[i], incomes[i]);
     const x = left + colW * i + (colW - barW) / 2;
     const isSel = i === selIdx;
+    const inc = incomes[i];
     return `<g>
-      ${i === curI && proj > v ? `<path class="chart-ghost" d="${barPath(x, y(proj), barW, top + plotH - y(proj))}" fill="var(--accent)" fill-opacity=".12" stroke="var(--accent)" stroke-opacity=".55" stroke-dasharray="3 3"/>` : ''}
-      <path d="${barPath(x, y(v), barW, top + plotH - y(v))}" fill="var(--accent)" opacity="${isSel ? 1 : 0.38}"/>
-      ${isSel ? `<text x="${x + barW / 2}" y="${y(v) - 7}" text-anchor="middle" class="chart-val">${esc(money(v, { maximumFractionDigits: 0 }))}</text>` : ''}
+      ${i === curI && proj > v ? `<path class="chart-ghost" d="${barPath(x, y(proj), barW, top + plotH - y(proj))}" fill="${fill(st)}" fill-opacity=".14" stroke="${fill(st)}" stroke-opacity=".6" stroke-dasharray="3 3"/>` : ''}
+      <path d="${barPath(x, y(v), barW, top + plotH - y(v))}" fill="${fill(st)}" opacity="${isSel ? 1 : 0.55}"/>
+      ${inc ? `<line x1="${x - 6}" x2="${x + barW + 6}" y1="${y(inc)}" y2="${y(inc)}" class="chart-inc"/>` : ''}
+      ${st ? `<text x="${x + barW / 2}" y="${y(Math.max(judged[i], inc)) - (isSel ? 20 : 7)}" text-anchor="middle" class="chart-st st-${st}">${ST[st][0]}</text>` : ''}
+      ${isSel ? `<text x="${x + barW / 2}" y="${y(Math.max(judged[i], inc)) - 6}" text-anchor="middle" class="chart-val">${esc(money(v, { maximumFractionDigits: 0 }))}</text>` : ''}
       <text x="${x + barW / 2}" y="${H - 8}" text-anchor="middle" class="chart-lbl${isSel ? ' sel' : ''}">${parse(m + '-01').toLocaleDateString(undefined, { month: 'short' })}</text>
-      <rect x="${left + colW * i}" y="0" width="${colW}" height="${H}" fill="transparent" data-action="trend-month" data-ym="${m}" style="cursor:pointer"><title>${fmtMonth(m)}: ${money(v)}</title></rect>
+      <rect x="${left + colW * i}" y="0" width="${colW}" height="${H}" fill="transparent" data-action="trend-month" data-ym="${m}" style="cursor:pointer"><title>${fmtMonth(m)}: ${money(v)} out${i === curI ? ` (≈${money(proj, { maximumFractionDigits: 0 })} by month end)` : ''}${inc ? ` · ${money(inc, { maximumFractionDigits: 0 })} in` : ''}${st ? ` · ${ST[st][1]}` : ''}</title></rect>
     </g>`;
   }).join('');
-  const avgLine = avg ? `<line x1="${left}" x2="${W - right}" y1="${y(avg)}" y2="${y(avg)}" class="chart-avg"/>` : '';
-  const chart = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Spending per month, last 6 months">
+  const planLine = planM ? `<line x1="${left}" x2="${W - right}" y1="${y(planM)}" y2="${y(planM)}" class="chart-plan"/>` : '';
+  const chart = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Spending per month against the plan, last 6 months">
     <line x1="${left}" x2="${W - right}" y1="${top + plotH}" y2="${top + plotH}" class="chart-base"/>
-    ${avgLine}${bars}</svg>`;
+    ${planLine}${bars}</svg>`;
+  const used = [...new Set(months.map((m, i) => status(judged[i], incomes[i])).filter(Boolean))];
+  const scoreN = months.filter((m, i) => i !== curI && status(judged[i], incomes[i]) === 'good').length, doneN = months.filter((m, i) => i !== curI && totals[i] > 0).length;
+  const legend = `<div class="chart-legend">${['good', 'warn', 'bad'].filter((k) => used.includes(k)).map((k) => `<span><i class="lg-dot st-${k}">${ST[k][0]}</i>${ST[k][1]}</span>`).join('')}${planM ? `<span><i class="lg-line plan"></i>Plan ${esc(moneyW(planM))}/mo</span>` : ''}<span><i class="lg-line inc"></i>Money in</span></div>`;
 
   // Pace: this month so far vs the same point last month
   let pace = '';
@@ -1193,9 +1209,11 @@ function trendsView(ym) {
 
   return `
     <div class="card">
-      <h3>Spending · last 6 months</h3>
+      <h3>Spending vs. plan · last 6 months</h3>
+      ${doneN ? `<div class="trend-score"><b>${scoreN} of ${doneN}</b> months at or under plan${avg ? ` · average ${esc(moneyW(avg))}/mo` : ''}</div>` : ''}
       ${chart}
-      <div class="small muted" style="text-align:center">${avg ? `<span class="avg-key"></span> Average ${esc(moneyW(avg))}/mo · ` : ''}${proj > (totals[curI] || 0) ? `<span class="ghost-key"></span> On pace for ${esc(moneyW(proj))} · ` : ''}Tap a month for details</div>
+      ${legend}
+      <div class="small muted" style="text-align:center">${proj > (totals[curI] || 0) ? `<span class="ghost-key"></span> ${esc(parse(months[curI] + '-01').toLocaleDateString(undefined, { month: 'short' }))} likely ${esc(moneyW(proj))} by month end · ` : ''}Tap a month for details</div>
     </div>
     ${pace}
     ${income ? `<div class="card">
