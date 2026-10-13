@@ -561,6 +561,7 @@ function simpleLauncher(id) {
     { to: 'treats', e: '🎁', label: 'Treats', sub: `⭐ ${stars}`, color: '#ec4899' },
   ];
   const tiles = [
+    typeof petTile === 'function' ? lk(petTile(id)) : null,
     lk({ to: 'squishies', e: '🧸', label: 'Squishies', sub: free ? 'Free box!' : 'My collection', color: '#a855f7', badge: free ? '!' : '' }),
     lk({ to: 'house', e: '🏡', label: 'My house', sub: 'Decorate', color: '#8b5cf6' }),
     lk({ to: 'games', e: '🎮', label: 'Games', sub: turns ? 'Your turn!' : 'Play', color: '#0ea5e9' }),
@@ -601,6 +602,7 @@ views.play = () => {
     { to: 'memory', e: '🃏', label: 'Memory', sub: 'Find the pairs', color: '#7c3aed' },
     { act: 'trivia-open', e: '🧠', label: 'Trivia', sub: triv ? `${triv} new!` : 'Family quiz', color: '#0284c7', badge: triv || '' },
     { to: 'squishies', e: '🧸', label: 'Squishies', sub: free ? '🎁 Free box!' : `${n} collected`, color: '#ec4899', badge: free ? '!' : '' },
+    me && isKidMember(me) && typeof petTile === 'function' ? petTile(me) : typeof petsTile === 'function' ? petsTile() : null,
     { to: 'house', e: '🏡', label: 'Dream House', sub: h ? `${h.rooms.length} room${h.rooms.length > 1 ? 's' : ''}` : 'Move in!', color: '#8b5cf6' },
     { to: 'avatar', e: '🧍', label: 'My avatar', sub: 'Dress up', color: '#f97316' },
     { to: 'town', e: '🏘️', label: 'Town', sub: 'Visit & vote', color: '#f59e0b' },
