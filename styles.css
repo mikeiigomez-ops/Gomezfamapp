@@ -265,6 +265,9 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .pace-bar > .ghost.bad { background: color-mix(in srgb, var(--bad) 28%, transparent); }
 .pace-bar > s { position: absolute; z-index: 2; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; border-radius: 2px; background: var(--text); text-decoration: none; }
 .pace-bar > s.cap { top: -4px; bottom: -4px; width: 0; background: none; border-left: 2px dashed var(--text); opacity: .6; }
+.bar.pace-bar.pace-fc { height: 5px; margin-top: 4px; background: transparent; }
+.bar.pace-fc > i { opacity: .45; }
+.pace-fc > s.cap { top: -3px; bottom: -3px; }
 .pace-line { margin-top: 5px; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .pace-line.warn { color: var(--warn); }
 .pace-line.bad { color: var(--bad); }

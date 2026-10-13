@@ -548,10 +548,15 @@ function paceLine(x, P) {
 }
 // The bar: solid = spent, ghost = where it's headed, tick = where you should be today, notch = the budget when you're past it
 function paceBar(x, P) {
+  // Top bar: spent so far, with a tick where you'd be today on an even month. Under it, a slimmer bar for the
+  // month-end forecast. Same scale, so the gap between them is what the rest of the month is likely to add.
   const scale = Math.max(x.cap, x.spent, P.past ? 0 : x.likely);
   if (!scale) return '';
   const pc = (n) => Math.max(0, Math.min(100, (n / scale) * 100)).toFixed(1) + '%';
-  return `<div class="bar pace-bar">${!P.past && x.likely > x.spent ? `<b class="ghost ${x.level}" style="width:${pc(x.likely)}"></b>` : ''}<i class="${x.level}" style="width:${pc(x.spent)}"></i>${P.cur && x.should !== null ? `<s class="tick" style="left:${pc(x.should)}" title="Should be about ${esc(moneyW(x.should))} by today"></s>` : ''}${x.cap && scale > x.cap + 0.5 ? `<s class="cap" style="left:${pc(x.cap)}"></s>` : ''}</div>`;
+  const cap = x.cap && scale > x.cap + 0.5 ? `<s class="cap" style="left:${pc(x.cap)}"></s>` : '';
+  const now = `<div class="bar pace-bar" title="Spent so far"><i class="${x.level}" style="width:${pc(x.spent)}"></i>${P.cur && x.should !== null ? `<s class="tick" style="left:${pc(x.should)}" title="Should be about ${esc(moneyW(x.should))} by today"></s>` : ''}${cap}</div>`;
+  const fc = P.past || !P.cur ? '' : `<div class="bar pace-bar pace-fc" title="Forecast by ${esc(P.endLabel)}"><i class="${x.level}" style="width:${pc(x.likely)}"></i>${cap}</div>`;
+  return now + fc;
 }
 
 /* =========================================================
@@ -834,7 +839,7 @@ views.budget = () => {
         const o = P.other, nSort = typeof uncategorizedMerchants === 'function' ? uncategorizedMerchants().length : 0;
         return `<div class="section-title">Categories<button data-action="add-category">+ Category</button></div>
       <div class="card">
-        ${sumLine ? `<div class="pace-sum"><span class="muted">Everyday · ${esc(mName)}</span><br>${sumLine}${P.cur ? `<div class="small muted">All amounts are for ${esc(mName)}. The tick on each bar is where you’d be today if you spread the budget evenly over the month.</div>` : ''}</div>` : ''}
+        ${sumLine ? `<div class="pace-sum"><span class="muted">Everyday · ${esc(mName)}</span><br>${sumLine}${P.cur ? `<div class="small muted">All amounts are for ${esc(mName)}. Top bar: spent so far, with a tick where you’d be today if you spread the budget evenly. Thin bar: forecast by ${esc(P.endLabel)}.</div>` : ''}</div>` : ''}
         ${(() => {
           // Categories with no budget, no spending and no history just take space: one line names them
           const live = P.cats.filter((x) => x.lim || x.spent || x.usual), idle = P.cats.filter((x) => !(x.lim || x.spent || x.usual));
