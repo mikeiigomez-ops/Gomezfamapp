@@ -122,12 +122,16 @@ async function bankSync({ quiet = false } = {}) {
   const bank = bankOf();
   try {
     // First sync: this month so far; later: a week of overlap to catch late-posting charges
-    const start = bank.last ? bank.last - 7 * 86400e3 : parse(monthKey(today()) + '-01').getTime();
+    const start = bank.last && !bank.empty ? bank.last - 7 * 86400e3 : parse(monthKey(today()) + '-01').getTime();
     const data = await sfFetch(c, start);
     const res = bankImport(data);
-    const errs = (data.errors || []).map(String).filter(Boolean);
+    // Protocol 1 sends errors: [strings]; newer bridges send errlist: [{ msg }]
+    const errs = [...(data.errors || []), ...(data.errlist || []).map((e) => e?.msg || e?.message || e)].map(String).filter(Boolean);
     bank.err = errs.join(' ').slice(0, 200);
+    bank.empty = !res.accounts;
+    if (!res.accounts && !bank.err) bank.err = 'Waiting for your bank — SimpleFIN is still loading it (the first load can take a few hours).';
     save(); render();
+    if (!res.accounts) { if (!quiet) toast('🏦 Connected — your bank’s accounts aren’t ready at SimpleFIN yet. The app will keep checking.'); return res; }
     if (!quiet || res.added || res.bills) toast(`🏦 Bank synced · ${res.added} new${res.bills ? ` · ${res.bills} bill${res.bills > 1 ? 's' : ''} marked paid` : ''}${res.linked ? ` · ${res.linked} matched` : ''}`);
     return res;
   } catch (e) {
@@ -146,8 +150,8 @@ function bankCard() {
   const ac = Object.values(bank?.accounts || {}).filter((a) => a.on);
   const who = c ? 'this phone' : 'another phone';
   return `<div class="card bank-card"><div style="display:flex;gap:12px;align-items:center"><span style="font-size:26px">🏦</span>
-    <div class="grow" style="flex:1;min-width:0"><b>${esc([...new Set(ac.map((a) => a.org).filter(Boolean))].join(', ') || 'Bank')} · ${ac.length} account${ac.length === 1 ? '' : 's'}</b>
-    <div class="small muted">${bank?.last ? `Synced ${esc(timeAgo(bank.last))} from ${who}` : 'Not synced yet'}${bank?.err ? ` · <span style="color:var(--bad)">${esc(bank.err)}</span>` : ''}</div></div>
+    <div class="grow" style="flex:1;min-width:0"><b>${ac.length ? `${esc([...new Set(ac.map((a) => a.org).filter(Boolean))].join(', ') || 'Bank')} · ${ac.length} account${ac.length === 1 ? '' : 's'}` : 'Bank connected · waiting for accounts'}</b>
+    <div class="small muted">${bank?.last ? `Synced ${esc(timeAgo(bank.last))} from ${who}` : 'Not synced yet'}${bank?.err ? ` · <span style="color:${bank.empty ? 'var(--muted)' : 'var(--bad)'}">${esc(bank.err)}</span>` : ''}</div></div>
     ${c ? `<button class="mini-btn" data-action="bank-sync"${sfBusy.on && Date.now() - sfBusy.at < 120e3 ? ' disabled' : ''}>${sfBusy.on && Date.now() - sfBusy.at < 120e3 ? 'Syncing…' : 'Sync now'}</button>` : ''}<button class="mini-btn" data-action="bank-open">${c ? 'Manage' : 'Connect here'}</button></div></div>`;
 }
 
@@ -212,7 +216,7 @@ views.budget = (p) => {
 // Auto sync when the app opens (and comes back), at most every few hours, only on the phone holding the key
 function bankAuto() {
   const c = sfCfg(), bank = state.budget.bank;
-  if (c && navigator.onLine !== false && !navigator.webdriver && Date.now() - (bank?.last || 0) > SF_EVERY) bankSync({ quiet: true });
+  if (c && navigator.onLine !== false && !navigator.webdriver && Date.now() - (bank?.last || 0) > (bank?.empty ? 20 * 60e3 : SF_EVERY)) bankSync({ quiet: true });
 }
 setTimeout(bankAuto, 5000);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') setTimeout(bankAuto, 2000); });
