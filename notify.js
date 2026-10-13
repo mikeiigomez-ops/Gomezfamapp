@@ -193,7 +193,12 @@ async function pushKeysSheet() {
     title: 'Set up phone notifications', saveLabel: 'I added them',
     fields: [{ type: 'html', html: `<p class="small muted" style="margin-top:0">Phone notifications are sent by a free scheduled job in your GitHub repository. It needs three secrets. Add each one in GitHub → your repo → <b>Settings → Secrets and variables → Actions → New repository secret</b>.</p>
       ${copy('1 · VAPID_PUBLIC_KEY', pub)}${copy('2 · VAPID_PRIVATE_KEY (shown only now)', priv)}
-      <div class="field"><label>3 · FIREBASE_SERVICE_ACCOUNT</label><p class="small muted" style="margin:0">Firebase console → ⚙️ Project settings → <b>Service accounts</b> → <b>Generate new private key</b>. Paste the whole downloaded file as the secret's value. Then delete the file.</p></div>
+      ${(() => {
+        // The family's Firebase project is already known from sync: link straight to its service-account page
+        const pid = typeof Sync !== 'undefined' && Sync.cfg?.config?.projectId;
+        const url = pid ? `https://console.firebase.google.com/project/${encodeURIComponent(pid)}/settings/serviceaccounts/adminsdk` : 'https://console.firebase.google.com/';
+        return `<div class="field"><label>3 · FIREBASE_SERVICE_ACCOUNT</label><p class="small muted" style="margin:0 0 6px">${pid ? `Your family syncs through the Firebase project <b>${esc(pid)}</b>.` : 'This phone isn’t syncing yet, so the project isn’t known here; open setup on a phone that syncs.'} Sign in with the Google account that created it, tap <b>Generate new private key</b>, and paste the whole downloaded file as the secret's value. Then delete the file.</p><a class="btn secondary block" href="${esc(url)}" target="_blank" rel="noopener">Open ${pid ? esc(pid) : 'Firebase console'} → Service accounts</a></div>`;
+      })()}
       <p class="small muted">Tap “I added them” to save the public key for the family. Then turn notifications on from each phone.</p>` }],
     onSave() { notifyCfg().vapid = pub; notifyCfg().keyAt = today(); toast('Saved. Now turn on notifications on each phone'); },
   });
