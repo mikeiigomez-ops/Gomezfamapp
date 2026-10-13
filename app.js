@@ -530,20 +530,21 @@ function catPace(ym) {
   const other = { c: { emoji: '📦', name: 'Uncategorized' }, ...one('', 0) };
   const rows = [...cats, other];
   const tot = (f) => r(sum(rows, f));
-  return { cur, past, day, dim, frac, months, cats, other,
+  const endLabel = fmtDate(ym + '-' + String(dim).padStart(2, '0'), { month: 'short', day: 'numeric' });
+  return { cur, past, day, dim, frac, months, cats, other, endLabel,
     total: { spent: tot((x) => x.spent), should: tot((x) => x.should || 0), likely: tot((x) => x.likely), limit: r(sum(cats, (x) => x.lim)), usual: rows.some((x) => x.usual !== null) ? tot((x) => x.usual || 0) : null } };
 }
 // "On pace for ~$740 · usually ~$560 · $200 ahead of pace" (or, for a finished month, how it ended)
 function paceLine(x, P) {
   const w = (n) => '~' + moneyW(n);
-  if (P.past) return [`Ended at ${moneyW(x.spent)}`, x.usual !== null ? `usually ${w(x.usual)}` : '', x.lim ? `budget ${moneyW(x.lim)}` : ''].filter(Boolean).join(' · ');
-  if (!P.cur) return x.usual !== null ? `Usually ${w(x.usual)}` : '';
+  if (P.past) return [`Ended at ${moneyW(x.spent)}`, x.usual !== null ? `usual month ${w(x.usual)}` : '', x.lim ? `budget ${moneyW(x.lim)}` : ''].filter(Boolean).join(' · ');
+  if (!P.cur) return x.usual !== null ? `Usual month ${w(x.usual)}` : '';
   if (!x.spent && !x.usual) return 'Nothing spent yet';
   // The budget is the headline: already over it, or headed over it, beats "ahead of pace"
   const a = x.ahead, over = x.lim ? x.spent - x.lim : 0, headed = x.lim ? x.likely - x.lim : 0;
   const pace = over > 0.5 ? `${moneyW(over)} over budget` : headed >= 5 ? `heading ${w(headed)} over budget`
     : a === null ? '' : Math.abs(a) < 5 ? 'right on pace' : `${moneyW(Math.abs(a))} ${a > 0 ? 'ahead of' : 'under'} pace`;
-  return [`On pace for ${w(x.likely)}`, x.usual !== null ? `usually ${w(x.usual)}` : P.months.length ? '' : 'no history yet', pace].filter(Boolean).join(' · ');
+  return [`${w(x.likely)} by ${P.endLabel}`, x.usual !== null ? `usual month ${w(x.usual)}` : P.months.length ? '' : 'no history yet', pace].filter(Boolean).join(' · ');
 }
 // The bar: solid = spent, ghost = where it's headed, tick = where you should be today, notch = the budget when you're past it
 function paceBar(x, P) {
@@ -824,7 +825,8 @@ views.budget = () => {
       </div>
       ${(() => {
         const P = catPace(ym), T = P.total;
-        const sumLine = P.cur ? `<b>${moneyW(T.spent)}</b> so far · should be <b>~${moneyW(T.should)}</b> · likely <b>~${moneyW(T.likely)}</b>${T.limit ? ` <span class="muted">(budget ${moneyW(T.limit)})</span>` : ''}`
+        const mName = parse(ym + '-01').toLocaleDateString(undefined, { month: 'long' });
+        const sumLine = P.cur ? `<b>${moneyW(T.spent)}</b> spent so far · should be <b>~${moneyW(T.should)}</b> by today · likely <b>~${moneyW(T.likely)}</b> by ${esc(P.endLabel)}${T.limit ? ` <span class="muted">(budget ${moneyW(T.limit)})</span>` : ''}`
           : P.past ? `Ended at <b>${moneyW(T.spent)}</b>${T.usual !== null ? ` · usually ~${moneyW(T.usual)}` : ''}${T.limit ? ` · budget ${moneyW(T.limit)}` : ''}`
           : T.usual !== null ? `Usually ~${moneyW(T.usual)}${T.limit ? ` · budget ${moneyW(T.limit)}` : ''}` : '';
         const row = (x) => `<div class="top"><span>${esc(x.c.emoji)} ${esc(x.c.name)}</span><span>${moneyW(x.spent)}${x.lim ? ` / ${moneyW(x.lim)}${x.c.limit !== undefined && x.lim !== x.c.limit ? ' ↻' : ''}` : ''}</span></div>
@@ -832,7 +834,7 @@ views.budget = () => {
         const o = P.other, nSort = typeof uncategorizedMerchants === 'function' ? uncategorizedMerchants().length : 0;
         return `<div class="section-title">Categories<button data-action="add-category">+ Category</button></div>
       <div class="card">
-        ${sumLine ? `<div class="pace-sum"><span class="muted">Everyday</span> ${sumLine}${P.cur ? '<div class="small muted">The tick on each bar is where you’d be today if you spread the budget evenly over the month.</div>' : ''}</div>` : ''}
+        ${sumLine ? `<div class="pace-sum"><span class="muted">Everyday · ${esc(mName)}</span><br>${sumLine}${P.cur ? `<div class="small muted">All amounts are for ${esc(mName)}. The tick on each bar is where you’d be today if you spread the budget evenly over the month.</div>` : ''}</div>` : ''}
         ${(() => {
           // Categories with no budget, no spending and no history just take space: one line names them
           const live = P.cats.filter((x) => x.lim || x.spent || x.usual), idle = P.cats.filter((x) => !(x.lim || x.spent || x.usual));
