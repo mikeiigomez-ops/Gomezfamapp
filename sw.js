@@ -1,14 +1,17 @@
 // Network-first service worker: always tries for the latest version, falls back to the cached copy when offline.
 // Each version's cache is filled in one go at install and never mixed with another version's files. A new version
 // waits until the app says "Reload" (or every window is closed), so one session never runs old and new scripts together.
-const CACHE = 'gomezfam-v98';
+const CACHE = 'gomezfam-v99';
 const SHELL = ['./', './index.html', './styles.css', './theme.css', './screen.css', './ui.js', './art.js', './art-icons.js', './art-house.js', './art-rewards.js', './app.js', './extras.js', './plus.js', './kids.js', './little.js', './family.js', './together.js', './games.js', './gems.js', './squish.js', './collect.js', './friends.js', './avatar.js', './house.js', './polish.js', './screen.js', './sync.js', './live.js', './world-data.js', './world.js', './nav.js', './bank.js', './cats.js', './periods.js', './level.js', './notify.js', './world.css', './motion.css', './motion.js', './manifest.webmanifest', './icons/apple-touch-icon.png', './icons/icon-192.png', './icons/icon-512.png', './vendor/qrcode.min.js', './vendor/jsQR.js'];
 
 self.addEventListener('install', (e) => {
   // Skip the browser's 10-minute HTTP cache so an update shows up on the next open.
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL.map((u) => new Request(u, { cache: 'reload' })))));
 });
-self.addEventListener('message', (e) => { if (e.data === 'skip-waiting') self.skipWaiting(); });
+self.addEventListener('message', (e) => {
+  if (e.data === 'skip-waiting') self.skipWaiting();
+  if (e.data === 'version' && e.source) e.source.postMessage({ type: 'sw-version', version: CACHE, push: true }); // lets the app check which background helper is running
+});
 
 self.addEventListener('activate', (e) => {
   e.waitUntil(

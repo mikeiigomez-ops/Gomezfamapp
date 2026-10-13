@@ -60,7 +60,7 @@ export async function verifyIdToken(token, projectId, jwksUrl = 'https://www.goo
 
 const recent = new Map(); // per-sender pacing within this worker instance
 export default {
-  async fetch(req, env) {
+  async fetch(req, env, ctx) {
     const origin = req.headers.get('origin') || '';
     const cors = { 'access-control-allow-origin': env.ALLOWED_ORIGIN || '*', 'access-control-allow-methods': 'POST, OPTIONS', 'access-control-allow-headers': 'authorization, content-type', 'access-control-max-age': '86400', vary: 'origin' };
     const reply = (status, body) => new Response(JSON.stringify(body), { status, headers: { ...cors, 'content-type': 'application/json' } });
@@ -78,6 +78,16 @@ export default {
     try { body = await req.json(); } catch { return reply(400, { error: 'json' }); }
     const subs = Array.isArray(body.subs) ? body.subs.slice(0, 12) : [];
     const payload = te.encode(JSON.stringify({ title: String(body.payload?.title || '').slice(0, 120), body: String(body.payload?.body || '').slice(0, 400), url: String(body.payload?.url || './').slice(0, 200), tag: String(body.payload?.tag || '').slice(0, 64) }));
+    // Test with a delay: answer now and send a few seconds later (time to lock the phone)
+    const delay = Math.min(20, Math.max(0, Number(body.delay) || 0));
+    if (delay && ctx?.waitUntil) {
+      ctx.waitUntil(new Promise((r) => setTimeout(r, delay * 1000)).then(() => sendAll(subs, payload, body, env)));
+      return reply(202, { results: subs.map((s) => ({ endpoint: s.endpoint, status: 'scheduled' })) });
+    }
+    return reply(200, { results: await sendAll(subs, payload, body, env) });
+  },
+};
+async function sendAll(subs, payload, body, env) {
     const results = [];
     for (const s of subs) {
       let host = '';
@@ -93,6 +103,5 @@ export default {
         results.push({ endpoint: s.endpoint, status: res.status, ...(res.ok ? {} : { reason: (await res.text().catch(() => '')).slice(0, 200) }) });
       } catch (e) { results.push({ endpoint: s.endpoint, status: 'error' }); }
     }
-    return reply(200, { results });
-  },
-};
+    return results;
+}

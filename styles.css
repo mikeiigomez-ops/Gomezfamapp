@@ -618,3 +618,4 @@ body:not(.paged) .budget-tabs { position: sticky; top: -6px; z-index: 6; transit
 .np-sub input.np-time, .np-sub input.np-num, .np-sub select { width: auto; flex: none; margin: 0; }
 .np-sub input.np-time { min-width: 120px; }
 .section-title .np-note { font-size: 12px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--muted); }
+.np-diag { margin-top: 8px; }

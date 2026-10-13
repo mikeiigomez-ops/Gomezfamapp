@@ -245,6 +245,7 @@ views.notify = () => {
         ? `<p class="small" style="margin-top:0;color:var(--bad)">${sub.stale ? 'The last notification to this phone was turned down.' : 'This phone was set up with an older key.'} Turn notifications on again so it gets them.</p><p class="small muted" style="margin-top:-4px">Phone key ${esc(String(sub.key || 'none').slice(0, 8))}… · app key ${esc(String(cfg.vapid).slice(0, 8))}…${sub.stale ? ' · turned down' : ''}</p><button class="btn block" data-action="np-on">Turn on again</button>`
         : `<div class="kv"><span>🔔 On for <b>${esc(who(sub.member))}</b></span><button class="mini-btn" data-action="np-off">Turn off</button></div>`)
       : `<p class="small muted" style="margin-top:0">${pushSupported() ? 'Get your summaries and alerts here, even when the app is closed.' : /iPhone|iPad/.test(navigator.userAgent) ? 'On iPhone, notifications work from the Home Screen app: Share → <b>Add to Home Screen</b>, then open it from there.' : 'This browser can’t show notifications.'}</p>${pushSupported() ? '<button class="btn block" data-action="np-on">Turn on notifications</button>' : ''}`}
+      ${sub ? `<div class="np-diag small muted">${ui.swVersion ? (ui.swVersion.push ? `Background helper ${esc(ui.swVersion.version.replace('gomezfam-', ''))} ✓` : 'Background helper is out of date') : 'Background helper: <b>old copy</b>. Fully close the app (or tap Reload) and reopen it'} · <button class="link-inline" data-action="np-local">Show test here</button></div>` : ''}
       ${subs.length ? `<div class="small muted" style="margin-top:8px">On for: ${subs.map((s) => `${esc(who(s.member))} (${esc(s.device || 'phone')})${s.stale || !s.key || s.key !== String(cfg.vapid).slice(0, 16) ? ' ⚠️ needs “Turn on again”' : ''}`).join(', ')}</div>` : ''}</div>`;
   if (!me) return setup + '<div class="card small muted">Pick who uses this phone in Settings to personalize notifications.</div>';
   const relay = cfg.vapid && !kid ? `<div class="card"><h3>Instant (chat, games, high-fives)</h3>${cfg.relay
@@ -283,6 +284,11 @@ document.addEventListener('change', (e) => {
   save(); render();
 });
 Object.assign(actions, {
+  'np-local': async () => {
+    // No internet involved: if this doesn't appear, it's the phone's notification settings (or Focus)
+    try { const reg = await navigator.serviceWorker.ready; await reg.showNotification('🔔 Test from this device', { body: 'If you see this, notifications are allowed here.', tag: 'local-test', icon: './icons/icon-192.png' }); toast('Shown. Check your notifications'); }
+    catch (e) { toast('This device blocked it: ' + (e.message || e)); }
+  },
   'np-relay-save': () => {
     const v = String($('#npRelay')?.value || '').trim();
     if (!/^https:\/\/[^/\s]+\.workers\.dev\/?$|^https:\/\/[^/\s]+\/?$/.test(v)) { toast('Paste the relay address that starts with https://'); return; }
@@ -295,7 +301,8 @@ Object.assign(actions, {
     if (!subs.length) { toast('Turn on notifications on this phone first'); return; }
     if (typeof Sync === 'undefined' || !Sync.user) { toast('Sign in to sync first'); return; }
     try {
-      const res = await fetch(url, { method: 'POST', headers: { authorization: 'Bearer ' + await Sync.user.getIdToken(), 'content-type': 'application/json' }, body: JSON.stringify({ subs: subs.map((s) => ({ endpoint: s.endpoint, keys: s.keys })), payload: { title: '⚡ Instant notifications work!', body: 'Chat, games and high-fives will arrive like this.', url: '#notify', tag: 'test' }, urgent: true }) });
+      const res = await fetch(url, { method: 'POST', headers: { authorization: 'Bearer ' + await Sync.user.getIdToken(), 'content-type': 'application/json' }, body: JSON.stringify({ subs: subs.map((s) => ({ endpoint: s.endpoint, keys: s.keys })), payload: { title: '⚡ Instant notifications work!', body: 'Chat, games and high-fives will arrive like this.', url: '#notify', tag: 'test' }, urgent: true, delay: 8 }) });
+      if (res.status === 202) { toast('Sending in 8 seconds: lock your phone (or switch apps) now 🔒'); return; }
       const j = await res.json().catch(() => ({}));
       const rs = j.results || [], bad = rs.filter((r) => [401, 403, 404, 410].includes(r.status));
       if (bad.length) { const ends = new Set(bad.map((r) => r.endpoint)); for (const s of state.notify.subs) if (ends.has(s.endpoint)) s.stale = true; save(); render(); }
@@ -412,4 +419,12 @@ afterRender = function () {
   if (currentRoute().name !== 'notify' || !url || ui.relayKeyFor === url) return;
   ui.relayKeyFor = url;
   fetch(url).then((r) => r.json()).then((j) => { const k = String(j.key || '').replace(/…$/, ''); if (k && k !== ui.relayKey) { ui.relayKey = k; render(); } }).catch(() => {});
+};
+
+// Ask the running background helper (service worker) which version it is: push needs v90 or newer
+navigator.serviceWorker?.addEventListener('message', (e) => { if (e.data?.type === 'sw-version') { ui.swVersion = e.data; if (currentRoute().name === 'notify') render(); } });
+const _afterRenderSw = afterRender;
+afterRender = function () {
+  _afterRenderSw();
+  if (currentRoute().name === 'notify' && !ui.swAsked) { ui.swAsked = true; navigator.serviceWorker?.controller?.postMessage('version'); }
 };
