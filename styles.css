@@ -600,3 +600,8 @@ body:not(.paged) .budget-tabs { position: sticky; top: -6px; z-index: 6; transit
 .month-verdict { margin-top: 8px; padding: 8px 11px; border-radius: 10px; font-size: 14px; background: var(--surface-2); }
 .month-verdict.down { background: var(--good-soft, var(--surface-2)); color: var(--good); }
 .month-verdict.up { background: var(--bad-soft, var(--surface-2)); color: var(--bad); }
+.lv-crunch { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.lv-crunch:last-of-type { border-bottom: 0; }
+.lv-crunch .title { font-size: 15px; line-height: 1.35; }
+.lv-crunch .sub { font-size: 13px; color: var(--muted); margin-top: 3px; line-height: 1.4; }
+.lv-crunch .sub b { color: var(--text); }

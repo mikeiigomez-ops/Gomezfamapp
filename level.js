@@ -112,6 +112,7 @@ function levelCard() {
     ${chart}
     <div class="chart-legend"><span><i class="lg-sw lv-before"></i>Now</span>${moves.length ? '<span><i class="lg-sw lv-after"></i>After the moves</span>' : ''}</div>
     ${rows ? `<div class="sq-gl" style="margin-top:10px">Due dates to ask about</div>${rows}` : `<p class="small muted">${hi - lo < 300 ? '✅ Your bills are already spread evenly across paychecks.' : 'No single due-date change helps much; the buffer below evens it out instead.'}</p>`}
+    ${crunchHtml()}
     <div class="sq-gl" style="margin-top:12px">Or keep a bills buffer</div>
     <div class="lv-tip">Set aside <b>${moneyW(Math.ceil(L.perPay / 10) * 10)}</b> from every paycheck for bills and pay them from that pot. Start it with <b>${moneyW(Math.ceil(L.buffer / 50) * 50)}</b> so the heaviest stretch is covered; after that every paycheck looks the same.</div>
     ${short ? `<div class="lv-tip bad">Even spread perfectly, each paycheck comes up about <b>${moneyW(-L.avgNet)}</b> short of bills plus the everyday budget, so moving dates can’t fix it on its own.${over.length ? ` Biggest gaps: ${over.map((x) => `${esc(x.c.name)} (usual ~${moneyW(x.usual)} vs ${moneyW(x.lim)} budget)`).join(', ')}.` : ''}</div>` : ''}
@@ -127,3 +128,102 @@ Object.assign(actions, {
   },
   'lv-fixed': (el) => { const b = findIn(state.budget.bills, el.dataset.id); if (b) { b.fixedDue = true; save(); render(); toast(`${b.name} stays put`); } },
 });
+
+/* ---------- Tight paychecks ahead: predict them, explain them, save for them ----------
+   A paycheck is "tight" when what it has left is well below a typical paycheck (or below zero). The cause is
+   whatever lands there more than usual: an every-2-weeks bill drafting twice, a yearly bill, bills bunching up.
+   For each one the app creates a 🛟 cushion savings goal (same id on every phone, so no duplicates), keeps its
+   amount current while nothing is saved yet, removes it if the prediction goes away, and never brings back
+   one you deleted. */
+function crunches() {
+  const L = levelPlan();
+  if (!L) return [];
+  const { R, before } = L, t = today();
+  const semi = payBill()?.freq === 'semimonthly';
+  const bills = state.budget.bills.filter((b) => b.type !== 'income');
+  const counts = bills.map((b) => R.map((r) => billOccurrences(b, r.from, r.to).length));
+  const out = [];
+  R.forEach((r, i) => {
+    if (i === 0 || r.from <= t) return; // the current paycheck is already here
+    // Twice-a-month pay: the 10th and the 25th carry different bills, so compare with the same half of other months
+    const peers = semi ? before.filter((_, j) => j % 2 === i % 2) : before, typ = median(peers);
+    const gap = typ - before[i];
+    if (!(gap >= Math.max(200, Math.abs(typ) * 0.25) || before[i] < 0)) return;
+    const causes = [];
+    bills.forEach((b, k) => {
+      // Monthly bills alternate between paychecks by design; only a second draft in one paycheck is unusual
+      const usual = (b.freq || 'monthly') === 'monthly' || b.freq === 'semimonthly' ? Math.max(1, median(counts[k])) : median(counts[k]), extra = counts[k][i] - usual;
+      if (extra > 0 && b.amount >= 25) causes.push({ b, extra, amount: Math.round(extra * b.amount), dates: billOccurrences(b, r.from, r.to) });
+    });
+    causes.sort((a, c) => c.amount - a.amount);
+    // Only bill-driven squeezes (or an actual shortfall): a few extra days of groceries isn't worth a goal
+    if (!causes.length && before[i] >= 0) return;
+    const target = Math.ceil(Math.max(gap, -before[i]) / 10) * 10;
+    const before_ = R.filter((x, j) => j < i).length; // paychecks you get before it (this one included)
+    out.push({ id: 'cushion-' + r.from, r, i, net: before[i], typical: typ, target, causes, payN: before_, per: Math.ceil(target / Math.max(1, before_) / 5) * 5 });
+  });
+  return out;
+}
+const crunchWhy = (c) => (c.causes.length ? c.causes.slice(0, 2).map((x) => x.extra >= 1 && ['biweekly', 'weekly'].includes(x.b.freq) ? `${x.b.name} drafts ${x.dates.length}× (${x.dates.map((d) => shortD(d)).join(' & ')})` : x.b.freq === 'yearly' ? `${x.b.name} (yearly, ${shortD(x.dates[0])})` : `${x.b.name} lands here too`).join('; ') : 'several bills land in the same paycheck');
+function syncCushions() {
+  const B = state.budget, made = (B.cushions ||= {});
+  const list = crunches(), ids = new Set(list.map((c) => c.id));
+  let changed = 0;
+  for (const c of list) {
+    const g = state.goals.find((x) => x.id === c.id);
+    const name = `${shortD(c.r.from)} paycheck cushion`, why = crunchWhy(c);
+    if (!g) {
+      if (made[c.id]) continue; // you deleted it: don't bring it back
+      state.goals.push({ id: c.id, created: today(), contributions: [], emoji: '🛟', name, target: c.target, deadline: c.r.from, auto: true, why });
+      made[c.id] = today(); changed++;
+      setTimeout(() => toast(`🛟 Added a goal: ${moneyW(c.target)} for the ${shortD(c.r.from)} paycheck`), 700);
+    } else if (g.auto && !goalSaved(g) && (g.target !== c.target || g.why !== why)) { g.target = c.target; g.why = why; changed++; }
+  }
+  // A prediction that went away (you moved a bill, the schedule changed): drop its goal if nothing was saved
+  const before = state.goals.length;
+  state.goals = state.goals.filter((g) => !(g.auto && g.id.startsWith('cushion-') && !ids.has(g.id) && !goalSaved(g) && g.deadline > today()));
+  if (state.goals.length !== before) changed++;
+  return changed;
+}
+let cushionAt = 0, cushionSig = '';
+const _afterRenderCushion = afterRender;
+afterRender = function () {
+  _afterRenderCushion();
+  try {
+    if (typeof inKidMode === 'function' && inKidMode()) return;
+    const sig = today() + JSON.stringify(state.budget.bills).length + ':' + state.goals.length + ':' + sum(state.budget.categories, (c) => Number(c.limit) || 0);
+    if (sig === cushionSig && Date.now() - cushionAt < 60000) return;
+    cushionSig = sig; cushionAt = Date.now();
+    if (syncCushions()) { save(); setTimeout(render); }
+  } catch (e) { if (typeof noteError === 'function') noteError('cushions', e); }
+};
+// On the Trends leveller: what's coming and the plan for each
+function crunchHtml() {
+  const list = crunches();
+  if (!list.length) return '';
+  return `<div class="sq-gl" style="margin-top:12px">Tight paychecks ahead</div>${list.map((c) => {
+    const g = state.goals.find((x) => x.id === c.id), saved = g ? goalSaved(g) : 0;
+    const bw = c.causes.find((x) => ['biweekly', 'weekly'].includes(x.b.freq));
+    const pay = payBill(), semi = pay?.freq === 'semimonthly' ? semiDays(pay) : null;
+    return `<div class="lv-crunch">
+      <div class="title">🛟 <b>${esc(shortD(c.r.from))} paycheck</b> · about <b>${moneyW(c.target)}</b> tighter than usual</div>
+      <div class="sub">${esc(crunchWhy(c))}. Left after bills: ${c.net < 0 ? '−' : '+'}${moneyW(Math.abs(c.net))} vs a typical ${moneyW(c.typical)}.</div>
+      <div class="sub"><b>Plan:</b> set aside ${moneyW(c.per)} from each of the next ${c.payN} paycheck${c.payN > 1 ? 's' : ''}.${bw && semi ? ` Or ask ${esc(bw.b.name)} to draft twice a month (the ${ordinal(Math.min(28, semi[0] + 1))} & ${ordinal(Math.min(28, semi[1] + 1))}, about ${moneyW(perMonth(bw.b) / 2)} each) so it never doubles up.` : ''}</div>
+      ${g ? `<button type="button" class="mini-btn" style="margin-top:6px" data-action="go" data-to="goal/${esc(g.id)}">Goal: ${moneyW(saved)} of ${moneyW(g.target)} saved ›</button>` : '<div class="sub muted">Goal removed — it won’t be added again.</div>'}
+    </div>`; }).join('')}`;
+}
+// Home: a heads-up for the next tight paycheck within ~6 weeks that isn't covered yet
+const _homeInsightsCushion = homeInsights;
+homeInsights = function () {
+  let html = _homeInsightsCushion();
+  try {
+    const c = crunches().find((x) => daysBetween(today(), x.r.from) <= 45);
+    const g = c && state.goals.find((x) => x.id === c.id);
+    if (c && (!g || goalSaved(g) < g.target)) {
+      const left = g ? g.target - goalSaved(g) : c.target;
+      const card = `<button class="insight warn" data-action="go" data-to="${g ? 'goal/' + g.id : 'budget'}" data-btab="trends"><span class="ii">🛟</span><b>${esc(shortD(c.r.from))} paycheck will be tight</b><small>${esc(crunchWhy(c))} · ${moneyW(left)} to set aside</small></button>`;
+      html = html ? html.replace('<div class="insights">', '<div class="insights">' + card) : `<div class="insights">${card}</div>`;
+    }
+  } catch { /* never break Home */ }
+  return html;
+};
