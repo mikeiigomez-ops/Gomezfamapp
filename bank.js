@@ -44,12 +44,42 @@ async function sfFetch(c, start) {
 }
 
 const sfDate = (sec) => { const d = new Date(sec * 1000); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
-const sfNote = (t) => String(t.payee || t.description || t.memo || 'Bank transaction')
-  .replace(/^\s*(TST|SQ|SP|PY|PP|DD|IC|SQU|BT)\s*\*\s*/i, '').replace(/#\s*\d+/g, ' ').replace(/\b(POS|DEBIT|PURCHASE|CARD|ACH|PPD|WEB|ID:?)\b/gi, ' ').replace(/[#*]+/g, ' ').replace(/\b\d{5,}\b/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60) || 'Bank transaction';
+const tidyMerchant = (raw) => {
+  let x = String(raw || '').replace(/\s+/g, ' ').trim();
+  x = x.replace(/^(POS (DEBIT|CREDIT)|DEBIT CARD PURCHASE|RECURRING CARD PURCHASE|ORIG CO NAME:)\s*/i, '')
+    .replace(/^PAYPAL PURCHASE\s+/i, '').replace(/^PAYPAL INST XFER\s*/i, 'PayPal ')
+    .replace(/^\s*(TST|SQ|SP|PY|PP|DD|IC|CTLP|SQU|BT)\s*\*\s*/i, '')
+    .replace(/\b(PPD|WEB|CCD|TEL|IAT)\s+ID:?\s*\S+/gi, ' ').replace(/transaction#:?\s*\S+/gi, ' ').replace(/\bCO ENTRY DESCR:.*$/i, ' ')
+    .replace(/\+?\d[\d-]{8,}\d/g, ' ').replace(/\b\d{2}\/\d{2}\b/g, ' ').replace(/#\s*\d+/g, ' ').replace(/\b[A-Z]-?\d{3,}\b/g, ' ')
+    .replace(/\b\d{4,}\b/g, ' ').replace(/\b(?=[A-Z0-9]*\d)(?=[A-Z0-9]*[A-Z])[A-Z0-9]{5,}\b/g, ' ').replace(/\b[\w.-]+\.(com|net|org)(\/\S*)?/gi, ' ').replace(/\b\d+_\w*/g, ' ').replace(/[*#_]+/g, ' ').replace(/\s+[A-Z]{2}\s*$/, '').replace(/[,\s.-]+$/, '').replace(/\s+/g, ' ').trim();
+  // A web address that was the whole name ("APPLE.COM/BILL") becomes the brand
+  const site = String(raw || '').match(/\b([a-z0-9-]{3,})\.(com|net|org)\b/i);
+  if (site && (!x || /^(bill|billing|pmt|payment|purchase)$/i.test(x) || x.length < 3)) x = site[1].toUpperCase();
+  if (!x) return 'Bank transaction';
+  // SHOUTY BANK TEXT → Title Case (keeps short all-caps brands like VW, BP)
+  x = x.replace(/\b[A-Z][A-Z'&-]{2,}\b/g, (w) => w[0] + w.slice(1).toLowerCase()); // SHOUTY BANK TEXT → Title Case (VW, BP stay)
+  return x.slice(0, 40);
+};
+const sfNote = (t) => tidyMerchant(t.payee || t.description || t.memo || 'Bank transaction');
 const isCardAcct = (a) => /credit|card|amex|sapphire|freedom|slate|visa|mastercard|discover/i.test(`${a.name} ${a.org?.name || ''}`) || Number(a.balance) < 0;
 const sfId = (a, t) => `sf-${String(a.id).replace(/[^\w-]/g, '').slice(-24)}-${String(t.id).replace(/[^\w-]/g, '').slice(-40)}`;
-const nameHit = (billName, note) => { const w = norm(billName).split(/\s+/).find((x) => x.length >= 3); return !!w && norm(note).includes(w); };
+const BILL_WORDS_SKIP = /^(credit|card|bill|bills|insurance|payment|pmt|the|and|inc|llc|co|company|services?|monthly)$/;
+const nameHit = (billName, note) => { const n = norm(note).replace(/[^a-z0-9 ]/g, ' '); return norm(billName).replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter((w) => w.length >= 4 && !BILL_WORDS_SKIP.test(w)).some((w) => n.includes(w.slice(0, 6))); };
 
+// Is this charge that bill? Name + roughly the amount, or the exact amount on a close day (small amounts need more proof,
+// so a $10 parking charge is never mistaken for a $10 gym fee), or a big payment within a few dollars.
+function billLike(name, amount, billAmount, days, text) {
+  const diff = Math.abs(billAmount - amount), named = nameHit(name, text);
+  return (named && diff <= billAmount * 0.25) || (diff < 0.01 && (amount >= 20 || Math.abs(days) <= 2)) || (!named && amount >= 50 && diff <= Math.max(1.5, billAmount * 0.03) && Math.abs(days) <= 4);
+}
+// Category for a bank charge: what you used for that merchant before, else a keyword hint, else Uncategorized
+function bankCategory(note) {
+  const n = norm(note), ids = new Set(state.budget.categories.map((c) => c.id));
+  const past = state.budget.transactions.find((t) => t.type !== 'income' && ids.has(t.categoryId) && t.note && !t.fromBill && norm(t.note) === n);
+  if (past) return past.categoryId;
+  if (typeof CATEGORY_HINTS !== 'undefined') for (const [re, key] of CATEGORY_HINTS) if (re.test(n)) { const c = state.budget.categories.find((x) => norm(x.name).includes(key)); if (c) return c.id; }
+  return '';
+}
 // Turn a SimpleFIN response into budget changes. Pure enough to test without the network (window.bankImport).
 function bankImport(data, opts = {}) {
   const bank = bankOf(), now = Date.now(), t = today();
@@ -62,9 +92,10 @@ function bankImport(data, opts = {}) {
   // Every posted transaction from the accounts we import
   const all = [];
   for (const a of accts) {
+    if (opts.csv) { for (const x of a.transactions || []) if (x.posted || x.date) all.push({ a, x, id: x.csvId || sfId(a, x), amt: Number(x.amount), date: x.date || sfDate(x.posted), note: sfNote(x), raw: String(x.description || '') }); continue; }
     bank.accounts[a.id] = { name: String(a.name || 'Account').slice(0, 40), org: String(a.org?.name || a.org?.domain || '').slice(0, 40), card: isCardAcct(a), balance: Number(a.balance) || 0, avail: a['available-balance'] != null ? Number(a['available-balance']) : null, at: now, on: bank.accounts[a.id]?.on ?? picks[a.id] ?? true };
     if (!bank.accounts[a.id].on) continue;
-    for (const x of a.transactions || []) if (!x.pending && x.posted) all.push({ a, x, id: sfId(a, x), amt: Number(x.amount), date: sfDate(x.posted), note: sfNote(x) });
+    for (const x of a.transactions || []) if (!x.pending && x.posted) all.push({ a, x, id: x.csvId || sfId(a, x), amt: Number(x.amount), date: x.date || sfDate(x.posted), note: sfNote(x), raw: String(x.description || '') + ' ' + String(x.payee || '') });
   }
   const done = new Set();
   for (const r of all) {
@@ -75,16 +106,16 @@ function bankImport(data, opts = {}) {
     if (twin) {
       // Paying a connected card from checking: the purchases are already imported, so the card bill is just settled
       const out = spend ? r : twin, oa = Math.abs(out.amt);
-      const occ = recurringBetween(addDays(out.date, -6), addDays(out.date, 6), 'bill').find((o) => !o.b.paid?.[o.date] && !claimed.has(billTxId(o.b, o.date)) && (Math.abs(o.amount - oa) <= Math.max(1.5, o.amount * 0.03) || nameHit(o.b.name, out.note)));
+      const occ = recurringBetween(addDays(out.date, -6), addDays(out.date, 6), 'bill').find((o) => !o.b.paid?.[o.date] && !claimed.has(billTxId(o.b, o.date)) && billLike(o.b.name, oa, o.amount, daysBetween(o.date, out.date), out.note + ' ' + out.raw));
       if (occ) { (occ.b.paid ||= {})[occ.date] = 'xfer'; claimed.add(billTxId(occ.b, occ.date)); res.bills++; }
       bank.used[r.id] = 'transfer'; bank.used[twin.id] = 'transfer'; done.add(r.id); done.add(twin.id); res.skipped++; continue;
     }
     // A payment received on a credit card account is just paying the card off
-    if (!spend && r.a && isCardAcct(r.a)) { bank.used[r.id] = 'card-payment'; res.skipped++; continue; }
+    if (!spend && !opts.csv && r.a && isCardAcct(r.a)) { bank.used[r.id] = 'card-payment'; res.skipped++; continue; }
     // An expected bill or paycheck: mark it paid/received (it's logged once, as the bill)
     const occ = recurringBetween(addDays(r.date, -6), addDays(r.date, 6), spend ? 'bill' : 'income')
-      .filter((o) => !claimed.has(billTxId(o.b, o.date)) && (Math.abs(o.amount - amount) <= Math.max(1.5, o.amount * 0.03) || (nameHit(o.b.name, r.note) && Math.abs(o.amount - amount) <= o.amount * 0.25)))
-      .sort((p, q) => (nameHit(q.b.name, r.note) - nameHit(p.b.name, r.note)) || Math.abs(daysBetween(p.date, r.date)) - Math.abs(daysBetween(q.date, r.date)))[0];
+      .filter((o) => !claimed.has(billTxId(o.b, o.date)) && billLike(o.b.name, amount, o.amount, daysBetween(o.date, r.date), r.note + ' ' + r.raw))
+      .sort((p, q) => (nameHit(q.b.name, r.note + ' ' + r.raw) - nameHit(p.b.name, r.note + ' ' + r.raw)) || Math.abs(daysBetween(p.date, r.date)) - Math.abs(daysBetween(q.date, r.date)))[0];
     if (occ) {
       const txId = billTxId(occ.b, occ.date);
       if (!occ.b.paid?.[occ.date]) markBillPaid(occ.b, occ.date, true);
@@ -93,10 +124,18 @@ function bankImport(data, opts = {}) {
       if (lt) lt.bankId = r.id;
       bank.used[r.id] = txId; claimed.add(txId); res.bills++; continue;
     }
-    // Already logged by hand (or from a CSV): link it instead of adding a copy
-    const mine = txs.find((x) => !x.bankId && !x.fromBill && (x.type === 'income') === !spend && Math.abs(Number(x.amount) - amount) < 0.01 && Math.abs(daysBetween(x.date, r.date)) <= 3);
+    // Already logged by hand, or imported earlier from a bank CSV: link it instead of adding a copy
+    const mine = txs.find((x) => ((!x.bankId && !x.fromBill) || (!opts.csv && String(x.bankId || '').startsWith('csv-'))) && (x.type === 'income') === !spend && Math.abs(Number(x.amount) - amount) < 0.01 && Math.abs(daysBetween(x.date, r.date)) <= 3);
     if (mine) { mine.bankId = r.id; bank.used[r.id] = mine.id; res.linked++; continue; }
-    txs.push({ id: r.id, created: now, type: spend ? 'expense' : 'income', amount, note: r.note, categoryId: spend ? categoryFor(r.note) : '', date: r.date > t ? t : r.date, memberId: '', bank: bank.accounts[r.a.id].org || bank.accounts[r.a.id].name, bankId: r.id });
+    // A bill payment from before the bill was set up in the app: file it as that bill (not as everyday spending)
+    const day = parse(r.date).getDate();
+    const old = spend && state.budget.bills.find((b) => b.type !== 'income' && r.date < (b.since || '0') && (
+      billLike(b.name, amount, b.amount, b.freq === 'monthly' ? day - (b.dueDay || parse(b.anchor).getDate()) : 99, r.note + ' ' + r.raw)));
+    if (old) {
+      txs.push({ id: r.id, created: now, type: 'expense', amount, note: old.name, categoryId: old.categoryId || '', date: r.date > t ? t : r.date, memberId: '', fromBill: true, billId: old.id, bank: opts.csv ? 'Chase CSV' : bank.accounts[r.a.id]?.org || '', bankId: r.id });
+      haveIds.add(r.id); res.oldBills = (res.oldBills || 0) + 1; continue;
+    }
+    txs.push({ id: r.id, created: now, type: spend ? 'expense' : 'income', amount, note: r.note, categoryId: spend ? bankCategory(r.note) : '', date: r.date > t ? t : r.date, memberId: '', bank: opts.csv ? 'Chase CSV' : bank.accounts[r.a.id].org || bank.accounts[r.a.id].name, bankId: r.id });
     haveIds.add(r.id); res.added++;
   }
   // Forget old matches so the record stays small (transactions themselves keep their bankId)
@@ -106,11 +145,11 @@ function bankImport(data, opts = {}) {
   for (const k of Object.keys(bank.used)) bank.usedAt[k] ||= t;
   // The checking balance keeps Safe to spend honest (set after importing so nothing is counted twice)
   const chk = bank.checking && bank.accounts[bank.checking] ? bank.checking : Object.keys(bank.accounts).find((id) => !bank.accounts[id].card && /check/i.test(bank.accounts[id].name)) || Object.keys(bank.accounts).find((id) => !bank.accounts[id].card);
-  if (chk && opts.balance !== false) {
+  if (chk && opts.balance !== false && !opts.csv) {
     bank.checking = chk;
     Object.assign(state.settings, { balance: Math.round(bank.accounts[chk].balance * 100) / 100, balanceDate: t, balanceAt: Date.now() + 1, balanceSrc: 'bank' });
   }
-  bank.last = now; bank.err = '';
+  if (!opts.csv) { bank.last = now; bank.err = ''; }
   return res;
 }
 
@@ -168,7 +207,7 @@ function bankConnectSheet() {
     ],
     onSave(v) {
       const btn = $('#sheetSave'); if (btn) { btn.disabled = true; btn.textContent = 'Connecting…'; }
-      sfClaim(v.token).then(() => { closeSheet(); toast('🏦 Connected — syncing…'); bankSync().then(() => bankManageSheet()); })
+      sfClaim(v.token).then(() => { if (btn) { btn.disabled = false; btn.textContent = 'Connect'; } closeSheet(); toast('🏦 Connected — syncing…'); bankSync().then(() => bankManageSheet()); })
         .catch((e) => { toast(e.message || 'Could not connect'); if (btn) { btn.disabled = false; btn.textContent = 'Connect'; } });
       return false; // stay open until SimpleFIN answers
     },
@@ -199,6 +238,65 @@ function bankManageSheet() {
   });
 }
 
+/* ---------- Chase "account activity" CSV: same matching as bank sync, pending rows skipped ---------- */
+const fnv = (str) => { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); };
+function isBankActivityCsv(head) { const h = head.map(norm); return h.includes('posting date') && h.includes('description') && h.includes('amount') && h.includes('balance'); }
+const CSV_XFER_TYPE = /^(acct_xfer)$/i, CSV_XFER_DESC = /\b(online transfer|robinhood|paypal transfer|real time transfer|transfer (to|from) (sav|chk))\b/i;
+function chaseCsvData(rows, fileName = '') {
+  const head = rows[0].map(norm), ix = (n) => head.indexOf(n);
+  const D = ix('posting date'), S = ix('description'), A = ix('amount'), T = ix('type'), B = ix('balance');
+  const last4 = (String(fileName).match(/(\d{4})_activity/i) || String(fileName).match(/chase\D*(\d{4})/i) || [])[1] || '';
+  const out = { pending: 0, xfer: 0, from: '', to: '', bal: null, txs: [] };
+  for (const r of rows.slice(1)) {
+    const posted = csvDate(r[D]), amt = csvAmount(r[A]), desc = String(r[S] || '');
+    if (!posted || amt == null || !amt) continue;
+    if (!String(r[B] ?? '').trim()) { out.pending++; continue; } // pending: no running balance yet
+    if (CSV_XFER_TYPE.test(String(r[T] || '').trim()) || CSV_XFER_DESC.test(desc)) { out.xfer++; continue; }
+    // Card purchases carry the real purchase day ("… MI 09/26"); use it when it's within a week before posting
+    let date = posted; const m = [...desc.matchAll(/\s(\d{2})\/(\d{2})(?=\s|$)/g)].at(-1);
+    if (m) { let y = +posted.slice(0, 4); if (+m[1] > +posted.slice(5, 7)) y--; const c = `${y}-${m[1]}-${m[2]}`; if (csvDate(c) && c <= posted && daysBetween(c, posted) <= 7) date = c; }
+    if (out.bal == null) out.bal = csvAmount(r[B]);
+    out.txs.push({ csvId: 'csv-' + fnv(`${posted}|${amt}|${desc}|${r[B]}`), date, amount: amt, description: desc });
+    if (!out.to || date > out.to) out.to = date;
+    if (!out.from || date < out.from) out.from = date;
+  }
+  out.data = { errors: [], accounts: [{ id: 'csv-chase' + last4, name: `Chase${last4 ? ' …' + last4 : ''}`, org: { name: 'Chase' }, transactions: out.txs }] };
+  return out;
+}
+function chaseCsvSheet(rows, fileName) {
+  const c = chaseCsvData(rows, fileName);
+  if (!c.txs.length) { toast('No posted transactions in that file'); return; }
+  // Dry run on a copy so the preview shows exactly what Import will do
+  const snap = JSON.stringify(state);
+  let p; try { p = bankImport(c.data, { csv: true }); } finally { state = JSON.parse(snap); }
+  const fmt = (d) => fmtDate(d, { month: 'short', day: 'numeric' });
+  openSheet({
+    title: '🏦 Import Chase activity', saveLabel: p.added + (p.oldBills || 0) ? 'Import' : 'Done',
+    fields: [{ type: 'html', html: `<div class="small" style="line-height:1.7">
+      <p class="muted" style="margin:0 0 8px">${c.txs.length} posted transactions · ${esc(fmt(c.from))} – ${esc(fmt(c.to))}</p>
+      <div class="kv"><span>New transactions</span><b>${p.added}</b></div>
+      ${p.bills ? `<div class="kv"><span>Bills marked paid</span><b>${p.bills}</b></div>` : ''}
+      ${p.oldBills ? `<div class="kv"><span>Earlier bill payments (filed as bills)</span><b>${p.oldBills}</b></div>` : ''}
+      ${p.linked ? `<div class="kv"><span>Already logged — matched, not doubled</span><b>${p.linked}</b></div>` : ''}
+      ${c.xfer ? `<div class="kv"><span class="muted">Transfers between your accounts (skipped)</span><b>${c.xfer}</b></div>` : ''}
+      ${c.pending ? `<div class="kv"><span class="muted">Pending (import again after they post)</span><b>${c.pending}</b></div>` : ''}
+      <p class="muted" style="margin:8px 0 0">Categories are guessed from the merchant; fix one and later ones follow. Importing the same file again adds nothing twice.</p></div>` }],
+    onSave() {
+      if (!(p.added + (p.oldBills || 0) + p.bills + p.linked)) return;
+      const r = bankImport(c.data, { csv: true });
+      ui.budgetTab = 'activity'; ui.budgetMonth = monthKey(c.to);
+      toast(`🏦 Imported ${r.added}${r.bills ? ` · ${r.bills} bills paid` : ''}${r.oldBills ? ` · ${r.oldBills} past bills` : ''}`);
+    },
+  });
+}
+// The general CSV importer hands bank "activity" exports (Chase and look-alikes) to the matcher above
+const _bankCsvSheet = bankCsvSheet;
+bankCsvSheet = function (text, fileName) {
+  const rows = parseCsv(String(text).replace(/^\uFEFF/, ''));
+  if (rows.length > 1 && isBankActivityCsv(rows[0])) return chaseCsvSheet(rows, fileName);
+  return _bankCsvSheet(text);
+};
+
 Object.assign(actions, {
   'bank-open': () => (sfCfg() ? bankManageSheet() : bankConnectSheet()),
   'bank-sync': () => bankSync(),
@@ -221,4 +319,4 @@ function bankAuto() {
 setTimeout(bankAuto, 5000);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') setTimeout(bankAuto, 2000); });
 
-window.BankDebug = { bankImport, sfClaim, sfCfg, sfStore, bankSync, sfBusy };
+window.BankDebug = { bankImport, sfClaim, sfCfg, sfStore, bankSync, sfBusy, chaseCsvData, tidyMerchant };

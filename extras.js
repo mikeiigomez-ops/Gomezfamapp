@@ -657,12 +657,12 @@ Object.assign(actions, {
 const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 const CATEGORY_HINTS = [
-  [/\b(costco|kroger|aldi|meijer|walmart|grocer|groceries|trader joe|whole foods|sam'?s|food)\b/, 'grocer'],
-  [/\b(gas|shell|bp|speedway|fuel|uber|lyft|parking|toll|car wash)\b/, 'gas'],
-  [/\b(restaurant|pizza|coffee|starbucks|chipotle|mcdonald|taco|dinner out|lunch|breakfast|takeout|doordash|ubereats|burger|sushi)\b/, 'dining'],
+  [/\b(costco|kroger|aldi|meijer|walmart|grocer|groceries|trader joe|whole foods|sam'?s|food|instacart|sprouts|fresh thyme|market)\b/, 'grocer'],
+  [/\b(gas|shell|bp|speedway|fuel|uber|lyft|parking|toll|car wash|sunoco|citgo|mobil|exxon|aaa)\b/, 'gas'],
+  [/\b(restaurant|pizza|coffee|starbucks|chipotle|mcdonald|taco|dinner out|lunch|breakfast|takeout|doordash|ubereats|burger|sushi|culvers?|chick-fil-a|tim hortons|cafe|grill|kitchen|bakery|donuts?|dunkin|wendy'?s|subway|panera|popeyes|kfc|noodles?|bbq|tacos|indian|vending|diner|tavern)\b/, 'dining'],
   [/\b(target|amazon|home depot|lowe'?s|household|cleaning|ikea)\b/, 'household'],
   [/\b(kid|school|daycare|soccer|toys?|diapers?)\b/, 'kids'],
-  [/\b(movie|netflix|concert|zoo|game|fun|bowling)\b/, 'fun'],
+  [/\b(movie|netflix|concert|zoo|game|fun|bowling|golf|hotel|theater|theatre|museum)\b/, 'fun'],
   [/\b(doctor|pharmacy|cvs|walgreens|dentist|copay|health|medicine)\b/, 'health'],
   [/\b(electric|water|internet|phone bill|utility|utilities|dte|consumers)\b/, 'utilit'],
   [/\b(gift|present|birthday)\b/, 'gift'],

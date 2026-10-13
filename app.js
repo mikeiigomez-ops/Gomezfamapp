@@ -1764,7 +1764,7 @@ function openSheet(cfg) {
   sheetCfg = cfg;
   const v = cfg.values || {};
   $('#sheetTitle').textContent = cfg.title;
-  $('#sheetSave').textContent = cfg.saveLabel || 'Save';
+  $('#sheetSave').textContent = cfg.saveLabel || 'Save'; $('#sheetSave').disabled = false; // a previous sheet may have left it busy
   const form = $('#sheetForm');
   form.innerHTML = cfg.fields.map((f) => fieldHTML(f, v)).join('')
     + (cfg.extra || '')
@@ -2096,7 +2096,7 @@ function bankCsvPlan(rows, map) {
 function pickBankCsv() {
   const inp = document.createElement('input');
   inp.type = 'file'; inp.accept = '.csv,text/csv,text/plain';
-  inp.onchange = async () => { const f = inp.files[0]; if (f) bankCsvSheet(await f.text()); };
+  inp.onchange = async () => { const f = inp.files[0]; if (f) bankCsvSheet(await f.text(), f.name); };
   inp.click();
 }
 function bankCsvSheet(text) {
