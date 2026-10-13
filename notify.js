@@ -299,7 +299,7 @@ Object.assign(actions, {
       const j = await res.json().catch(() => ({}));
       const rs = j.results || [], bad = rs.filter((r) => [401, 403, 404, 410].includes(r.status));
       if (bad.length) { const ends = new Set(bad.map((r) => r.endpoint)); for (const s of state.notify.subs) if (ends.has(s.endpoint)) s.stale = true; save(); render(); }
-      if (res.ok && bad.length && bad.length === rs.length) { toast('Not delivered: the push key changed since these devices turned notifications on. Tap “Turn on again” on each device.'); return; }
+      if (res.ok && bad.length && bad.length === rs.length) { toast(`Not delivered: ${[...new Set(bad.map((r) => `${r.status}${r.reason ? ' ' + String(r.reason).replace(/[{}"]/g, '').slice(0, 60) : ''}`))].join(' · ')}`); return; }
       toast(res.ok ? `Sent to ${(j.results || []).filter((r) => r.status >= 200 && r.status < 300).length} of ${subs.length} device(s)` : `Relay said: ${j.error || res.status}`);
     } catch (e) { toast('Couldn’t reach the relay: ' + e.message); }
   },

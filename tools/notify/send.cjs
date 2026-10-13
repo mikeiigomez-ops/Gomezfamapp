@@ -54,7 +54,7 @@ async function families() {
     for (const k of ['FIREBASE_SERVICE_ACCOUNT', 'VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY']) if (!process.env[k]) { console.log(`${k} isn't set: nothing to do`); return; }
   }
   const webpush = DRY ? null : require('web-push');
-  if (webpush) webpush.setVapidDetails('mailto:notifications@gomezfam.invalid', process.env.VAPID_PUBLIC_KEY, process.env.VAPID_PRIVATE_KEY);
+  if (webpush) webpush.setVapidDetails(process.env.VAPID_SUBJECT || `https://${String(process.env.GITHUB_REPOSITORY_OWNER || 'github').toLowerCase()}.github.io`, process.env.VAPID_PUBLIC_KEY, process.env.VAPID_PRIVATE_KEY);
   const { chromium } = require(process.env.PW || 'playwright');
   const srv = await serve(), base = `http://127.0.0.1:${srv.address().port}/`;
   const browser = await chromium.launch();
@@ -87,7 +87,7 @@ async function families() {
             try { await webpush.sendNotification({ endpoint: s.endpoint, keys: s.keys }, payload, { TTL: 6 * 3600, urgency: m.kind === 'alert' ? 'high' : 'normal' }); ok = true; sent++; }
             catch (e) {
               if (e.statusCode === 404 || e.statusCode === 410) { log['dead:' + hashKey(s.endpoint)] = Date.now(); console.log(`[${fam.id}] a subscription expired; it will be skipped`); }
-              else console.log(`[${fam.id}] push failed (${e.statusCode || e.message})`);
+              else console.log(`[${fam.id}] push failed (${e.statusCode || e.message}) ${String(e.body || '').slice(0, 200)}`);
             }
           }
           if (ok || !targets.length) Object.assign(log, m.mark); // failed sends are retried next run

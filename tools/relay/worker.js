@@ -31,7 +31,8 @@ export async function encryptPayload(payload, p256dh, auth, opts = {}) {
   return cat(head, asPub, ct);
 }
 // RFC 8292 VAPID JWT (ES256)
-export async function vapidHeader(endpoint, pub, priv, subject = 'mailto:notifications@gomezfam.invalid') {
+// Apple turns down placeholder contacts, so the subject is the app's own site (https://…github.io)
+export async function vapidHeader(endpoint, pub, priv, subject = 'https://github.com') {
   const p = unb64u(pub);
   const key = await crypto.subtle.importKey('jwk', { kty: 'EC', crv: 'P-256', d: priv, x: b64u(p.slice(1, 33)), y: b64u(p.slice(33, 65)), ext: true }, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
   const enc = (o) => b64u(te.encode(JSON.stringify(o)));
@@ -84,11 +85,12 @@ export default {
       if (!PUSH_HOSTS.test(host) || !s.keys?.p256dh || !s.keys?.auth) { results.push({ endpoint: s.endpoint, status: 'rejected' }); continue; }
       try {
         const headers = { TTL: '21600', 'content-encoding': 'aes128gcm', 'content-type': 'application/octet-stream', urgency: body.urgent ? 'high' : 'normal',
-          authorization: await vapidHeader(s.endpoint, env.VAPID_PUBLIC_KEY, env.VAPID_PRIVATE_KEY) };
+          authorization: await vapidHeader(s.endpoint, env.VAPID_PUBLIC_KEY, env.VAPID_PRIVATE_KEY, env.VAPID_SUBJECT || env.ALLOWED_ORIGIN || 'https://github.com') };
         const topic = String(body.payload?.tag || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 32);
         if (topic) headers.topic = topic; // a newer message with the same topic replaces an undelivered one
         const res = await fetch(s.endpoint, { method: 'POST', body: await encryptPayload(payload, s.keys.p256dh, s.keys.auth), headers });
-        results.push({ endpoint: s.endpoint, status: res.status });
+        // Push services explain refusals in the body (e.g. Apple: {"reason":"BadJwtToken"})
+        results.push({ endpoint: s.endpoint, status: res.status, ...(res.ok ? {} : { reason: (await res.text().catch(() => '')).slice(0, 200) }) });
       } catch (e) { results.push({ endpoint: s.endpoint, status: 'error' }); }
     }
     return reply(200, { results });
