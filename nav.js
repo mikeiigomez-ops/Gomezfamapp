@@ -63,7 +63,8 @@ function paintNav() {
   const html = h.chips.map(([to, label]) => {
     let n = 0;
     try { n = CHIP_BADGE[to]?.() || 0; } catch { n = 0; }
-    return `<button class="chip${to === name ? ' on' : ''}" data-action="go" data-to="${to}"${to === name ? ' aria-current="page"' : ''}>${esc(label)}${n ? `<i>${n > 9 ? '9+' : n}</i>` : ''}</button>`;
+    const why = n ? ({ budget: `${n} overdue bill${n > 1 ? 's' : ''}`, chat: `${n} unread message${n > 1 ? 's' : ''}`, upkeep: `${n} overdue house task${n > 1 ? 's' : ''}`, board: `${n} poll${n > 1 ? 's' : ''} to vote on` }[to] || `${n} new`) : '';
+    return `<button class="chip${to === name ? ' on' : ''}" data-action="go" data-to="${to}"${to === name ? ' aria-current="page"' : ''}${why ? ` title="${esc(why)}" aria-label="${esc(label + ', ' + why)}"` : ''}>${esc(label)}${n ? `<i>${n > 9 ? '9+' : n}</i>` : ''}</button>`;
   }).join('');
   if (subnavEl.dataset.html !== html) {
     const keep = subnavEl.dataset.hub === hid ? subnavEl.scrollLeft : 0;
