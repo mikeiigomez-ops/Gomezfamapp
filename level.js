@@ -11,11 +11,12 @@ const LV_MAX_MOVES = 3;
 
 function levelPeriods() {
   const pay = payBill();
-  if (!pay || !['biweekly', 'weekly'].includes(pay.freq)) return null;
+  if (!pay || !['biweekly', 'weekly', 'semimonthly'].includes(pay.freq)) return null;
   const t = today();
-  const ds = billOccurrences(pay, addDays(t, -20), addDays(t, 14 * (LV_N + 2)));
+  const ds = billOccurrences(pay, addDays(t, -20), addDays(t, 16 * (LV_N + 2)));
   const s0 = ds.filter((d) => d <= t).pop() || ds[0];
-  const starts = ds.filter((d) => d >= s0).slice(0, LV_N + 1);
+  const n = pay.freq === 'semimonthly' ? 12 : pay.freq === 'weekly' ? 26 : LV_N; // about 6 months
+  const starts = ds.filter((d) => d >= s0).slice(0, n + 1);
   if (starts.length < 4) return null;
   return starts.slice(0, -1).map((from, i) => ({ from, to: addDays(starts[i + 1], -1) }));
 }
@@ -104,6 +105,7 @@ function levelCard() {
   return `<div class="card lv-card">
     <h3>Level your paychecks</h3>
     <p class="small muted" style="margin:0 0 6px">What each paycheck has left after its bills and the everyday budget, for the next ${R.length} paychecks.</p>
+    ${payBasis()}
     <div class="lv-range">Now: <b>${sign(lo)}</b> to <b>${sign(hi)}</b>${moves.length ? ` · after the moves: <b>${sign(loA)}</b> to <b>${sign(hiA)}</b>` : ''}</div>
     ${chart}
     <div class="chart-legend"><span><i class="lg-sw lv-before"></i>Now</span>${moves.length ? '<span><i class="lg-sw lv-after"></i>After the moves</span>' : ''}</div>

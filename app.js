@@ -360,7 +360,10 @@ const monthTx = (ym) => state.budget.transactions.filter((t) => t.date.startsWit
 
 /* Recurring bills & income. Monthly items repeat on dueDay; weekly/biweekly/yearly repeat from anchor. */
 const FREQ_STEP = { weekly: 7, biweekly: 14 };
-const FREQ_NAMES = { monthly: 'Monthly', biweekly: 'Every 2 weeks', weekly: 'Weekly', yearly: 'Yearly' };
+const FREQ_NAMES = { monthly: 'Monthly', semimonthly: 'Twice a month', biweekly: 'Every 2 weeks', weekly: 'Weekly', yearly: 'Yearly' };
+// Paydays and bills that land on a weekend move to the business day before ('before') or after ('after')
+const bizShift = (d, rule) => { if (!rule) return d; const w = parse(d).getDay(); return w === 6 ? addDays(d, rule === 'before' ? -1 : 2) : w === 0 ? addDays(d, rule === 'before' ? -2 : 1) : d; };
+const semiDays = (b) => (b.days?.length === 2 ? b.days : [b.dueDay || 1, Math.min(31, (b.dueDay || 1) + 15)]);
 const BILL_GROUPS = ['Housing', 'Utilities', 'Auto', 'Insurance', 'Debt', 'Subscriptions', 'Health', 'Kids & School', 'Pets', 'Giving', 'Other'];
 function dayInMonth(day, ym) {
   const last = new Date(+ym.slice(0, 4), +ym.slice(5, 7), 0).getDate();
@@ -369,11 +372,13 @@ function dayInMonth(day, ym) {
 function billOccurrences(b, from, to) {
   const out = [];
   const freq = b.freq || 'monthly';
-  if (freq === 'monthly') {
-    for (let ym = monthKey(from); ym <= monthKey(to); ym = addMonths(ym, 1)) {
-      const d = dayInMonth(b.dueDay || 1, ym);
-      if (d >= from && d <= to) out.push(d);
+  if (freq === 'monthly' || freq === 'semimonthly') {
+    const days = freq === 'semimonthly' ? semiDays(b) : [b.dueDay || 1], w = b.weekend || '';
+    // One month either side: a weekend shift can carry a date across the month boundary
+    for (let ym = addMonths(monthKey(from), w ? -1 : 0); ym <= (w ? addMonths(monthKey(to), 1) : monthKey(to)); ym = addMonths(ym, 1)) {
+      for (const day of days) { const d = bizShift(dayInMonth(day, ym), w); if (d >= from && d <= to && !out.includes(d)) out.push(d); }
     }
+    out.sort();
   } else if (FREQ_STEP[freq] && b.anchor) {
     const step = FREQ_STEP[freq];
     for (let d = addDays(b.anchor, Math.ceil(daysBetween(b.anchor, from) / step) * step); d <= to; d = addDays(d, step)) out.push(d);
@@ -452,12 +457,14 @@ function recurringBetween(from, to, type) {
   }
   return out.sort((x, y) => x.date.localeCompare(y.date) || y.b.amount - x.b.amount);
 }
-const perMonth = (b) => b.amount * ({ weekly: 52 / 12, biweekly: 26 / 12, yearly: 1 / 12 }[b.freq] || 1);
+const perMonth = (b) => b.amount * ({ weekly: 52 / 12, biweekly: 26 / 12, semimonthly: 2, yearly: 1 / 12 }[b.freq] || 1);
 function scheduleLabel(b) {
+  const wk = b.weekend ? ` (${b.weekend === 'before' ? 'Fri before' : 'Mon after'} if a weekend)` : '';
+  if (b.freq === 'semimonthly') { const [a, c] = semiDays(b); return `Twice a month · ${ordinal(a)} & ${ordinal(c)}${wk}`; }
   if (b.freq === 'biweekly') return `Every 2 weeks · ${fmtDate(b.anchor, { weekday: 'long' })}s`;
   if (b.freq === 'weekly') return `Weekly · ${fmtDate(b.anchor, { weekday: 'long' })}s`;
   if (b.freq === 'yearly') return `Yearly · ${fmtDate(b.anchor, { month: 'short', day: 'numeric' })}`;
-  return `Monthly on the ${ordinal(b.dueDay || 1)}`;
+  return `Monthly on the ${ordinal(b.dueDay || 1)}${wk}`;
 }
 const nameColor = (str) => { let h = 0; for (const c of str) h = (h * 31 + c.charCodeAt(0)) | 0; return COLORS[Math.abs(h) % COLORS.length]; };
 const letterAvatar = (name) => `<div class="avatar" style="background:${nameColor(name)};color:#fff;font-weight:750;font-size:16px">${esc((String(name).match(/[A-Za-z0-9]/) || ['?'])[0].toUpperCase())}</div>`;
@@ -2034,11 +2041,18 @@ function categoryForm(c) {
   });
 }
 
+// Show only the schedule fields that apply: two days for "Twice a month", one date otherwise
+function billFormShow(form) {
+  const f = form.elements.freq?.value, show = (n, on) => { const el = form.querySelector('#f_' + n)?.closest('.field'); if (el) el.style.display = on ? '' : 'none'; };
+  show('next', f !== 'semimonthly'); show('day1', f === 'semimonthly'); show('day2', f === 'semimonthly');
+  show('weekend', f === 'monthly' || f === 'semimonthly');
+}
 function billForm(b) {
   const isNew = !b;
   openSheet({
     title: isNew ? 'New recurring item' : `Edit ${b.type === 'income' ? 'income' : 'bill'}`,
-    values: b ? { ...b, next: nextBillDate(b) || b.anchor } : { type: 'bill', freq: 'monthly', next: today(), showOnCalendar: true, categoryId: '', group: '' },
+    values: b ? { ...b, next: nextBillDate(b) || b.anchor, day1: semiDays(b)[0], day2: semiDays(b)[1], weekend: b.weekend || '' } : { type: 'bill', freq: 'monthly', next: today(), showOnCalendar: true, categoryId: '', group: '', day1: 1, day2: 15, weekend: '' },
+    onInput: billFormShow,
     fields: [
       { name: 'name', label: 'Name', required: true, placeholder: 'e.g. Mortgage, DTE Energy, Paycheck' },
       { row: [
@@ -2049,6 +2063,11 @@ function billForm(b) {
         { name: 'freq', label: 'Repeats', type: 'select', options: Object.entries(FREQ_NAMES).map(([value, label]) => ({ value, label })) },
         { name: 'next', label: 'Next date', type: 'date', required: true },
       ] },
+      { row: [
+        { name: 'day1', label: 'First day of the month', type: 'number', placeholder: '10' },
+        { name: 'day2', label: 'Second day', type: 'number', placeholder: '25' },
+      ] },
+      { name: 'weekend', label: 'If it falls on a weekend', type: 'select', options: [{ value: '', label: 'Same day' }, { value: 'before', label: 'Business day before (Friday)' }, { value: 'after', label: 'Business day after (Monday)' }] },
       { name: 'group', label: 'Group', placeholder: 'e.g. Subscriptions', list: 'billGroups' },
       { type: 'html', html: `<datalist id="billGroups">${BILL_GROUPS.map((g) => `<option value="${g}">`).join('')}</datalist>` },
       { name: 'categoryId', label: 'Also count against budget category', type: 'select', options: [{ value: '', label: '— No, keep separate —' }, ...state.budget.categories.map((c) => ({ value: c.id, label: `${c.emoji} ${c.name}` }))] },
@@ -2057,18 +2076,28 @@ function billForm(b) {
       { name: 'showOnCalendar', label: 'Show on calendar', type: 'checkbox' },
     ],
     onSave(v) {
-      const { next, ...rest } = v;
+      const { next, day1, day2, ...rest } = v;
       rest.anchor = next;
       rest.dueDay = parse(next).getDate();
+      if (rest.freq === 'semimonthly') {
+        const ds = [day1, day2].map((d) => Math.max(1, Math.min(31, Math.round(Number(d) || 1)))).sort((a, c) => a - c);
+        if (ds[0] === ds[1]) { toast('Pick two different days'); return false; }
+        rest.days = ds; rest.dueDay = ds[0];
+        rest.anchor = billOccurrences({ ...rest }, today(), addDays(today(), 40))[0] || next;
+      } else delete rest.days;
+      if (!['monthly', 'semimonthly'].includes(rest.freq)) rest.weekend = '';
+      if (!rest.weekend) delete rest.weekend;
       if (isNew) state.budget.bills.push({ id: uid(), paid: {}, since: today(), ...rest });
       else {
         // Moving a due date: a new-schedule date that's already passed was settled by the old date in the same
         // period (paid → don't autopay/log it again; unpaid → it stays overdue).
         const win = [addDays(today(), -60), today()];
         const prev = billOccurrences(b, addDays(today(), -120), today()).map((d) => [d, b.paid?.[d]]);
+        if (!rest.days) delete b.days;
+        if (!rest.weekend) delete b.weekend;
         Object.assign(b, rest);
         b.paid ||= {};
-        const samePeriod = (od, d) => (b.freq === 'monthly' ? monthKey(od) === monthKey(d) : Math.abs(daysBetween(od, d)) < (FREQ_STEP[b.freq] || 366));
+        const samePeriod = (od, d) => (b.freq === 'monthly' ? monthKey(od) === monthKey(d) : Math.abs(daysBetween(od, d)) < (FREQ_STEP[b.freq] || (b.freq === 'semimonthly' ? 13 : 366)));
         for (const d of billOccurrences(b, ...win)) {
           if (d in b.paid || prev.some(([od]) => od === d)) continue;
           if (prev.some(([od, p]) => p && samePeriod(od, d))) b.paid[d] = 'moved';
@@ -2079,6 +2108,7 @@ function billForm(b) {
       state.budget.bills = state.budget.bills.filter((x) => x.id !== b.id);
     }),
   });
+  billFormShow($('#sheetForm'));
 }
 
 // "Name | amount | schedule | group" per line. "+4042" = income. Schedule: "15" (monthly on the 15th),

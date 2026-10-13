@@ -578,3 +578,7 @@ body:not(.paged) .budget-tabs { position: sticky; top: -6px; z-index: 6; transit
 .lv-n { flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); font-weight: 800; font-size: 13px; }
 .lv-tip { margin-top: 6px; padding: 9px 11px; border-radius: 10px; background: var(--surface-2); font-size: 13.5px; line-height: 1.45; }
 .lv-tip.bad { background: var(--bad-soft, var(--surface-2)); }
+.pay-basis { font-size: 13px; color: var(--muted); margin: -2px 0 8px; line-height: 1.5; }
+.pay-basis b { color: var(--text); font-weight: 650; }
+.pay-basis .link, .pay-card .link { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: var(--accent); cursor: pointer; }
+.pay-card .sub + .sub { margin-top: 1px; }

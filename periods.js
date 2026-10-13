@@ -15,7 +15,7 @@ function periodRanges(unit) {
     const b = payBill();
     if (b) {
       // Paydays: the paycheck deposits that actually landed (they move), plus scheduled ones with no deposit yet
-      const big = Math.max(50, perMonth(b) / (b.freq === 'weekly' ? 4.3 : b.freq === 'biweekly' ? 2.17 : 1) * 0.6);
+      const big = Math.max(50, perMonth(b) / (b.freq === 'weekly' ? 4.3 : b.freq === 'biweekly' ? 2.17 : b.freq === 'semimonthly' ? 2 : 1) * 0.6);
       const dep = [...new Set(state.budget.transactions.filter((x) => x.type === 'income' && x.amount >= big && x.date <= t).map((x) => x.date))].sort();
       const sch = billOccurrences(b, addDays(t, -420), addDays(t, 62));
       const near = (d) => dep.some((x) => Math.abs(daysBetween(x, d)) <= 3);
@@ -134,6 +134,7 @@ function periodCard() {
   const seg = (k, opts, cur) => `<div class="segmented mini">${opts.map(([v, l]) => `<button class="${cur === v ? 'active' : ''}" data-action="${k}" data-v="${v}">${l}</button>`).join('')}</div>`;
   return `<div class="card per-card">
     <h3>${real === 'pay' ? 'By pay period' : 'By week'}</h3>
+    ${real === 'pay' ? payBasis() : ''}
     <div class="per-ctl">${seg('per-unit', [['pay', 'Pay periods'], ['week', 'Weeks']], unit === 'pay' && real === 'pay' ? 'pay' : 'week')}${seg('per-sched', [['0', 'As paid'], ['1', 'As due']], sched ? '1' : '0')}</div>
     ${chart}
     <div class="chart-legend"><span><i class="lg-sw per-bill"></i>Bills</span><span><i class="lg-sw per-bill striped"></i>Paid early/late</span><span><i class="lg-sw per-every"></i>Everyday</span>${cur >= 0 && P[cur].due ? '<span><i class="lg-sw per-due"></i>Still due</span>' : ''}<span><i class="lg-line inc"></i>Money in</span></div>
@@ -148,3 +149,30 @@ Object.assign(actions, {
   'per-unit': (el) => { ui.perUnit = el.dataset.v; ui.perSel = undefined; render(); },
   'per-sched': (el) => { ui.perSched = el.dataset.v === '1'; render(); },
 });
+
+// "Based on: Payroll · Twice a month · 10th & 25th · Change" so the schedule behind the math is visible
+function payBasis() {
+  const b = payBill();
+  if (!b) return `<div class="pay-basis">No paycheck set up yet · <button class="link" data-action="add-income">Add your pay schedule</button></div>`;
+  return `<div class="pay-basis">Based on <b>${esc(b.name)}</b> · ${esc(scheduleLabel(b))} · <button class="link" data-action="edit-bill" data-id="${b.id}">Change</button></div>`;
+}
+// Recurring: paychecks first, with their pattern and next paydays
+const _recurringViewPay = recurringView;
+recurringView = function () {
+  const html = _recurringViewPay();
+  const inc = state.budget.bills.filter((b) => b.type === 'income');
+  const card = `<div class="section-title"><span>Paychecks</span><button data-action="add-income">+ Income</button></div>
+    <div class="card flush pay-card">${inc.length ? inc.map((b) => { const nx = billOccurrences(b, today(), addDays(today(), 70)).slice(0, 3); return `<button class="row tap" style="width:100%;text-align:left" data-action="edit-bill" data-id="${b.id}">
+      ${letterAvatar(b.name)}<div class="grow"><div class="title">${esc(b.name)}</div><div class="sub">${esc(scheduleLabel(b))}</div>${nx.length ? `<div class="sub">Next: ${nx.map((d) => esc(fmtDate(d, { weekday: 'short', month: 'short', day: 'numeric' }))).join(' · ')}</div>` : ''}</div>
+      <span class="amount income">+${money(b.amount)}</span></button>`; }).join('')
+      : `<button class="row tap" style="width:100%;text-align:left" data-action="add-income"><div class="avatar">💰</div><div class="grow"><div class="title">Set up your pay schedule</div><div class="sub">Every 2 weeks, twice a month (e.g. 10th & 25th), weekly or monthly</div></div>${ICON.chev}</button>`}</div>`;
+  // "All" already lists income in full; Upcoming starts with the paychecks
+  return (ui.recurTab || 'upcoming') === 'upcoming' && state.budget.bills.length ? card.replace('<div class="section-title">', '<div class="section-title" style="margin-top:0">') + html : html;
+};
+actions['add-income'] = () => {
+  billForm(null);
+  const f = $('#sheetForm');
+  f.elements.type.value = 'income'; f.elements.freq.value = 'semimonthly'; f.elements.day1.value = 10; f.elements.day2.value = 25; f.elements.weekend.value = 'before';
+  $('#sheetTitle').textContent = 'Pay schedule';
+  billFormShow(f);
+};
