@@ -463,7 +463,7 @@ function wrappedStats(ym) {
   const tx = state.budget.transactions.filter((x) => x.date.startsWith(ym) && x.type !== 'income');
   const spent = sum(tx, (x) => x.amount), prev = spentIn(addMonths(ym, -1));
   const cats = state.budget.categories.map((c) => ({ c, v: spentIn(ym, c.id) })).filter((x) => x.v > 0).sort((a, b) => b.v - a.v);
-  const limit = sum(state.budget.categories, (c) => c.limit);
+  const limit = sum(everydayCats(), (c) => c.limit);
   const biggest = tx.slice().sort((a, b) => b.amount - a.amount)[0];
   const choreLogs = state.chores.flatMap((c) => (c.log || []).filter((l) => l.date.startsWith(ym)).map((l) => ({ ...l, pts: Number(c.points) || 1 })));
   const pts = {}; for (const l of choreLogs) if (l.memberId) pts[l.memberId] = (pts[l.memberId] || 0) + l.pts;
@@ -895,7 +895,7 @@ function monthReviewItems(ym) {
   // "Usual" = median of this month and the two before (only months the history fully covers)
   const months = [ym, ...(typeof paceMonths === 'function' ? paceMonths(ym) : [])].slice(0, 3);
   const r10 = (n) => Math.max(10, Math.round(n / 10) * 10);
-  const cats = state.budget.categories.map((c) => {
+  const cats = everydayCats().map((c) => {
     const spent = spentIn(ym, c.id), lim = catLimit(c, ym);
     const usual = months.length >= 2 ? median(months.map((m) => spentIn(m, c.id))) : null;
     const gap = usual === null ? 0 : Math.abs(usual - (c.limit || 0));

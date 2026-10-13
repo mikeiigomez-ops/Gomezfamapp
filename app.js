@@ -411,7 +411,7 @@ function balanceNow() {
 // Category budget still free for everyday spending in a month, after the bills that count against it.
 function flexLeft(ym) {
   const due = recurringBetween(ym + '-01', dayInMonth(31, ym), 'bill').filter((x) => x.b.categoryId && !isPaid(x.b, x.date));
-  return sum(state.budget.categories, (c) => (c.limit ? Math.max(0, c.limit - spentIn(ym, c.id) - sum(due.filter((x) => x.b.categoryId === c.id), (x) => x.amount)) : 0));
+  return sum(everydayCats(), (c) => (c.limit ? Math.max(0, c.limit - spentIn(ym, c.id) - sum(due.filter((x) => x.b.categoryId === c.id), (x) => x.amount)) : 0));
 }
 // Unspent everyday budget pro-rated over the days from t up to (not including) end — same daily rate the forecast uses.
 function flexUntil(end, t = today()) {
@@ -426,7 +426,11 @@ const dueWindow = (t = today()) => [t, addDays(t, 6)];
 function billsDueSoon(t = today()) { return [...overdueBills(t), ...recurringBetween(...dueWindow(t), 'bill').filter((x) => !isPaid(x.b, x.date))]; }
 // Paid bills are logged as transactions (fromBill). Ones with no budget category count as spending in Trends/Activity
 // but not against category limits.
-const isBillOnly = (x) => !!x.fromBill && x.type !== 'income' && !state.budget.categories.some((c) => c.id === x.categoryId);
+// Outside everyday spending: charges in a Home & bills / Debt & payments / Giving category, or a paid bill with no category
+const isEveryday = (c) => !c || !c.group || c.group === 'everyday';
+const everydayCats = () => state.budget.categories.filter(isEveryday);
+const looseBill = (x) => isBillOnly(x) && !state.budget.categories.some((c) => c.id === x.categoryId); // shown as "Bills · group"
+const isBillOnly = (x) => { if (x.type === 'income') return false; const c = state.budget.categories.find((k) => k.id === x.categoryId); return c ? !isEveryday(c) : !!x.fromBill; };
 const billGroupOf = (x) => state.budget.bills.find((b) => b.id === x.billId)?.group || 'Bills';
 const billTxId = (b, date) => `bill-${b.id}-${date}`;
 // Category for a new expense: the last transaction with the same/similar description, else the keyword guess.
@@ -470,7 +474,7 @@ function budgetSummary(ym) {
   const spent = sum(tx.filter((t) => t.type !== 'income' && !isBillOnly(t)), (t) => t.amount); // vs. the category budget
   const bills = sum(tx.filter(isBillOnly), (t) => t.amount);
   const income = sum(tx.filter((t) => t.type === 'income'), (t) => t.amount);
-  const limit = sum(state.budget.categories, (c) => catLimit(c, ym));
+  const limit = sum(everydayCats(), (c) => catLimit(c, ym));
   const r = (n) => Math.round(n * 100) / 100; // no 0.1+0.2 drift ("-$0.00")
   return { tx, spent: r(spent), bills: r(bills), income: r(income), limit, left: r(limit - spent) };
 }
@@ -522,7 +526,7 @@ function catPace(ym) {
       : overB || (!lim && overU) || (cur && should !== null && all - should > Math.max(10, cap * 0.1)) ? 'warn' : '';
     return { key, spent: r(all), every: r(every), lim, usual: usual === null ? null : r(usual), should: should === null ? null : r(should), likely: r(likely), ahead: should === null ? null : r(all - should), cap, level };
   };
-  const cats = state.budget.categories.map((c) => ({ c, ...one(c.id, catLimit(c, ym)) }));
+  const cats = everydayCats().map((c) => ({ c, ...one(c.id, catLimit(c, ym)) }));
   const other = { c: { emoji: '📦', name: 'Uncategorized' }, ...one('', 0) };
   const rows = [...cats, other];
   const tot = (f) => r(sum(rows, f));
@@ -540,49 +544,6 @@ function paceLine(x, P) {
   const pace = over > 0.5 ? `${moneyW(over)} over budget` : headed >= 5 ? `heading ${w(headed)} over budget`
     : a === null ? '' : Math.abs(a) < 5 ? 'right on pace' : `${moneyW(Math.abs(a))} ${a > 0 ? 'ahead of' : 'under'} pace`;
   return [`On pace for ${w(x.likely)}`, x.usual !== null ? `usually ${w(x.usual)}` : P.months.length ? '' : 'no history yet', pace].filter(Boolean).join(' · ');
-}
-// Everyday spending with no category, one entry per merchant (biggest first)
-function uncategorizedMerchants() {
-  const ids = new Set(state.budget.categories.map((c) => c.id)), by = new Map();
-  for (const t of state.budget.transactions) {
-    if (t.type === 'income' || ids.has(t.categoryId) || isBillOnly(t) || t.fromBill) continue;
-    const k = norm(t.note || '') || '(no description)';
-    const m = by.get(k) || { note: t.note || '(no description)', key: k, n: 0, total: 0, last: '' };
-    m.n++; m.total += Number(t.amount) || 0; if (t.date > m.last) m.last = t.date;
-    by.set(k, m);
-  }
-  return [...by.values()].sort((a, b) => b.total - a.total);
-}
-// Sort merchants: pick a category once per merchant; every past charge follows, and future bank imports
-// learn it too (bankCategory reuses the category of the last charge with the same description).
-function sortMerchantsSheet() {
-  const list = uncategorizedMerchants().slice(0, 60);
-  if (!list.length) { toast('Everything has a category ✓'); return; }
-  const opts = `<option value="">Not sorted</option><option value="__out">🧾 Bill or payment</option>${state.budget.categories.map((c) => `<option value="${esc(c.id)}">${esc(c.emoji)} ${esc(c.name)}</option>`).join('')}`;
-  const guess = (note) => (typeof bankCategory === 'function' ? bankCategory(note) : ''); // name hints only, never a blind default
-  openSheet({
-    title: 'Sort merchants', saveLabel: 'Apply',
-    fields: [{ type: 'html', html: `<p class="small muted" style="margin-top:0">Pick a category once per merchant. Past charges move now, and new ones from the bank will follow. Card payments, loans and money sent to family can go under “Bill or payment” so they don’t count as everyday spending.</p>
-      <div class="card flush sort-list">${list.map((m, i) => `<label class="row sort-row"><div class="grow"><div class="title">${esc(m.note)}</div><div class="sub">${m.n} charge${m.n > 1 ? 's' : ''} · ${moneyW(m.total)} · last ${esc(fmtDate(m.last, { month: 'short', day: 'numeric' }))}</div></div>
-        <select data-merchant="${i}" aria-label="Category for ${esc(m.note)}">${opts.replace(`value="${esc(guess(m.note))}"`, `value="${esc(guess(m.note))}" selected`).replace('value="" selected', 'value=""')}</select></label>`).join('')}</div>` }],
-    onSave() {
-      let moved = 0, merchants = 0;
-      const ids = new Set(state.budget.categories.map((c) => c.id));
-      for (const sel of $('#sheetForm').querySelectorAll('select[data-merchant]')) {
-        const m = list[+sel.dataset.merchant], to = sel.value;
-        if (!m || !(ids.has(to) || to === '__out')) continue;
-        merchants++;
-        for (const t of state.budget.transactions) {
-          if (t.type === 'income' || ids.has(t.categoryId) || t.fromBill) continue;
-          if ((norm(t.note || '') || '(no description)') !== m.key) continue;
-          if (to === '__out') Object.assign(t, { categoryId: '', fromBill: true, outside: true }); // counts with bills paid, not everyday
-          else t.categoryId = to;
-          moved++;
-        }
-      }
-      toast(moved ? `Sorted ${merchants} merchant${merchants > 1 ? 's' : ''} · ${moved} charge${moved > 1 ? 's' : ''} ✓` : 'Nothing changed');
-    },
-  });
 }
 // The bar: solid = spent, ghost = where it's headed, tick = where you should be today, notch = the budget when you're past it
 function paceBar(x, P) {
@@ -822,7 +783,7 @@ views.budget = () => {
     const mFrom = ym + '-01', mTo = dayInMonth(31, ym);
     const incM = sum(recurringBetween(mFrom, mTo, 'income'), (x) => x.amount);
     const billM = sum(recurringBetween(mFrom, mTo, 'bill'), (x) => x.amount);
-    const flexB = sum(state.budget.categories, (c) => Math.max(0, (c.limit || 0) - sum(recurringBetween(mFrom, mTo, 'bill').filter((x) => x.b.categoryId === c.id), (x) => x.amount)));
+    const flexB = sum(everydayCats(), (c) => Math.max(0, (c.limit || 0) - sum(recurringBetween(mFrom, mTo, 'bill').filter((x) => x.b.categoryId === c.id), (x) => x.amount)));
     const leftover = incM - billM - flexB; // bills already inside a category budget aren't counted twice
     body = `
       ${ym === monthKey(today()) ? safeHero() : ''}
@@ -868,14 +829,19 @@ views.budget = () => {
           : T.usual !== null ? `Usually ~${moneyW(T.usual)}${T.limit ? ` · budget ${moneyW(T.limit)}` : ''}` : '';
         const row = (x) => `<div class="top"><span>${esc(x.c.emoji)} ${esc(x.c.name)}</span><span>${moneyW(x.spent)}${x.lim ? ` / ${moneyW(x.lim)}${x.c.limit !== undefined && x.lim !== x.c.limit ? ' ↻' : ''}` : ''}</span></div>
             ${paceBar(x, P)}${(() => { const l = paceLine(x, P); return l ? `<div class="pace-line ${x.level}">${esc(l)}</div>` : ''; })()}`;
-        const o = P.other, nSort = uncategorizedMerchants().length;
+        const o = P.other, nSort = typeof uncategorizedMerchants === 'function' ? uncategorizedMerchants().length : 0;
         return `<div class="section-title">Categories<button data-action="add-category">+ Category</button></div>
       <div class="card">
         ${sumLine ? `<div class="pace-sum"><span class="muted">Everyday</span> ${sumLine}${P.cur ? '<div class="small muted">The tick on each bar is where you’d be today if you spread the budget evenly over the month.</div>' : ''}</div>` : ''}
-        ${P.cats.map((x) => `<button class="cat-row" style="display:block;width:100%;text-align:left" data-action="edit-category" data-id="${x.c.id}">${row(x)}</button>`).join('') || '<div class="empty small">No categories yet.</div>'}
+        ${(() => {
+          // Categories with no budget, no spending and no history just take space: one line names them
+          const live = P.cats.filter((x) => x.lim || x.spent || x.usual), idle = P.cats.filter((x) => !(x.lim || x.spent || x.usual));
+          return (live.map((x) => `<button class="cat-row" style="display:block;width:100%;text-align:left" data-action="edit-category" data-id="${x.c.id}">${row(x)}</button>`).join('') || '<div class="empty small">No everyday spending yet.</div>')
+            + (idle.length ? `<div class="cat-row small muted idle-cats">Nothing yet: ${idle.map((x) => `<button class="link" data-action="edit-category" data-id="${x.c.id}">${esc(x.c.emoji)} ${esc(x.c.name)}</button>`).join(', ')}</div>` : '');
+        })()}
         ${o.spent || (P.cur && o.usual) ? `<div class="cat-row uncat-row"><button class="plain" style="display:block;width:100%;text-align:left" data-action="budget-tab" data-tab="activity">${row(o)}</button>${nSort ? `<button class="mini-btn" style="margin-top:6px" data-action="sort-merchants">Sort ${nSort} merchant${nSort > 1 ? 's' : ''} into categories</button>` : ''}</div>` : ''}
-        ${s.bills ? `<button class="cat-row" style="display:block;width:100%;text-align:left" data-action="budget-tab" data-tab="bills"><div class="top"><span>🧾 Bills paid <span class="muted small">outside the budget</span></span><span>${moneyW(s.bills)}</span></div></button>` : ''}
-      </div>`;
+      </div>
+      ${typeof outsideEverydayCard === 'function' ? outsideEverydayCard(ym) : ''}`;
       })()}`;
   } else if (tab === 'activity') {
     const byDate = {};
@@ -883,7 +849,7 @@ views.budget = () => {
     body = Object.keys(byDate).length ? Object.entries(byDate).map(([d, list]) => `
       <div class="section-title"><span>${fmtDate(d)}</span><span class="small" style="text-transform:none">${moneyW(sum(list.filter((t) => t.type !== 'income'), (t) => t.amount))}</span></div>
       <div class="card flush">${list.map((t) => {
-        const bo = isBillOnly(t), c = bo ? { emoji: '🧾', name: `Bills · ${billGroupOf(t)}` } : category(t.categoryId);
+        const bo = looseBill(t), c = bo ? { emoji: '🧾', name: `Bills · ${billGroupOf(t)}` } : category(t.categoryId);
         const m = t.memberId ? member(t.memberId) : null;
         return `<button class="row tap" style="width:100%;text-align:left" data-action="edit-tx" data-id="${t.id}">
           <div class="avatar">${t.type === 'income' ? '💰' : esc(c.emoji)}</div>
@@ -1203,10 +1169,10 @@ function trendsView(ym) {
   const prevLbl = parse(prev + '-01').toLocaleDateString(undefined, { month: 'short' }) + (isCur ? ` 1–${Math.min(cut, new Date(+prev.slice(0, 4), +prev.slice(5), 0).getDate())}` : '');
   const out = (m, f) => sum(state.budget.transactions.filter((x) => x.type !== 'income' && x.date.startsWith(m) && (m !== prev || parse(x.date).getDate() <= cut) && f(x)), (x) => x.amount);
   const known = (x) => state.budget.categories.some((k) => k.id === x.categoryId);
-  const groups = [...new Set(state.budget.transactions.filter((x) => isBillOnly(x) && (x.date.startsWith(sel) || x.date.startsWith(prev))).map(billGroupOf))];
+  const groups = [...new Set(state.budget.transactions.filter((x) => looseBill(x) && (x.date.startsWith(sel) || x.date.startsWith(prev))).map(billGroupOf))];
   const cats = [...state.budget.categories.map((c) => ({ c, f: (x) => x.categoryId === c.id })),
     { c: { emoji: '📦', name: 'Uncategorized' }, f: (x) => !known(x) && !isBillOnly(x) },
-    ...groups.map((g) => ({ c: { emoji: '🧾', name: `Bills · ${g}` }, f: (x) => isBillOnly(x) && billGroupOf(x) === g }))]
+    ...groups.map((g) => ({ c: { emoji: '🧾', name: `Bills · ${g}` }, f: (x) => looseBill(x) && billGroupOf(x) === g }))]
     .map(({ c, f }) => ({ c, v: out(sel, f), pv: out(prev, f) }))
     .filter((x) => x.v > 0)
     .sort((a, b) => b.v - a.v);
@@ -1251,8 +1217,8 @@ function trendsView(ym) {
     <div class="card">${where || '<div class="empty small">No spending this month.</div>'}</div>
     ${biggest.length ? `<div class="section-title">Biggest expenses</div>
     <div class="card flush">${biggest.map((x) => `<button class="row tap" style="width:100%;text-align:left" data-action="edit-tx" data-id="${x.id}">
-      <div class="avatar">${isBillOnly(x) ? '🧾' : esc(category(x.categoryId).emoji)}</div>
-      <div class="grow"><div class="title">${esc(x.note || category(x.categoryId).name)}</div><div class="sub">${fmtDate(x.date)} · ${esc(isBillOnly(x) ? `Bills · ${billGroupOf(x)}` : category(x.categoryId).name)}</div></div>
+      <div class="avatar">${looseBill(x) ? '🧾' : esc(category(x.categoryId).emoji)}</div>
+      <div class="grow"><div class="title">${esc(x.note || category(x.categoryId).name)}</div><div class="sub">${fmtDate(x.date)} · ${esc(looseBill(x) ? `Bills · ${billGroupOf(x)}` : category(x.categoryId).name)}</div></div>
       <span class="amount">${money(x.amount)}</span></button>`).join('')}</div>` : ''}
   `;
 }
@@ -2025,12 +1991,13 @@ function categoryForm(c) {
   const isNew = !c;
   openSheet({
     title: isNew ? 'New category' : 'Edit category',
-    values: c || { emoji: '📦' },
+    values: c ? { ...c, group: c.group || 'everyday' } : { emoji: '📦', group: 'everyday' },
     fields: [
       { row: [
         { name: 'emoji', label: 'Emoji', placeholder: '📦' },
         { name: 'name', label: 'Name', required: true, placeholder: 'e.g. Pets' },
       ] },
+      { name: 'group', label: 'Counts as', type: 'select', options: [['everyday', 'Everyday spending (budget & pace)'], ['home', 'Home & bills'], ['debt', 'Debt & payments'], ['giving', 'Giving']].map(([value, label]) => ({ value, label })) },
       { name: 'limit', label: 'Monthly budget', type: 'money', placeholder: '0 = no limit' },
       { name: 'rollover', label: 'Roll over what’s left', type: 'checkbox', hint: 'Unspent money (or overspending) carries into next month' },
     ],
@@ -2736,7 +2703,6 @@ const actions = {
   // Budget
   'budget-month': (el) => { ui.budgetMonth = addMonths(ui.budgetMonth, +el.dataset.n); render(); },
   'budget-tab': (el) => { ui.budgetTab = el.dataset.tab; render(); },
-  'sort-merchants': () => sortMerchantsSheet(),
   'export-csv': (el) => {
     const ym = ui.budgetMonth, all = !!el?.dataset?.all;
     const cell = (v) => { const s = String(v ?? ''); return `"${(/^[=+\-@\t\r]/.test(s) ? "'" + s : s).replace(/"/g, '""')}"`; }; // no spreadsheet formula injection

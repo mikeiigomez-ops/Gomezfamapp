@@ -117,6 +117,7 @@ views.settings = (p) => {
 };
 actions['errors-clear'] = () => { try { localStorage.removeItem('gomezfam:errors'); } catch { /* ignore */ } render(); };
 
-// An earlier script may already have drawn the first screen before this file wired up the tabs and chips
-// (then the app's own first render is skipped): redraw once so a cold start on #budget gets them too.
-if (typeof lastRouteKey !== 'undefined' && lastRouteKey !== null) render();
+// An earlier script may already have drawn the first screen before this file (and the ones after it) were
+// loaded, and then the app's own first render is skipped: redraw once every script is in, so a cold start
+// on #budget gets the tabs, chips and everything later files add.
+document.addEventListener('DOMContentLoaded', () => { if (typeof lastRouteKey !== 'undefined' && lastRouteKey !== null) render(); });
