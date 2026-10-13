@@ -207,8 +207,8 @@ async function pushOff() {
 const _afterRenderNotify = afterRender;
 afterRender = function () {
   _afterRenderNotify();
-  const s = mySub(), me = actor();
-  if (s && me && s.member !== me) { s.member = me; save(); }
+  const s = mySub(), me = actor(), kidNow = typeof inKidMode === 'function' && inKidMode();
+  if (s && me && (s.member !== me || !!s.kid !== kidNow)) { s.member = me; s.kid = kidNow; save(); } // follows Kid Mode on/off
 };
 // One-time family setup: a key pair for Web Push. The public half is shared with the family's phones;
 // the private half is shown once to paste into GitHub (it's never saved in the app).
