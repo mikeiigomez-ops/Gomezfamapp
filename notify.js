@@ -15,7 +15,7 @@ const NOTIFY_DEF = {
   weekly: { on: true, day: 0, time: '19:00' },
   monthly: { on: true, time: '09:00' },
   alerts: { on: true, near: true, over: true, big: 200, tight: true },
-  family: { on: true, chat: true, events: true },
+  family: { on: true, chat: true, events: true, games: true, kudos: true, polls: true, requests: true, friends: true },
   quiet: { on: true, from: '21:30', to: '07:00' },
 };
 const notifyCfg = () => (state.notify ||= { subs: [], prefs: {} });
@@ -103,14 +103,17 @@ function alertDigest(mid, P, log) {
   if (!items.length) return null;
   return { kind: 'alert', title: items.length > 1 ? `Budget alerts (${items.length})` : 'Budget alert', body: items.join('\n'), url: '#budget', tag: 'alert', mark };
 }
-function familyDigest(mid, P, log) {
+function familyDigest(mid, P, log, opts = {}) {
   const out = [], now = Date.now();
   if (P.family.chat) {
     const kc = `chat:${mid}`, since = log[kc] || now - 2 * 3600e3;
-    const fresh = state.chat.filter((m) => m.at > since && m.who !== mid).sort((a, b) => a.at - b.at);
+    // With the instant relay, chat already arrived as it happened, except what was held during quiet hours
+    const heldOnly = !!state.notify?.relay && P.quiet.on;
+    const minsOf = (at) => { const x = new Date(at); return x.getHours() * 60 + x.getMinutes(); };
+    const fresh = state.chat.filter((m) => m.at > since && m.who !== mid && (!heldOnly || npQuiet(minsOf(m.at), P.quiet))).sort((a, b) => a.at - b.at);
     if (fresh.length) {
       const last = fresh.at(-1), who = state.members.find((m) => m.id === last.who)?.name || 'Family';
-      out.push({ kind: 'chat', title: fresh.length > 1 ? `💬 ${fresh.length} new messages` : `💬 ${who}`, body: (fresh.length > 1 ? `${who}: ` : '') + String(last.text || '').slice(0, 140), url: '#chat', tag: 'chat', mark: { [kc]: last.at } });
+      out.push({ kind: 'chat', title: heldOnly ? `💬 While you were away: ${fresh.length} message${fresh.length > 1 ? 's' : ''}` : fresh.length > 1 ? `💬 ${fresh.length} new messages` : `💬 ${who}`, body: (fresh.length > 1 ? `${who}: ` : '') + String(last.text || '').slice(0, 140), url: '#chat', tag: 'chat', mark: { [kc]: last.at } });
     }
   }
   if (P.family.events) {
@@ -119,6 +122,26 @@ function familyDigest(mid, P, log) {
       if (e.kind !== 'event' || !e.time || (kid && e.whoIds?.length && !e.whoIds.includes(mid))) continue;
       const k = `ev:${mid}:${e.id}:${t}`, start = npMin(e.time);
       if (start > mins && start - mins <= 60 && !log[k]) out.push({ kind: 'event', title: `📅 ${e.title} at ${fmtTime(e.time)}`, body: e.location ? `📍 ${e.location}` : 'In less than an hour', url: '#calendar', tag: 'ev-' + e.id, mark: { [k]: now } });
+    }
+  }
+  // Friends circles (the server passes the family's circles in): messages and trade offers from friends
+  if (P.family.friends && opts.circles?.length && opts.famId) {
+    const kid = isKidMember(mid), rule = kid && typeof kidRule === 'function' ? kidRule(mid) : null;
+    const d0 = new Date(now), mm = d0.getHours() * 60 + d0.getMinutes();
+    const ok = !rule || (rule.on && !(rule.quiet && npQuiet(mm, { from: rule.quietFrom, to: rule.quietTo })));
+    if (ok) for (const c of opts.circles) {
+      const d = c.data || {}, mine = `${opts.famId}:${mid}`, nameOf = (k) => d.people?.[k]?.name || d.fams?.[String(k).split(':')[0]]?.name || 'A friend';
+      const kc = `fc:${mid}:${c.id}`, since = log[kc] || now - 2 * 3600e3;
+      const fresh = (d.chat || []).filter((m) => m.at > since && !String(m.from).startsWith(opts.famId + ':')).sort((a, b) => a.at - b.at);
+      if (fresh.length && (!rule || rule.chat !== 'off')) {
+        const last = fresh.at(-1);
+        out.push({ kind: 'friends', title: fresh.length > 1 ? `👯 ${fresh.length} messages from friends` : `👯 ${nameOf(last.from)}`, body: (fresh.length > 1 ? `${nameOf(last.from)}: ` : '') + String(last.text || '').slice(0, 140), url: '#fchat', tag: 'friends', mark: { [kc]: last.at } });
+      }
+      for (const t of d.trades || []) {
+        const k = `ft:${mid}:${t.id}`;
+        if (t.to !== mine || t.status !== 'offered' || log[k] || (rule && rule.trade === 'off')) continue;
+        out.push({ kind: 'friends', title: `🔁 Trade offer from ${nameOf(t.from)}`, body: 'Tap to see what they offered', url: '#friends', tag: 'ftrade', mark: { [k]: now } });
+      }
     }
   }
   return out;
@@ -139,7 +162,7 @@ function notifyPlan(log = {}, members = [], opts = {}) {
       if (!kid && P.monthly.on && (opts.force || t.slice(8) === '01') && due(P.monthly.time)) add({ kind: 'monthly', tag: 'monthly', ...monthlyDigest(addMonths(monthKey(t), -1)) }, `m:${mid}:${monthKey(t)}`);
       const quiet = P.quiet.on && npQuiet(mins, P.quiet) && !opts.force; // held, not lost: the next run after quiet hours sends it
       if (!quiet && !kid && P.alerts.on) add(alertDigest(mid, P, opts.force ? {} : log));
-      if (!quiet && P.family.on) for (const m of familyDigest(mid, P, opts.force ? {} : log)) add(m);
+      if (!quiet && P.family.on) for (const m of familyDigest(mid, P, opts.force ? {} : log, opts)) add(m);
     } catch (e) { if (typeof noteError === 'function') noteError('notify', e); }
   }
   return out;
@@ -218,7 +241,10 @@ views.notify = () => {
       : `<p class="small muted" style="margin-top:0">${pushSupported() ? 'Get your summaries and alerts here, even when the app is closed.' : /iPhone|iPad/.test(navigator.userAgent) ? 'On iPhone, notifications work from the Home Screen app: Share → <b>Add to Home Screen</b>, then open it from there.' : 'This browser can’t show notifications.'}</p>${pushSupported() ? '<button class="btn block" data-action="np-on">Turn on notifications</button>' : ''}`}
       ${subs.length ? `<div class="small muted" style="margin-top:8px">On for: ${subs.map((s) => `${esc(who(s.member))} (${esc(s.device || 'phone')})`).join(', ')}</div>` : ''}</div>`;
   if (!me) return setup + '<div class="card small muted">Pick who uses this phone in Settings to personalize notifications.</div>';
-  return `${setup}
+  const relay = cfg.vapid && !kid ? `<div class="card"><h3>Instant (chat, games, high-fives)</h3>${cfg.relay
+    ? `<div class="kv"><span>⚡ On · <span class="small muted">${esc(String(cfg.relay).replace(/^https:\/\//, ''))}</span></span><button class="mini-btn" data-action="np-relay-test">Test</button></div><button class="link-inline small" data-action="np-relay-edit">Change</button>`
+    : `<p class="small muted" style="margin-top:0">Without this, chat and game alerts come with the ~30-minute check. With the free relay they arrive instantly. After the relay is deployed (see the setup guide), paste its address:</p><div class="np-key"><input id="npRelay" type="url" placeholder="https://gomezfam-push.….workers.dev" autocapitalize="off"><button class="mini-btn" data-action="np-relay-save">Save</button></div>`}</div>` : '';
+  return `${setup}${relay}
     <div class="section-title">Summaries <span class="np-note">bills, paydays and plans ride along</span></div>
     <div class="card np-card">
       ${tog('daily.on', P.daily.on, kid ? 'Evening check-in' : 'End of day', kid ? 'Chores left and tomorrow’s plans' : 'Today’s spending, what’s due tomorrow, payday plan')}${P.daily.on ? `<div class="np-sub">at ${time('daily.time', P.daily.time)}</div>` : ''}
@@ -234,7 +260,7 @@ views.notify = () => {
     </div>`}
     <div class="section-title">Family</div>
     <div class="card np-card">
-      ${tog('family.on', P.family.on, 'Family')}${P.family.on ? `${tog('family.chat', P.family.chat, 'Chat messages', 'Several at once arrive as one')}${tog('family.events', P.family.events, 'Event reminders', '1 hour before timed events')}` : ''}
+      ${tog('family.on', P.family.on, 'Family')}${P.family.on ? `${tog('family.chat', P.family.chat, 'Chat messages', 'Several at once arrive as one')}${tog('family.games', P.family.games, 'Games', 'Your turn, challenges, results')}${tog('family.kudos', P.family.kudos, 'High-fives')}${tog('family.polls', P.family.polls, 'Polls & challenges', 'New Fridge polls, trivia, family challenges')}${kid ? '' : tog('family.requests', P.family.requests, 'Kid requests', 'Chores to OK, wishes, treats, gem trades')}${tog('family.friends', P.family.friends, kid ? 'Friends' : 'Friends circles', 'Messages and trade offers from friend families')}${tog('family.events', P.family.events, 'Event reminders', '1 hour before timed events')}` : ''}
     </div>
     <div class="section-title">Quiet hours</div>
     <div class="card np-card">
@@ -251,6 +277,23 @@ document.addEventListener('change', (e) => {
   save(); render();
 });
 Object.assign(actions, {
+  'np-relay-save': () => {
+    const v = String($('#npRelay')?.value || '').trim();
+    if (!/^https:\/\/[^/\s]+\.workers\.dev\/?$|^https:\/\/[^/\s]+\/?$/.test(v)) { toast('Paste the relay address that starts with https://'); return; }
+    notifyCfg().relay = v.replace(/\/$/, ''); save(); render(); toast('Instant notifications on ⚡');
+  },
+  'np-relay-edit': () => { delete notifyCfg().relay; save(); render(); },
+  'np-relay-test': async () => {
+    const me = actor(), url = state.notify?.relay;
+    const subs = (state.notify?.subs || []).filter((s) => s.member === me);
+    if (!subs.length) { toast('Turn on notifications on this phone first'); return; }
+    if (typeof Sync === 'undefined' || !Sync.user) { toast('Sign in to sync first'); return; }
+    try {
+      const res = await fetch(url, { method: 'POST', headers: { authorization: 'Bearer ' + await Sync.user.getIdToken(), 'content-type': 'application/json' }, body: JSON.stringify({ subs: subs.map((s) => ({ endpoint: s.endpoint, keys: s.keys })), payload: { title: '⚡ Instant notifications work!', body: 'Chat, games and high-fives will arrive like this.', url: '#notify', tag: 'test' }, urgent: true }) });
+      const j = await res.json().catch(() => ({}));
+      toast(res.ok ? `Sent to ${(j.results || []).filter((r) => r.status >= 200 && r.status < 300).length} of ${subs.length} device(s)` : `Relay said: ${j.error || res.status}`);
+    } catch (e) { toast('Couldn’t reach the relay: ' + e.message); }
+  },
   'np-on': () => pushOn(),
   'np-off': () => pushOff(),
   'np-keys': () => pushKeysSheet().catch((e) => toast('Couldn’t make keys: ' + e.message)),
@@ -269,3 +312,84 @@ views.settings = (p) => {
 };
 if (typeof HUB !== 'undefined') { HUB.home.routes.push('notify'); HUB_OF.notify = 'home'; }
 if (typeof TITLES !== 'undefined') TITLES.notify = 'Notifications';
+
+/* ---------- Instant: what this phone just did, told to the right people right away ----------
+   When this phone syncs its changes, compare with what was there before: new chat messages, game moves,
+   high-fives, polls, kid requests… made by this person. Each recipient's own settings and quiet hours
+   decide who hears about it; the family's relay (tools/relay) sends the push. */
+const np = {
+  name: (id) => state.members.find((m) => m.id === id)?.name || 'Someone',
+  newOf: (b, a) => { const ids = new Set((b || []).map((x) => x.id)); return (a || []).filter((x) => x && !ids.has(x.id)); },
+};
+function familyEvents(before, after, me) {
+  const ev = [], me_ = np.name(me), others = state.members.map((m) => m.id).filter((id) => id !== me);
+  const parents = state.members.filter((m) => !m.kid && m.id !== me).map((m) => m.id), kid = isKidMember(me);
+  const chat = np.newOf(before.chat, after.chat).filter((x) => x.who === me);
+  if (chat.length) ev.push({ pref: 'chat', to: others, title: `💬 ${me_}`, body: chat.map((x) => x.text).join(' · ').slice(0, 300), url: '#chat', tag: 'chat' });
+  for (const k of np.newOf(before.kudos, after.kudos).filter((x) => x.from === me)) ev.push({ pref: 'kudos', to: [k.to], title: `${k.emoji || '🙌'} ${me_} high-fived you`, body: k.text || 'High-five!', url: '#kudos', tag: 'kudos-' + k.id });
+  for (const b of np.newOf(before.board, after.board).filter((x) => x.who === me)) {
+    if (b.type === 'poll') ev.push({ pref: 'polls', to: others, title: `🗳️ ${me_} started a poll`, body: b.text, url: '#board', tag: 'poll-' + b.id });
+    else if (kid) ev.push({ pref: 'requests', to: parents, title: `📝 ${me_} posted on the Fridge`, body: b.text, url: '#board', tag: 'note-' + b.id });
+  }
+  for (const q of np.newOf(before.trivia, after.trivia).filter((x) => x.by === me)) ev.push({ pref: 'polls', to: others, title: `❓ ${me_} added a trivia question`, body: 'Can you guess the answer?', url: '#trivia', tag: 'trivia' });
+  for (const c of np.newOf(before.challenges, after.challenges)) ev.push({ pref: 'polls', to: others, title: `🏆 New challenge: ${c.title}`, body: `${me_} started it. Join in!`, url: '#challenges', tag: 'ch-' + c.id });
+  // Connect Four: a move hands the turn over, a new game is a challenge, a finished game tells the other player
+  const bg = new Map((before.games || []).map((g) => [g.id, g]));
+  for (const g of after.games || []) {
+    if (g.type !== 'c4' || g.mode !== 'remote' || ![g.a, g.b].includes(me)) continue;
+    const old = bg.get(g.id), other = g.a === me ? g.b : g.a;
+    if (old && old.moves.length === g.moves.length) continue;
+    const st = c4Status(g);
+    if (st.over) { if (old && !c4Status(old).over) ev.push({ pref: 'games', to: [other], title: st.draw ? `🤝 Draw with ${me_}` : `🏁 ${playerName(st.winner)} won Connect Four`, body: 'Rematch?', url: '#c4/' + g.id, tag: 'c4-' + g.id }); }
+    else if (c4Turn(g) === other) ev.push({ pref: 'games', to: [other], title: old ? `🔴 Your turn vs ${me_}` : `🔴 ${me_} challenged you to Connect Four`, body: old ? `Move ${g.moves.length + 1}` : 'Your move first? Tap to play', url: '#c4/' + g.id, tag: 'c4-' + g.id });
+  }
+  const t = today(), wb = before.wordle?.[t]?.[me], wa = after.wordle?.[t]?.[me];
+  if (wa?.done && !wb?.done) ev.push({ pref: 'games', to: others, title: wa.won ? `🟩 ${me_} solved today’s Family Word in ${wa.g.length}` : `🟥 ${me_} didn’t get today’s Family Word`, body: 'Your turn to try!', url: '#word', tag: 'word' });
+  // Kid requests → grown-ups
+  if (kid) {
+    const bLogs = new Set((before.chores || []).flatMap((c) => (c.log || []).map((l) => l.id)));
+    for (const c of after.chores || []) for (const l of c.log || []) if (!bLogs.has(l.id) && l.memberId === me && l.status === 'pending') ev.push({ pref: 'requests', to: parents, title: `✅ ${me_} did “${c.title}”`, body: 'Needs your OK', url: '#chores', tag: 'ok-' + me });
+    for (const w of np.newOf(before.wishes, after.wishes).filter((x) => x.memberId === me)) ev.push({ pref: 'requests', to: parents, title: `🎁 ${me_} added a wish`, body: `${w.emoji || ''} ${w.title || ''}`.trim(), url: '#wishes', tag: 'wish-' + me });
+    for (const r of np.newOf(before.gems?.requests, after.gems?.requests).filter((x) => x.who === me && x.status === 'pending')) ev.push({ pref: 'requests', to: parents, title: `🐷 ${me_} wants to trade $${r.dollars} for gems`, body: 'Tap to OK it', url: '#gems', tag: 'gems-' + me });
+    for (const r of np.newOf(before.redemptions, after.redemptions).filter((x) => x.memberId === me && x.status === 'pending')) ev.push({ pref: 'requests', to: parents, title: `🎟️ ${me_} wants a reward`, body: 'Tap to OK it', url: '#kid/' + me, tag: 'reward-' + me });
+  }
+  for (const tr of np.newOf(before.squish?.trades, after.squish?.trades).filter((x) => x.from === me)) ev.push({ pref: 'games', to: [tr.to], title: `🔁 ${me_} offered you a squishy trade`, body: 'Tap to take a look', url: '#squishies', tag: 'strade' });
+  return ev.filter((e) => e.to.length);
+}
+const tzMins = (tz) => { try { const [h, m] = new Intl.DateTimeFormat('en-US', { timeZone: tz || undefined, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date()).split(':').map(Number); return h * 60 + m; } catch { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); } };
+// Which phones should get this one, by each person's own settings and quiet hours (in their time zone)
+function relayTargets(e) {
+  return (state.notify?.subs || []).filter((s) => {
+    if (!e.to.includes(s.member) || !s.endpoint) return false;
+    const P = notifyPrefs(s.member);
+    if (!P.family.on || P.family[e.pref] === false) return false;
+    return !(P.quiet.on && npQuiet(tzMins(s.tz), P.quiet));
+  });
+}
+async function relaySend(events) {
+  const url = state.notify?.relay;
+  if (!url || !events.length || typeof Sync === 'undefined' || !Sync.user) return;
+  let token; try { token = await Sync.user.getIdToken(); } catch { return; }
+  for (const e of events) {
+    const subs = relayTargets(e);
+    if (!subs.length) continue;
+    try {
+      const res = await fetch(url, { method: 'POST', keepalive: true, headers: { authorization: 'Bearer ' + token, 'content-type': 'application/json' },
+        body: JSON.stringify({ subs: subs.map((s) => ({ endpoint: s.endpoint, keys: s.keys })), payload: { title: e.title, body: e.body, url: e.url, tag: e.tag }, urgent: true }) });
+      const j = await res.json().catch(() => ({}));
+      const dead = new Set((j.results || []).filter((r) => r.status === 404 || r.status === 410).map((r) => r.endpoint));
+      if (dead.size) { state.notify.subs = state.notify.subs.filter((s) => !dead.has(s.endpoint)); save(); }
+    } catch { /* offline: it shows up in the app anyway */ }
+  }
+}
+window.familyEvents = familyEvents;
+if (typeof push === 'function') {
+  const _pushRelay = push;
+  // eslint-disable-next-line no-global-assign
+  push = async function () {
+    const before = Sync.base?.data, me = actor(), local = Sync.dirty && before ? shared(state) : null;
+    await _pushRelay();
+    if (!local || !me || !state.notify?.relay || Sync.base?.data === before) return; // not sent (yet): it'll be compared next time
+    try { relaySend(familyEvents(before, local, me)); } catch (e) { if (typeof noteError === 'function') noteError('relay', e); }
+  };
+}

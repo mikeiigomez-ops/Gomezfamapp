@@ -32,15 +32,19 @@ function serve() {
 const hashKey = (s) => require('crypto').createHash('sha1').update(String(s)).digest('hex').slice(0, 16);
 
 async function families() {
-  if (DRY) return [{ id: 'dry', state: JSON.parse(fs.readFileSync(DRY, 'utf8')), log: {} }];
+  if (DRY) { const j = JSON.parse(fs.readFileSync(DRY, 'utf8')); return [j.state ? { id: j.famId || 'dry', state: j.state, circles: j.circles || [], log: {} } : { id: 'dry', state: j, log: {} }]; }
   const admin = require('firebase-admin');
   admin.initializeApp({ credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)) });
   const db = admin.firestore(), out = [];
+  const circlesAll = (await db.collection('circles').get().catch(() => ({ docs: [] }))).docs;
   for (const d of (await db.collection('families').get()).docs) {
     let state; try { state = unpack(d.data().data); } catch { console.log(`family ${d.id}: unreadable data, skipped`); continue; }
     if (!state?.notify?.subs?.length) continue;
     const logDoc = await db.collection('notifyLog').doc(d.id).get();
-    out.push({ id: d.id, state, log: (logDoc.exists && logDoc.data().log) || {}, save: (log) => db.collection('notifyLog').doc(d.id).set({ log, updatedAt: admin.firestore.FieldValue.serverTimestamp() }) });
+    // Friends circles this family is in (only names, chat and trades live there)
+    const circles = [];
+    for (const c of circlesAll) { try { const data = unpack(c.data().data); if (data?.fams?.[d.id]) circles.push({ id: c.id, data: { chat: (data.chat || []).slice(-80), trades: data.trades || [], people: data.people || {}, fams: Object.fromEntries(Object.entries(data.fams || {}).map(([k, v]) => [k, { name: v.name }])) } }); } catch { /* skip */ } }
+    out.push({ id: d.id, state, circles, log: (logDoc.exists && logDoc.data().log) || {}, save: (log) => db.collection('notifyLog').doc(d.id).set({ log, updatedAt: admin.firestore.FieldValue.serverTimestamp() }) });
   }
   return out;
 }
@@ -71,10 +75,11 @@ async function families() {
         await page.goto(base + '#home');
         await page.waitForFunction(() => typeof window.notifyPlan === 'function', null, { timeout: 30000 });
         await page.waitForTimeout(500);
-        const msgs = await page.evaluate(([l, m]) => window.notifyPlan(l, m), [log, [...members]]);
+        const msgs = await page.evaluate(([l, m, o]) => window.notifyPlan(l, m, o), [log, [...members], { circles: fam.circles || [], famId: fam.id }]);
         await ctx.close();
         for (const m of msgs) {
           const targets = subs.filter((s) => s.member === m.member && !(s.kid && ['weekly', 'monthly', 'alert'].includes(m.kind)));
+          if (!targets.length) { Object.assign(log, m.mark); continue; }
           const payload = JSON.stringify({ title: m.title, body: m.body, url: m.url, tag: m.tag });
           if (DRY) { console.log(JSON.stringify({ to: m.member, kind: m.kind, title: m.title, body: m.body, targets: targets.length })); Object.assign(log, m.mark); continue; }
           let ok = false;

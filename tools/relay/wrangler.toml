@@ -1,0 +1,5 @@
+# Deployed by .github/workflows/relay.yml (secrets and vars are set there, never committed)
+name = "gomezfam-push"
+main = "worker.js"
+compatibility_date = "2024-09-23"
+workers_dev = true
