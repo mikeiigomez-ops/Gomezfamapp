@@ -892,8 +892,17 @@ afterRender = function () {
 /* ---------- Month review (days 1–5): biggest over/under categories + subscriptions to check ---------- */
 const reviewYm = (t = today()) => (parse(t).getDate() <= 5 ? addMonths(monthKey(t), -1) : null);
 function monthReviewItems(ym) {
-  const cats = state.budget.categories.filter((c) => c.limit).map((c) => { const spent = spentIn(ym, c.id), lim = catLimit(c, ym); return { c, spent, lim, diff: spent - lim }; })
-    .filter((x) => Math.abs(x.diff) >= 1).sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff)).slice(0, 3);
+  // "Usual" = median of this month and the two before (only months the history fully covers)
+  const months = [ym, ...(typeof paceMonths === 'function' ? paceMonths(ym) : [])].slice(0, 3);
+  const r10 = (n) => Math.max(10, Math.round(n / 10) * 10);
+  const cats = state.budget.categories.map((c) => {
+    const spent = spentIn(ym, c.id), lim = catLimit(c, ym);
+    const usual = months.length >= 2 ? median(months.map((m) => spentIn(m, c.id))) : null;
+    const gap = usual === null ? 0 : Math.abs(usual - (c.limit || 0));
+    const suggest = usual !== null && usual >= 20 && gap >= Math.max(25, 0.2 * (c.limit || 0)) ? r10(usual) : null;
+    return { c, spent, lim, diff: spent - lim, usual, suggest, weight: Math.max(c.limit ? Math.abs(spent - lim) : 0, suggest ? gap : 0) };
+  }).filter((x) => (x.c.limit && Math.abs(x.diff) >= 1) || (x.suggest && x.suggest !== x.c.limit))
+    .sort((a, b) => b.weight - a.weight).slice(0, 4);
   const subs = typeof isSub === 'function' ? state.budget.bills.filter((b) => isSub(b) && !b.review) : [];
   return { cats, subs };
 }
@@ -901,10 +910,13 @@ function monthReviewBody(ym) {
   const { cats, subs } = monthReviewItems(ym), done = (ui.reviewDone ||= {});
   const mName = parse(ym + '-01').toLocaleDateString(undefined, { month: 'long' });
   const catRows = cats.filter((x) => !done[x.c.id]).map((x) => {
-    const over = x.diff > 0, to = over ? Math.ceil(x.spent / 10) * 10 : Math.max(10, Math.ceil(x.spent / 10) * 10);
-    return `<div class="row"><div class="avatar">${esc(x.c.emoji)}</div><div class="grow"><div class="title">${esc(x.c.name)}</div>
-      <div class="sub" style="color:${over ? 'var(--bad)' : 'var(--good)'}">${moneyW(Math.abs(x.diff))} ${over ? 'over' : 'under'} · ${moneyW(x.spent)} of ${moneyW(x.lim)}</div>
-      <div class="btn-row" style="margin:6px 0 0"><button type="button" class="mini-btn" data-action="review-limit" data-id="${x.c.id}" data-v="${to}">${over ? 'Raise' : 'Lower'} limit to ${moneyW(to)}</button><button type="button" class="mini-btn" data-action="review-keep" data-id="${x.c.id}">Keep ${moneyW(x.c.limit)}</button></div></div></div>`;
+    const over = x.diff > 0, to = x.suggest || Math.max(10, Math.ceil(x.spent / 10) * 10);
+    const head = x.suggest ? `You usually spend ~${moneyW(x.usual)} on ${esc(x.c.name)} <span class="muted">(${x.c.limit ? `budget ${moneyW(x.c.limit)}` : 'no budget'})</span>` : esc(x.c.name);
+    const sub = x.c.limit ? `<span style="color:${over ? 'var(--bad)' : 'var(--good)'}">${moneyW(Math.abs(x.diff))} ${over ? 'over' : 'under'}</span> in ${esc(mName)} · ${moneyW(x.spent)} of ${moneyW(x.lim)}` : `${moneyW(x.spent)} in ${esc(mName)}`;
+    const verb = x.suggest ? (x.c.limit ? 'Set to' : 'Budget') : over ? 'Raise limit to' : 'Lower limit to';
+    return `<div class="row"><div class="avatar">${esc(x.c.emoji)}</div><div class="grow"><div class="title">${head}</div>
+      <div class="sub">${sub}</div>
+      <div class="btn-row" style="margin:6px 0 0"><button type="button" class="mini-btn" data-action="review-limit" data-id="${x.c.id}" data-v="${to}">${verb} ${moneyW(to)}</button><button type="button" class="mini-btn" data-action="review-keep" data-id="${x.c.id}">${x.c.limit ? `Keep ${moneyW(x.c.limit)}` : 'No budget'}</button></div></div></div>`;
   }).join('');
   const subRows = subs.map((b) => `<div class="row">${letterAvatar(b.name)}<div class="grow"><div class="title">${esc(b.name)}</div><div class="sub">${money(b.amount)} · ${moneyW(perMonth(b) * 12)}/yr</div></div>
     <button type="button" class="mini-btn" data-action="review-sub" data-id="${b.id}" data-v="keep">👍 Keep</button><button type="button" class="mini-btn" data-action="review-sub" data-id="${b.id}" data-v="cancel">✂️ Cancel</button></div>`).join('');

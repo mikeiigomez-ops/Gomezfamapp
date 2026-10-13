@@ -81,6 +81,7 @@ function bankCategory(note) {
   if (typeof CATEGORY_HINTS !== 'undefined') for (const [re, key] of CATEGORY_HINTS) if (re.test(n)) { const c = state.budget.categories.find((x) => norm(x.name).includes(key)); if (c) return c.id; }
   return '';
 }
+const bankOutside = (note) => { const n = norm(note); return state.budget.transactions.some((t) => t.outside && norm(t.note) === n); };
 // Turn a SimpleFIN response into budget changes. Pure enough to test without the network (window.bankImport).
 function bankImport(data, opts = {}) {
   const bank = bankOf(), now = Date.now(), t = today();
@@ -136,7 +137,8 @@ function bankImport(data, opts = {}) {
       txs.push({ id: r.id, created: now, type: 'expense', amount, note: old.name, categoryId: old.categoryId || '', date: r.date > t ? t : r.date, memberId: '', fromBill: true, billId: old.id, bank: opts.csv ? 'Chase CSV' : bank.accounts[r.a.id]?.org || '', bankId: r.id });
       haveIds.add(r.id); res.oldBills = (res.oldBills || 0) + 1; continue;
     }
-    txs.push({ id: r.id, created: now, type: spend ? 'expense' : 'income', amount, note: r.note, categoryId: spend ? bankCategory(r.note) : '', date: r.date > t ? t : r.date, memberId: '', bank: opts.csv ? 'Chase CSV' : bank.accounts[r.a.id].org || bank.accounts[r.a.id].name, bankId: r.id });
+    const outside = spend && bankOutside(r.note); // a merchant you sorted as a bill/payment stays outside the budget
+    txs.push({ id: r.id, created: now, type: spend ? 'expense' : 'income', amount, note: r.note, categoryId: spend && !outside ? bankCategory(r.note) : '', date: r.date > t ? t : r.date, memberId: '', bank: opts.csv ? 'Chase CSV' : bank.accounts[r.a.id].org || bank.accounts[r.a.id].name, bankId: r.id, ...(outside ? { fromBill: true, outside: true } : {}) });
     haveIds.add(r.id); res.added++;
   }
   // Forget old matches so the record stays small (transactions themselves keep their bankId)

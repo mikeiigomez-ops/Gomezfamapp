@@ -258,6 +258,22 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .kv b { font-weight: 650; }
 .cat-row { padding: 10px 0; border-bottom: 1px solid var(--line); }
 .cat-row:last-child { border-bottom: 0; }
+.pace-bar { position: relative; overflow: visible; }
+.pace-bar > i { position: relative; z-index: 1; }
+.pace-bar > .ghost { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 99px; background: color-mix(in srgb, var(--good) 28%, transparent); }
+.pace-bar > .ghost.warn { background: color-mix(in srgb, var(--warn) 30%, transparent); }
+.pace-bar > .ghost.bad { background: color-mix(in srgb, var(--bad) 28%, transparent); }
+.pace-bar > s { position: absolute; z-index: 2; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; border-radius: 2px; background: var(--text); text-decoration: none; }
+.pace-bar > s.cap { top: -4px; bottom: -4px; width: 0; background: none; border-left: 2px dashed var(--text); opacity: .6; }
+.pace-line { margin-top: 5px; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pace-line.warn { color: var(--warn); }
+.pace-line.bad { color: var(--bad); }
+.pace-sum { padding: 2px 0 10px; border-bottom: 1px solid var(--line); font-size: 14px; line-height: 1.45; font-variant-numeric: tabular-nums; }
+.pace-sum .small { margin-top: 3px; }
+.uncat-row > button.plain { background: none; border: 0; padding: 0; margin: 0; color: inherit; font: inherit; cursor: pointer; }
+.sort-row { align-items: center; gap: 10px; }
+.sort-row select { width: 44%; flex: none; min-height: 40px; padding: 6px 8px; font-size: 15px; }
+.sort-row .sub { white-space: normal; }
 .cat-row .top { display: flex; justify-content: space-between; gap: 8px; font-size: 15px; }
 .cat-row .top span:last-child { color: var(--muted); font-variant-numeric: tabular-nums; }
 

@@ -476,6 +476,118 @@ function budgetSummary(ym) {
 }
 const levelCls = (frac) => (frac >= 1 ? 'bad' : frac >= 0.85 ? 'warn' : '');
 
+/* Category pace: what you usually spend, where you are, where you should be, where you're headed.
+   "Usual" = median of the last 3 full months of everyday (non-bill) spending, so one odd month can't skew it.
+   A month only counts if the history covers all of it (a CSV that starts mid-July doesn't make July look cheap). */
+const median = (a) => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+function paceMonths(ym) {
+  let first = '';
+  for (const t of state.budget.transactions) if (t.type !== 'income' && (!first || t.date < first)) first = t.date;
+  const out = [];
+  for (let i = 1; i <= 3; i++) { const m = addMonths(ym, -i); if (first && first <= m + '-03') out.push(m); }
+  return out;
+}
+// Everyday spending per bucket (category id, or '' for Uncategorized) in one pass
+function everydayByCat(ym) {
+  const ids = new Set(state.budget.categories.map((c) => c.id)), out = {};
+  for (const t of state.budget.transactions) {
+    if (t.type === 'income' || t.fromBill || !t.date.startsWith(ym)) continue;
+    const k = ids.has(t.categoryId) ? t.categoryId : '';
+    out[k] = (out[k] || 0) + (Number(t.amount) || 0);
+  }
+  return out;
+}
+function catPace(ym) {
+  const now = today(), cur = ym === monthKey(now), past = ym < monthKey(now);
+  const dim = new Date(+ym.slice(0, 4), +ym.slice(5), 0).getDate();
+  const day = cur ? parse(now).getDate() : past ? dim : 0, left = dim - day, frac = day / dim;
+  const months = paceMonths(ym), hist = months.map(everydayByCat), here = everydayByCat(ym);
+  const mFrom = ym + '-01', mTo = dayInMonth(31, ym), sched = recurringBetween(mFrom, mTo, 'bill');
+  const ids = new Set(state.budget.categories.map((c) => c.id));
+  const r = (n) => Math.round(n * 100) / 100;
+  const one = (key, lim) => {
+    const all = sum(monthTx(ym).filter((t) => t.type !== 'income' && (key ? t.categoryId === key : !ids.has(t.categoryId) && !isBillOnly(t))), (t) => t.amount);
+    const every = here[key] || 0, billPaid = all - every;
+    const mine = key ? sched.filter((x) => x.b.categoryId === key) : [];
+    const billSched = sum(mine, (x) => x.amount), billLeft = cur || !past ? sum(mine.filter((x) => !isPaid(x.b, x.date)), (x) => x.amount) : 0;
+    const usualE = months.length ? median(hist.map((h) => h[key] || 0)) || null : null; // never spent here before = no history yet
+    const usual = usualE === null ? null : usualE + billSched;
+    const flex = lim ? Math.max(0, lim - billSched) : usualE; // the everyday part of the target
+    const should = flex === null ? null : billPaid + flex * frac;
+    const rate = usualE !== null ? usualE / dim : day ? every / day : 0;
+    const likely = past ? all : all + rate * left + billLeft;
+    const cap = lim || usual || 0;
+    const overB = !!lim && likely > lim + 0.5, overU = usual !== null && likely > usual * 1.05 + 5;
+    const level = (cap && all > cap + 0.5) || (overB && (usual === null || overU)) ? 'bad'
+      : overB || (!lim && overU) || (cur && should !== null && all - should > Math.max(10, cap * 0.1)) ? 'warn' : '';
+    return { key, spent: r(all), every: r(every), lim, usual: usual === null ? null : r(usual), should: should === null ? null : r(should), likely: r(likely), ahead: should === null ? null : r(all - should), cap, level };
+  };
+  const cats = state.budget.categories.map((c) => ({ c, ...one(c.id, catLimit(c, ym)) }));
+  const other = { c: { emoji: '📦', name: 'Uncategorized' }, ...one('', 0) };
+  const rows = [...cats, other];
+  const tot = (f) => r(sum(rows, f));
+  return { cur, past, day, dim, frac, months, cats, other,
+    total: { spent: tot((x) => x.spent), should: tot((x) => x.should || 0), likely: tot((x) => x.likely), limit: r(sum(cats, (x) => x.lim)), usual: rows.some((x) => x.usual !== null) ? tot((x) => x.usual || 0) : null } };
+}
+// "On pace for ~$740 · usually ~$560 · $200 ahead of pace" (or, for a finished month, how it ended)
+function paceLine(x, P) {
+  const w = (n) => '~' + moneyW(n);
+  if (P.past) return [`Ended at ${moneyW(x.spent)}`, x.usual !== null ? `usually ${w(x.usual)}` : '', x.lim ? `budget ${moneyW(x.lim)}` : ''].filter(Boolean).join(' · ');
+  if (!P.cur) return x.usual !== null ? `Usually ${w(x.usual)}` : '';
+  const a = x.ahead, pace = a === null ? '' : Math.abs(a) < 5 ? 'right on pace' : `${moneyW(Math.abs(a))} ${a > 0 ? 'ahead of' : 'under'} pace`;
+  return [`On pace for ${w(x.likely)}`, x.usual !== null ? `usually ${w(x.usual)}` : P.months.length ? '' : 'no history yet', pace].filter(Boolean).join(' · ');
+}
+// Everyday spending with no category, one entry per merchant (biggest first)
+function uncategorizedMerchants() {
+  const ids = new Set(state.budget.categories.map((c) => c.id)), by = new Map();
+  for (const t of state.budget.transactions) {
+    if (t.type === 'income' || ids.has(t.categoryId) || isBillOnly(t) || t.fromBill) continue;
+    const k = norm(t.note || '') || '(no description)';
+    const m = by.get(k) || { note: t.note || '(no description)', key: k, n: 0, total: 0, last: '' };
+    m.n++; m.total += Number(t.amount) || 0; if (t.date > m.last) m.last = t.date;
+    by.set(k, m);
+  }
+  return [...by.values()].sort((a, b) => b.total - a.total);
+}
+// Sort merchants: pick a category once per merchant; every past charge follows, and future bank imports
+// learn it too (bankCategory reuses the category of the last charge with the same description).
+function sortMerchantsSheet() {
+  const list = uncategorizedMerchants().slice(0, 60);
+  if (!list.length) { toast('Everything has a category ✓'); return; }
+  const opts = `<option value="">Not sorted</option><option value="__out">🧾 Bill or payment</option>${state.budget.categories.map((c) => `<option value="${esc(c.id)}">${esc(c.emoji)} ${esc(c.name)}</option>`).join('')}`;
+  const guess = (note) => (typeof bankCategory === 'function' ? bankCategory(note) : ''); // name hints only, never a blind default
+  openSheet({
+    title: 'Sort merchants', saveLabel: 'Apply',
+    fields: [{ type: 'html', html: `<p class="small muted" style="margin-top:0">Pick a category once per merchant. Past charges move now, and new ones from the bank will follow. Card payments, loans and money sent to family can go under “Bill or payment” so they don’t count as everyday spending.</p>
+      <div class="card flush sort-list">${list.map((m, i) => `<label class="row sort-row"><div class="grow"><div class="title">${esc(m.note)}</div><div class="sub">${m.n} charge${m.n > 1 ? 's' : ''} · ${moneyW(m.total)} · last ${esc(fmtDate(m.last, { month: 'short', day: 'numeric' }))}</div></div>
+        <select data-merchant="${i}" aria-label="Category for ${esc(m.note)}">${opts.replace(`value="${esc(guess(m.note))}"`, `value="${esc(guess(m.note))}" selected`).replace('value="" selected', 'value=""')}</select></label>`).join('')}</div>` }],
+    onSave() {
+      let moved = 0, merchants = 0;
+      const ids = new Set(state.budget.categories.map((c) => c.id));
+      for (const sel of $('#sheetForm').querySelectorAll('select[data-merchant]')) {
+        const m = list[+sel.dataset.merchant], to = sel.value;
+        if (!m || !(ids.has(to) || to === '__out')) continue;
+        merchants++;
+        for (const t of state.budget.transactions) {
+          if (t.type === 'income' || ids.has(t.categoryId) || t.fromBill) continue;
+          if ((norm(t.note || '') || '(no description)') !== m.key) continue;
+          if (to === '__out') Object.assign(t, { categoryId: '', fromBill: true, outside: true }); // counts with bills paid, not everyday
+          else t.categoryId = to;
+          moved++;
+        }
+      }
+      toast(moved ? `Sorted ${merchants} merchant${merchants > 1 ? 's' : ''} · ${moved} charge${moved > 1 ? 's' : ''} ✓` : 'Nothing changed');
+    },
+  });
+}
+// The bar: solid = spent, ghost = where it's headed, tick = where you should be today, notch = the budget when you're past it
+function paceBar(x, P) {
+  const scale = Math.max(x.cap, x.spent, P.past ? 0 : x.likely);
+  if (!scale) return '';
+  const pc = (n) => Math.max(0, Math.min(100, (n / scale) * 100)).toFixed(1) + '%';
+  return `<div class="bar pace-bar">${!P.past && x.likely > x.spent ? `<b class="ghost ${x.level}" style="width:${pc(x.likely)}"></b>` : ''}<i class="${x.level}" style="width:${pc(x.spent)}"></i>${P.cur && x.should !== null ? `<s class="tick" style="left:${pc(x.should)}" title="Should be about ${esc(moneyW(x.should))} by today"></s>` : ''}${x.cap && scale > x.cap + 0.5 ? `<s class="cap" style="left:${pc(x.cap)}"></s>` : ''}</div>`;
+}
+
 /* =========================================================
    Shopping logic
    ========================================================= */
@@ -745,19 +857,22 @@ views.budget = () => {
           </div>
         </div>
       </div>
-      <div class="section-title">Categories<button data-action="add-category">+ Category</button></div>
+      ${(() => {
+        const P = catPace(ym), T = P.total;
+        const sumLine = P.cur ? `<b>${moneyW(T.spent)}</b> so far · should be <b>~${moneyW(T.should)}</b> · likely <b>~${moneyW(T.likely)}</b>${T.limit ? ` <span class="muted">(budget ${moneyW(T.limit)})</span>` : ''}`
+          : P.past ? `Ended at <b>${moneyW(T.spent)}</b>${T.usual !== null ? ` · usually ~${moneyW(T.usual)}` : ''}${T.limit ? ` · budget ${moneyW(T.limit)}` : ''}`
+          : T.usual !== null ? `Usually ~${moneyW(T.usual)}${T.limit ? ` · budget ${moneyW(T.limit)}` : ''}` : '';
+        const row = (x) => `<div class="top"><span>${esc(x.c.emoji)} ${esc(x.c.name)}</span><span>${moneyW(x.spent)}${x.lim ? ` / ${moneyW(x.lim)}${x.c.limit !== undefined && x.lim !== x.c.limit ? ' ↻' : ''}` : ''}</span></div>
+            ${paceBar(x, P)}${(() => { const l = paceLine(x, P); return l ? `<div class="pace-line ${x.level}">${esc(l)}</div>` : ''; })()}`;
+        const o = P.other, nSort = uncategorizedMerchants().length;
+        return `<div class="section-title">Categories<button data-action="add-category">+ Category</button></div>
       <div class="card">
-        ${state.budget.categories.map((c) => {
-          const spent = sum(s.tx.filter((t) => t.type !== 'income' && t.categoryId === c.id), (t) => t.amount);
-          const lim = catLimit(c, ym), f = lim ? spent / lim : 0;
-          return `<button class="cat-row" style="display:block;width:100%;text-align:left" data-action="edit-category" data-id="${c.id}">
-            <div class="top"><span>${esc(c.emoji)} ${esc(c.name)}</span><span>${money(spent, { maximumFractionDigits: 0 })}${lim ? ` / ${money(lim, { maximumFractionDigits: 0 })}${lim !== c.limit ? ' ↻' : ''}` : ''}</span></div>
-            ${lim ? `<div class="bar"><i class="${levelCls(f)}" style="width:${Math.min(100, f * 100)}%"></i></div>` : ''}
-          </button>`;
-        }).join('') || '<div class="empty small">No categories yet.</div>'}
-        ${(() => { const ids = new Set(state.budget.categories.map((c) => c.id)); const other = sum(s.tx.filter((t) => t.type !== 'income' && !ids.has(t.categoryId) && !isBillOnly(t)), (t) => t.amount); return other ? `<button class="cat-row" style="display:block;width:100%;text-align:left" data-action="budget-tab" data-tab="activity"><div class="top"><span>📦 Uncategorized</span><span>${moneyW(other)}</span></div></button>` : ''; })()}
+        ${sumLine ? `<div class="pace-sum"><span class="muted">Everyday</span> ${sumLine}${P.cur ? '<div class="small muted">The tick on each bar is where you’d be today if you spread the budget evenly over the month.</div>' : ''}</div>` : ''}
+        ${P.cats.map((x) => `<button class="cat-row" style="display:block;width:100%;text-align:left" data-action="edit-category" data-id="${x.c.id}">${row(x)}</button>`).join('') || '<div class="empty small">No categories yet.</div>'}
+        ${o.spent || (P.cur && o.usual) ? `<div class="cat-row uncat-row"><button class="plain" style="display:block;width:100%;text-align:left" data-action="budget-tab" data-tab="activity">${row(o)}</button>${nSort ? `<button class="mini-btn" style="margin-top:6px" data-action="sort-merchants">Sort ${nSort} merchant${nSort > 1 ? 's' : ''} into categories</button>` : ''}</div>` : ''}
         ${s.bills ? `<button class="cat-row" style="display:block;width:100%;text-align:left" data-action="budget-tab" data-tab="bills"><div class="top"><span>🧾 Bills paid <span class="muted small">outside the budget</span></span><span>${moneyW(s.bills)}</span></div></button>` : ''}
       </div>`;
+      })()}`;
   } else if (tab === 'activity') {
     const byDate = {};
     for (const t of [...s.tx].sort((a, b) => b.date.localeCompare(a.date) || (b.created || 0) - (a.created || 0))) (byDate[t.date] ||= []).push(t);
@@ -2617,6 +2732,7 @@ const actions = {
   // Budget
   'budget-month': (el) => { ui.budgetMonth = addMonths(ui.budgetMonth, +el.dataset.n); render(); },
   'budget-tab': (el) => { ui.budgetTab = el.dataset.tab; render(); },
+  'sort-merchants': () => sortMerchantsSheet(),
   'export-csv': (el) => {
     const ym = ui.budgetMonth, all = !!el?.dataset?.all;
     const cell = (v) => { const s = String(v ?? ''); return `"${(/^[=+\-@\t\r]/.test(s) ? "'" + s : s).replace(/"/g, '""')}"`; }; // no spreadsheet formula injection
