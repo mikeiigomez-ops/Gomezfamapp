@@ -842,7 +842,7 @@ views.budget = () => {
         ${sumLine ? `<div class="pace-sum"><span class="muted">Everyday · ${esc(mName)}</span><br>${sumLine}${P.cur ? `<div class="small muted">All amounts are for ${esc(mName)}. Top bar: spent so far, with a tick where you’d be today if you spread the budget evenly. Thin bar: forecast by ${esc(P.endLabel)}.</div>` : ''}</div>` : ''}
         ${(() => {
           // Categories with no budget, no spending and no history just take space: one line names them
-          const live = P.cats.filter((x) => x.lim || x.spent || x.usual), idle = P.cats.filter((x) => !(x.lim || x.spent || x.usual));
+          const live = P.cats.filter((x) => x.lim || x.spent || x.usual).sort((a, b) => b.likely - a.likely || b.spent - a.spent || (b.lim || 0) - (a.lim || 0)), idle = P.cats.filter((x) => !(x.lim || x.spent || x.usual));
           return (live.map((x) => `<button class="cat-row" style="display:block;width:100%;text-align:left" data-action="edit-category" data-id="${x.c.id}">${row(x)}</button>`).join('') || '<div class="empty small">No everyday spending yet.</div>')
             + (idle.length ? `<div class="cat-row small muted idle-cats">Nothing yet: ${idle.map((x) => `<button class="link" data-action="edit-category" data-id="${x.c.id}">${esc(x.c.emoji)} ${esc(x.c.name)}</button>`).join(', ')}</div>` : '');
         })()}

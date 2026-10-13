@@ -229,17 +229,19 @@ Object.assign(actions, {
 
 /* ---------- Budget overview: the money that isn't everyday spending, by category ---------- */
 function outsideEverydayCard(ym) {
+  // One card per group (biggest first inside it), so a page break never strands a group's heading
   const tx = monthTx(ym).filter((t) => t.type !== 'income');
-  const rows = [];
-  for (const [g, label] of CAT_GROUPS.slice(1)) {
-    const cs = state.budget.categories.filter((c) => c.group === g).map((c) => ({ c, v: sum(tx.filter((t) => t.categoryId === c.id), (t) => t.amount) })).filter((x) => x.v > 0);
-    if (cs.length) rows.push(`<div class="sq-gl" style="margin-top:${rows.length ? 10 : 0}px">${esc(label)}</div>` + cs.map((x) => `<button class="cat-row" style="display:block;width:100%;text-align:left" data-action="edit-category" data-id="${x.c.id}"><div class="top"><span>${esc(x.c.emoji)} ${esc(x.c.name)}</span><span>${moneyW(x.v)}</span></div></button>`).join(''));
-  }
-  const loose = sum(tx.filter((t) => isBillOnly(t) && !catOf(t.categoryId)), (t) => t.amount);
-  if (loose) rows.push(`<button class="cat-row" style="display:block;width:100%;text-align:left" data-action="budget-tab" data-tab="bills"><div class="top"><span>🧾 Other bills</span><span>${moneyW(loose)}</span></div></button>`);
-  if (!rows.length) return '';
   const total = sum(tx.filter(isBillOnly), (t) => t.amount);
-  return `<div class="section-title"><span>Bills & payments</span><span class="small" style="text-transform:none">${moneyW(total)} · not everyday</span></div><div class="card">${rows.join('')}</div>`;
+  if (!total) return '';
+  const row = (emoji, name, v, attrs) => `<button class="cat-row" style="display:block;width:100%;text-align:left" ${attrs}><div class="top"><span>${esc(emoji)} ${esc(name)}</span><span>${moneyW(v)}</span></div></button>`;
+  const cards = CAT_GROUPS.slice(1).map(([g, label]) => {
+    const cs = state.budget.categories.filter((c) => c.group === g).map((c) => ({ c, v: sum(tx.filter((t) => t.categoryId === c.id), (t) => t.amount) })).filter((x) => x.v > 0).sort((a, b) => b.v - a.v);
+    if (g === 'home') { const loose = sum(tx.filter((t) => isBillOnly(t) && !catOf(t.categoryId)), (t) => t.amount); if (loose) cs.push({ c: { emoji: '🧾', name: 'Other bills' }, v: loose, loose: true }); }
+    if (!cs.length) return '';
+    return `<div class="section-title"><span>${esc(label)}</span><span class="small" style="text-transform:none">${moneyW(sum(cs, (x) => x.v))}</span></div>
+      <div class="card">${cs.map((x) => row(x.c.emoji, x.c.name, x.v, x.loose ? 'data-action="budget-tab" data-tab="bills"' : `data-action="edit-category" data-id="${x.c.id}"`)).join('')}</div>`;
+  }).join('');
+  return `<div class="section-title" style="margin-top:22px"><span>Bills & payments</span><span class="small" style="text-transform:none">${moneyW(total)} this month · not everyday</span></div>${cards}`;
 }
 
 if (typeof module !== 'undefined') module.exports = { merchantKey, merchantRule };
