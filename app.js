@@ -873,7 +873,7 @@ function safeHero() {
     <div class="kv"><span class="muted">Everyday budget set aside (groceries, gas…)</span><b>−${moneyW(s.flex)}</b></div>
     <div class="kv" style="border-top:1px solid var(--line);margin-top:6px;padding-top:8px"><span>Extra safe to spend</span><b>${moneyW(s.safe)}</b></div>
     <div class="btn-row" style="margin:8px 0 0;flex-wrap:wrap"><span class="small muted" style="align-self:center">Plan by</span>${mode('month', '2 paychecks')}${mode('pay', 'Next paycheck')}</div>
-    <div class="btn-row" style="margin:6px 0 0"><button class="mini-btn" data-action="edit-balance">Update balance</button><span class="small muted" style="align-self:center">Updated ${relDays(-s.stale).toLowerCase()}</span></div>
+    <div class="btn-row" style="margin:6px 0 0"><button class="mini-btn" data-action="edit-balance">Update balance</button><span class="small muted" style="align-self:center">${state.settings.balanceSrc === 'bank' ? '🏦 From your bank · ' : ''}Updated ${relDays(-s.stale).toLowerCase()}</span></div>
   </details>`;
 }
 // Yearly bills: how much to set aside each month so they're not a surprise.
@@ -2602,7 +2602,7 @@ const actions = {
       { name: 'balance', label: 'Current balance', type: 'money', placeholder: '0.00' },
       { type: 'html', html: '<p class="small muted" style="margin:0 4px">Used to work out what\'s safe to spend before your next paycheck. Leave blank to hide.</p>' },
     ],
-    onSave(v) { state.settings.balance = v.balance; state.settings.balanceDate = today(); state.settings.balanceAt = Date.now(); },
+    onSave(v) { state.settings.balance = v.balance; state.settings.balanceDate = today(); state.settings.balanceAt = Date.now(); state.settings.balanceSrc = ''; },
   }),
 
   // Shopping
