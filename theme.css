@@ -1925,3 +1925,70 @@ button.sh-c:active { background: rgba(255, 255, 255, .5); }
 .pet-alert { color: var(--bad, #dc2626); font-weight: 700; }
 .tile-pet { display: block; width: 100%; height: 100%; }
 .tile-pet .pet-svg { width: 100%; height: 100%; }
+
+/* ---------- Quiz Show ---------- */
+.qz-q { text-align: center; font: 800 21px/1.3 var(--font-display); margin: 4px 0 8px; }
+.qz-q.small-q { font-size: 16px; color: var(--muted); }
+.qz-cat { display: block; font-size: 26px; margin-bottom: 2px; }
+.qz-timer { height: 8px; border-radius: 99px; background: var(--surface-2, #eee); overflow: hidden; margin-bottom: 8px; }
+.qz-timer i { display: block; height: 100%; background: linear-gradient(90deg, #22c55e, #f59e0b, #ef4444); transform-origin: left; animation: qz-t var(--ms) linear var(--d) forwards; }
+@keyframes qz-t { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+.qz-stage { place-items: stretch !important; }
+.qz-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; height: 100%; min-height: 220px; }
+.qz-ch { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 12px 8px; border-radius: 20px; background: var(--c); color: #fff; font: 800 18px/1.2 var(--font-display); text-align: center; box-shadow: 0 5px 0 color-mix(in oklab, var(--c) 65%, #000); }
+.qz-ch span { font-size: 26px; opacity: .85; }
+.qz-ch:active { transform: translateY(3px); box-shadow: 0 2px 0 color-mix(in oklab, var(--c) 65%, #000); }
+.qz-locked { text-align: center; font-weight: 750; margin: 6px 0 12px; }
+.qz-reveal { text-align: center; padding: 16px; border-radius: 22px; margin-bottom: 10px; color: #fff; background: #16a34a; }
+.qz-reveal.no { background: #e11d48; }
+.qz-reveal p { margin: 8px 0 0; opacity: .95; }
+.qz-big { font: 850 26px/1.2 var(--font-display); }
+.qz-pts { font: 850 34px/1 var(--font-display); margin-top: 4px; }
+.qz-board { display: grid; gap: 6px; margin: 6px 0; }
+.qz-row { display: grid; grid-template-columns: 28px auto 1fr auto; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 14px; background: var(--surface); box-shadow: var(--shadow); }
+.qz-row i { height: 8px; border-radius: 99px; background: var(--c); width: var(--w); }
+.qz-row em { font-style: normal; font-weight: 850; }
+.qz-board.final .qz-row { padding: 12px; font-size: 17px; }
+.qz-tv { padding-top: 6px; }
+.qz-tvn { text-align: center; color: var(--muted); font-weight: 700; }
+.qz-q.tvq { font-size: clamp(22px, 4vw, 44px); }
+.qz-choices.tv { min-height: 0; height: auto; } .qz-choices.tv .qz-ch { min-height: 90px; font-size: clamp(18px, 2.6vw, 30px); }
+.qz-who { display: flex; justify-content: center; gap: 12px; margin: 14px 0 6px; flex-wrap: wrap; }
+.qz-who span { display: flex; flex-direction: column; align-items: center; font-size: 34px; opacity: .35; transition: opacity .3s, transform .3s; }
+.qz-who span.in { opacity: 1; transform: translateY(-4px); }
+.qz-who small { font-size: 13px; font-weight: 800; }
+.qz-tvbtn { font-size: 13px; padding: 6px 12px; min-height: 0; }
+/* ---------- Imposter ---------- */
+.imp-card { text-align: center; padding: 18px 14px; border-radius: 22px; background: var(--surface); box-shadow: var(--shadow); margin-bottom: 10px; }
+.imp-card.imp { background: linear-gradient(140deg, #1e1b4b, #6d28d9); color: #fff; }
+.imp-card.imp .small { color: rgba(255, 255, 255, .85); }
+.imp-word { font: 850 28px/1.2 var(--font-display); margin: 4px 0; }
+.imp-clues { display: grid; gap: 6px; margin-bottom: 8px; }
+.imp-cl { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 14px; background: var(--surface); box-shadow: var(--shadow); flex-wrap: wrap; }
+.imp-cl span { font-weight: 750; margin-right: auto; }
+.imp-cl b { padding: 3px 10px; border-radius: 99px; background: var(--accent-soft, #fdecea); color: var(--accent-ink, var(--accent)); }
+.imp-form { display: flex; gap: 8px; margin-top: 6px; }
+.imp-form input { flex: 1; font: inherit; font-size: 17px; padding: 10px 14px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); color: var(--text); }
+.imp-vote { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.imp-votes { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; font-weight: 700; }
+.imp-peek { margin-bottom: 8px; } .imp-peek summary { cursor: pointer; font-weight: 700; color: var(--muted); }
+.imp-loud { margin-bottom: 8px; line-height: 1.45; }
+/* ---------- Forehead Charades ---------- */
+.ch-decks { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ch-deck { display: flex; align-items: center; gap: 10px; padding: 14px; border-radius: 18px; background: var(--surface); box-shadow: var(--shadow); font-weight: 800; color: var(--text); text-align: left; }
+.ch-deck span { font-size: 28px; }
+body.ch-on .tabbar, body.ch-on .topbar, body.ch-on header, body.ch-on .subnav { visibility: hidden; }
+.ch-full { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: #7c3aed; color: #fff; overflow: hidden; touch-action: none; }
+.ch-full.got { background: #16a34a; } .ch-full.pass { background: #f59e0b; }
+.ch-ready { background: #0f172a; }
+.ch-rot { position: absolute; left: 50%; top: 50%; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; width: 100vw; transform: translate(-50%, -50%); pointer-events: none; }
+@media (orientation: portrait) { .ch-rot { width: 100vh; width: 100dvh; transform: translate(-50%, -50%) rotate(90deg); } .ch-rot.flip { transform: translate(-50%, -50%) rotate(-90deg); } }
+@media (orientation: landscape) { .ch-rot.flip { transform: translate(-50%, -50%) rotate(180deg); } }
+.ch-word { font: 900 clamp(40px, 12vmin, 96px)/1.05 var(--font-display); padding: 0 24px; }
+.ch-time { font: 900 34px/1 var(--font-display); opacity: .85; }
+.ch-hint { font-size: 18px; font-weight: 700; opacity: .8; }
+.ch-tap { position: absolute; top: 0; bottom: 0; width: 50%; background: transparent; z-index: 1; }
+.ch-tap.left { left: 0; } .ch-tap.right { right: 0; }
+.ch-below { position: fixed; left: 0; right: 0; bottom: max(20px, env(safe-area-inset-bottom)); z-index: 61; justify-content: center; }
+.ch-result { text-align: center; } .ch-score { font: 900 64px/1 var(--font-display); }
+.imp-order { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 0; font-weight: 750; } .imp-order i { font-style: normal; color: var(--muted); }

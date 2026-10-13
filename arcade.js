@@ -51,7 +51,7 @@ function mpFinish(g) {
   g.endAt = Date.now();
   g.winner = st.winner || 'draw';
   const X = GX[g.type];
-  if (g.winner !== 'draw') {
+  if (g.winner !== 'draw' && g.p.includes(g.winner)) {
     logAct(X.e, `${g.winner === actor() ? 'won' : 'played'} ${X.name}${g.winner === actor() ? '' : ` — ${playerName(g.winner)} won`}`, 'games');
     if (g.winner !== BOT && (g.mode !== 'remote' || g.winner === actor())) setTimeout(confetti, 400);
     if (isMember(g.winner)) g.gem = gameGem(g.winner, `${X.name} win ${X.e}`);
@@ -87,13 +87,14 @@ views.mp = (id) => {
   if (!g || !GX[g.type]) return '<div class="card empty">This game was deleted.<br><button class="btn" style="margin-top:12px" data-action="go" data-to="games">Back to games</button></div>';
   const X = GX[g.type], st = mpStatus(g), need = mpNeed(g), who = mpActor(g), me = actor();
   // Pass the phone: when the next player changes on a shared phone and the game has secrets, cover the screen
-  if (g.mode !== 'remote' && X.hidden && who && g.p.filter(mpHuman).length > 1 && (ui.mpPass?.[g.id] !== who)) {
+  if (g.mode !== 'remote' && X.hidden && !(X.open && X.open(g)) && who && g.p.filter(mpHuman).length > 1 && (ui.mpPass?.[g.id] !== who)) {
     return `<div class="mp-pass"><div class="mp-pass-e">${esc(playerEmoji(who))}</div><h2>Pass to ${esc(playerName(who))}</h2><p class="muted">No peeking, everyone else 🙈</p><button class="btn" data-action="mp-ready" data-id="${g.id}" data-who="${esc(who)}">I’m ${esc(playerName(who))} — show me</button></div>`;
   }
+  if (X.tv && (ui.mpTv === g.id || (g.mode === 'remote' && !g.p.includes(actor())))) return X.tv(g, st);
   const scores = X.scores ? X.scores(g) : null;
   const chips = g.p.map((pid) => `<div class="mp-chip${g.p.length > 3 ? ' small' : ''}${need.includes(pid) ? ' turn' : ''}${st.over && g.winner === pid ? ' won' : ''}" style="--c:${mpColor(g, pid)}"><span>${esc(playerEmoji(pid))}</span><b>${esc(playerName(pid))}</b>${scores ? `<i>${scores[pid] || 0}</i>` : ''}</div>`).join('');
   const waiting = need.filter((p) => p !== who);
-  const status = st.over ? (g.winner === 'draw' ? '🤝 It’s a tie!' : `🏆 ${playerEmoji(g.winner)} ${playerName(g.winner)} wins!`)
+  const status = st.over ? (X.endText ? X.endText(g) : g.winner === 'draw' ? '🤝 It’s a tie!' : `🏆 ${playerEmoji(g.winner)} ${playerName(g.winner)} wins!`)
     : who ? (X.prompt ? X.prompt(g, who) : g.mode === 'remote' ? '👉 Your turn!' : `${playerEmoji(who)} ${playerName(who)}’s turn`)
     : need.includes(BOT) ? '🤖 Robot is thinking…' : `⏳ Waiting for ${waiting.map(playerName).join(', ')}…`;
   return `<div class="mp-chips">${chips}</div>
@@ -115,7 +116,7 @@ function arcadeTiles() {
 function mpCard(g) {
   const X = GX[g.type], st = mpStatus(g), me = actor(), need = mpNeed(g);
   const others = g.p.filter((p) => p !== me);
-  const sub = st.over ? (g.winner === 'draw' ? 'Tie' : `${playerName(g.winner)} won 🏆`) : g.mode === 'remote' ? (need.includes(me) ? '👉 Your turn!' : `Waiting for ${need.map(playerName).join(', ')}…`) : g.p.includes(BOT) ? 'vs the robot' : 'Pass-and-play';
+  const sub = st.over ? (X.endText ? X.endText(g) : g.winner === 'draw' ? 'Tie' : `${playerName(g.winner)} won 🏆`) : g.mode === 'remote' ? (need.includes(me) ? '👉 Your turn!' : `Waiting for ${need.map(playerName).join(', ')}…`) : g.p.includes(BOT) ? 'vs the robot' : 'Pass-and-play';
   return `<button class="row tap" style="width:100%;text-align:left" data-action="go" data-to="mp/${g.id}"><div class="avatar">${X.e}</div><div class="grow"><div class="title">${esc(X.name)} · vs ${esc(others.map((p) => `${playerEmoji(p)} ${playerName(p)}`).join(', '))}</div><div class="sub">${esc(sub)}</div></div>${!st.over && g.mode === 'remote' && need.includes(me) ? '<span class="dot-new"></span>' : ICON.chev}</button>`;
 }
 function arcadeList() {
@@ -625,6 +626,7 @@ Object.assign(actions, {
     const t = el.dataset.t, X = GX[t], s = [...(ui.mpSel || [])];
     const humans = s.filter(mpHuman);
     if (!X.bot && humans.length < 1) { toast('Pick at least one more player'); return; }
+    if (X.min && s.length + 1 < X.min) { toast(`${X.name} needs at least ${X.min} players`); return; }
     if (!s.length && t !== 'dice') { toast('Pick who’s playing'); return; }
     closeSheet();
     ui.mpSel = null;
@@ -698,7 +700,7 @@ familyEvents = function (before, after, me) {
     let st, need, was;
     try { st = X.status(g); need = st.over ? [] : X.need(g); was = old ? (X.status(old).over ? [] : X.need(old)) : []; } catch { continue; }
     if (st.over) {
-      if (old && !X.status(old).over) ev.push({ pref: 'games', to: others, title: g.winner === 'draw' ? `🤝 ${X.name} ended in a tie` : `🏁 ${playerName(g.winner)} won ${X.name}`, body: 'Play again?', url: '#mp/' + g.id, tag: 'mp-' + g.id });
+      if (old && !X.status(old).over) ev.push({ pref: 'games', to: others, title: X.endText ? `${X.e} ${X.endText(g)}` : g.winner === 'draw' ? `🤝 ${X.name} ended in a tie` : `🏁 ${playerName(g.winner)} won ${X.name}`, body: 'Play again?', url: '#mp/' + g.id, tag: 'mp-' + g.id });
       continue;
     }
     const to = !old ? others : need.filter((x) => x !== me && isMember(x) && !was.includes(x)); // a new game invites everyone
