@@ -865,13 +865,13 @@ function safeHero() {
   return `<details class="card sts-hero"${ui.stsOpen ? ' open' : ''}>
     <summary data-action="sts-toggle"><div class="stat-label">Safe to spend${s.mode === 'month' ? ` · next ${s.incs.length > 1 ? s.incs.length : 2} paychecks` : ''}</div>
       <div class="stat" style="color:${s.safe < 0 ? 'var(--bad)' : 'var(--good)'}">${moneyW(s.safe)}</div>
-      <div class="small muted">${esc(when)}${s.safe > 0 ? ` · about ${moneyW(s.perDay)}/day` : ''} · <span class="sts-more">${ui.stsOpen ? 'hide' : 'how?'}</span></div>
+      <div class="small muted">${esc(when)} · after bills and your everyday budget${s.safe > 0 ? ` · +${moneyW(s.perDay)}/day extra` : ''} · <span class="sts-more">${ui.stsOpen ? 'hide' : 'how?'}</span></div>
       ${s.tight ? `<div class="small" style="color:var(--bad);font-weight:650;margin-top:4px">⚠️ Tight until payday ${esc(fmtDate(s.tight.until, { weekday: 'short' }))}: bills due first need ${moneyW(s.tight.by)} more than you have</div>` : ''}</summary>
     <div class="kv"><span class="muted">Checking balance${(state.settings.balanceDate || t) < t ? ' (est. today)' : ''}</span><b>${moneyW(s.bal)}</b></div>
     ${s.mode === 'month' ? `<div class="kv"><span class="muted">Paychecks by ${esc(fmtDate(s.end, { month: 'short', day: 'numeric' }))} (${s.incs.length})</span><b style="color:var(--good)">+${moneyW(s.inc)}</b></div>` : ''}
     <div class="kv"><span class="muted">Bills ${s.mode === 'month' ? `due by ${esc(fmtDate(s.end, { month: 'short', day: 'numeric' }))}` : 'before payday'} (${s.bills.length}${s.overdue ? `, ${s.overdue} overdue` : ''})</span><b>−${moneyW(s.owed)}</b></div>
-    <div class="kv"><span class="muted">Planned everyday spending</span><b>−${moneyW(s.flex)}</b></div>
-    <div class="kv" style="border-top:1px solid var(--line);margin-top:6px;padding-top:8px"><span>Safe to spend</span><b>${moneyW(s.safe)}</b></div>
+    <div class="kv"><span class="muted">Everyday budget set aside (groceries, gas…)</span><b>−${moneyW(s.flex)}</b></div>
+    <div class="kv" style="border-top:1px solid var(--line);margin-top:6px;padding-top:8px"><span>Extra safe to spend</span><b>${moneyW(s.safe)}</b></div>
     <div class="btn-row" style="margin:8px 0 0;flex-wrap:wrap"><span class="small muted" style="align-self:center">Plan by</span>${mode('month', '2 paychecks')}${mode('pay', 'Next paycheck')}</div>
     <div class="btn-row" style="margin:6px 0 0"><button class="mini-btn" data-action="edit-balance">Update balance</button><span class="small muted" style="align-self:center">Updated ${relDays(-s.stale).toLowerCase()}</span></div>
   </details>`;
