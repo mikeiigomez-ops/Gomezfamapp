@@ -13,7 +13,7 @@ const SF_EVERY = 4 * 3600e3; // SimpleFIN asks apps not to poll more than a few 
 const sfCfg = () => { try { const c = JSON.parse(localStorage.getItem(SF_KEY) || 'null'); return c && c.base && c.auth ? c : null; } catch { return null; } };
 const sfStore = (c) => { try { if (c) localStorage.setItem(SF_KEY, JSON.stringify(c)); else localStorage.removeItem(SF_KEY); } catch { /* storage full: stay disconnected */ } };
 const bankOf = () => (state.budget.bank ||= { accounts: {}, used: {}, last: 0 });
-const sfBusy = { on: false };
+const sfBusy = { on: false, at: 0 };
 
 // A setup token is base64 of a one-time claim URL; claiming it returns the access URL (https://user:pass@host/path)
 async function sfClaim(token) {
@@ -31,7 +31,12 @@ async function sfClaim(token) {
 }
 
 async function sfFetch(c, start) {
-  const r = await fetch(`${c.base}/accounts?start-date=${Math.floor(start / 1000)}`, { headers: { Authorization: 'Basic ' + c.auth } });
+  // SimpleFIN can be slow (it may be talking to the bank); never wait forever — a phone that slept mid-request recovers
+  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 90e3);
+  let r;
+  try { r = await fetch(`${c.base}/accounts?start-date=${Math.floor(start / 1000)}`, { headers: { Authorization: 'Basic ' + c.auth }, signal: ctl.signal }); }
+  catch (e) { throw new Error(e.name === 'AbortError' ? 'SimpleFIN took too long to answer. Tap Sync now to try again.' : 'Couldn’t reach SimpleFIN. Check your connection and tap Sync now.'); }
+  finally { clearTimeout(timer); }
   if (r.status === 403 || r.status === 401) throw Object.assign(new Error('SimpleFIN no longer accepts this phone’s key. Reconnect bank sync.'), { gone: true });
   if (r.status === 402) throw new Error('Your SimpleFIN subscription needs attention.');
   if (!r.ok) throw new Error(`SimpleFIN said ${r.status}.`);
@@ -111,8 +116,9 @@ function bankImport(data, opts = {}) {
 
 async function bankSync({ quiet = false } = {}) {
   const c = sfCfg();
+  if (sfBusy.on && Date.now() - sfBusy.at > 120e3) sfBusy.on = false; // a request lost while the phone slept
   if (!c || sfBusy.on || (typeof inKidMode === 'function' && inKidMode())) return null;
-  sfBusy.on = true;
+  sfBusy.on = true; sfBusy.at = Date.now(); render();
   const bank = bankOf();
   try {
     // First sync: this month so far; later: a week of overlap to catch late-posting charges
@@ -130,7 +136,7 @@ async function bankSync({ quiet = false } = {}) {
     save(); render();
     if (!quiet) toast('🏦 ' + bank.err);
     return null;
-  } finally { sfBusy.on = false; }
+  } finally { sfBusy.on = false; render(); }
 }
 
 /* ---------- UI ---------- */
@@ -142,7 +148,7 @@ function bankCard() {
   return `<div class="card bank-card"><div style="display:flex;gap:12px;align-items:center"><span style="font-size:26px">🏦</span>
     <div class="grow" style="flex:1;min-width:0"><b>${esc([...new Set(ac.map((a) => a.org).filter(Boolean))].join(', ') || 'Bank')} · ${ac.length} account${ac.length === 1 ? '' : 's'}</b>
     <div class="small muted">${bank?.last ? `Synced ${esc(timeAgo(bank.last))} from ${who}` : 'Not synced yet'}${bank?.err ? ` · <span style="color:var(--bad)">${esc(bank.err)}</span>` : ''}</div></div>
-    ${c ? `<button class="mini-btn" data-action="bank-sync"${sfBusy.on ? ' disabled' : ''}>${sfBusy.on ? 'Syncing…' : 'Sync now'}</button>` : ''}<button class="mini-btn" data-action="bank-open">${c ? 'Manage' : 'Connect here'}</button></div></div>`;
+    ${c ? `<button class="mini-btn" data-action="bank-sync"${sfBusy.on && Date.now() - sfBusy.at < 120e3 ? ' disabled' : ''}>${sfBusy.on && Date.now() - sfBusy.at < 120e3 ? 'Syncing…' : 'Sync now'}</button>` : ''}<button class="mini-btn" data-action="bank-open">${c ? 'Manage' : 'Connect here'}</button></div></div>`;
 }
 
 function bankConnectSheet() {
@@ -211,4 +217,4 @@ function bankAuto() {
 setTimeout(bankAuto, 5000);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') setTimeout(bankAuto, 2000); });
 
-window.BankDebug = { bankImport, sfClaim, sfCfg, sfStore, bankSync };
+window.BankDebug = { bankImport, sfClaim, sfCfg, sfStore, bankSync, sfBusy };
