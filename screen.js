@@ -385,7 +385,7 @@ views.home = () => {
   const left = sumry.limit ? sumry.limit - sumry.spent : null;
   const dinner = state.meals[t]?.dinner;
   const choresDue = state.chores.filter((c) => !choreDone(c)).length;
-  const billsDue = overdueBills(t).length + recurringBetween(t, addDays(t, 7), 'bill').filter(({ b, date }) => !isPaid(b, date)).length;
+  const billsDue = typeof billsDueSoon === 'function' ? billsDueSoon(t).length : overdueBills(t).length + recurringBetween(t, addDays(t, 7), 'bill').filter(({ b, date }) => !isPaid(b, date)).length;
   const unread = state.chat.filter((m) => m.at > (seen().chat || 0) && m.who !== me).length;
   const turns = typeof myTurnGames === 'function' ? myTurnGames().length : 0;
   const listN = state.shop.list.filter((i) => !i.done).length;
@@ -406,6 +406,15 @@ views.home = () => {
   const todos = state.todos.filter((x) => !x.done).length;
   const nights = [...Array(7)].map((_, i) => addDays(t, i)).filter((d) => state.meals[d]?.dinner).length;
   const fresh = state.members.length < 2;
+  // The top money heads-up (Review last month on days 1–5, Safe to spend, budget pace) rides in the Today row.
+  const ins = (() => {
+    if (typeof homeInsights !== 'function') return '';
+    const tpl = document.createElement('template'); tpl.innerHTML = homeInsights();
+    const b = [...tpl.content.querySelectorAll('.insight')].find((x) => /month-review|edit-balance/.test(x.dataset.action) || x.dataset.to === 'budget'); if (!b) return '';
+    const act = [...b.attributes].filter((a) => a.name.startsWith('data-')).map((a) => `${a.name}="${esc(a.value)}"`).join(' ');
+    const tone = ['bad', 'warn', 'good'].find((c) => b.classList.contains(c)) || '';
+    return `<button role="listitem" class="home-ins ${tone}" ${act}><b>${esc(b.querySelector('.ii')?.textContent || '💡')}</b><span>${esc(b.querySelector('b')?.textContent || '')}</span></button>`;
+  })();
   const poll = me && state.board.find((x) => x.type === 'poll' && !x.closed && !x.votes?.[me]);
   // Today's shortcuts: each tile says what needs doing; the tabs below hold everything else
   const tiles = [
@@ -431,7 +440,7 @@ views.home = () => {
       <div class="btn-row" style="margin:10px 0 0"><button class="btn" data-action="add-member">Set up your family</button>${typeof loadDemo === 'function' ? '<button class="btn secondary" data-action="load-demo">Try the demo</button>' : ''}</div></div>` : ''}
     ${needMe()}
     ${typeof whatsNewCard === 'function' ? whatsNewCard() : ''}
-    ${ahead.length ? `<div class="home-today" role="list" aria-label="Today">${ahead.slice(0, 3).map((e) => `<button role="listitem" data-action="go" data-to="calendar" style="--c:${e.color}"><b>${e.time ? fmtTime(e.time).replace(/:00(?=\s?[AP]M)/, '') : 'All day'}</b><span>${esc(e.title)}</span></button>`).join('')}</div>` : ''}
+    ${ahead.length || ins ? `<div class="home-today" role="list" aria-label="Today">${ins}${ahead.slice(0, ins ? 1 : 3).map((e) => `<button role="listitem" data-action="go" data-to="calendar" style="--c:${e.color}"><b>${e.time ? fmtTime(e.time).replace(/:00(?=\s?[AP]M)/, '') : 'All day'}</b><span>${esc(e.title)}</span></button>`).join('')}</div>` : ''}
     <div class="launch">${tiles.map(tileHTML).join('')}</div>`;
 };
 

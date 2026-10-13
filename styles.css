@@ -453,3 +453,7 @@ button.wk-day:active span { background: var(--accent-soft, var(--line)); }
 .wk.compact .wk-day { padding: 1px 0; }
 .wk.compact .wk-day span { width: 28px; height: 28px; }
 .wk.compact .wk-day em { top: -2px; }
+.home-today .home-ins { border-left-color: var(--accent); }
+.home-today .home-ins.good { border-left-color: var(--good, #2f8a5b); }
+.home-today .home-ins.warn { border-left-color: #e0a800; }
+.home-today .home-ins.bad { border-left-color: var(--bad); }
