@@ -101,3 +101,15 @@ views.inbox = () => `${_inboxNav()}
   </div>`;
 
 if (typeof module !== 'undefined') module.exports = { HUBS, hubOf };
+
+/* Settings: recent problems on this device, easy to screenshot (cleared with one tap) */
+const _settingsNav = views.settings;
+views.settings = (p) => {
+  let errs = [];
+  try { errs = JSON.parse(localStorage.getItem('gomezfam:errors') || '[]').filter((x) => Date.now() - x.at < 7 * 864e5); } catch { errs = []; }
+  const card = errs.length ? `<div class="section-title">Recent problems on this device</div><div class="card small">
+    ${errs.slice().reverse().map((x) => `<div style="margin-bottom:8px"><b>${esc(x.where)}</b> · ${esc(timeAgo(x.at))}<br><span class="muted">${esc(x.msg)}</span>${x.line ? `<br><span class="muted" style="font:11px ui-monospace,monospace">${esc(x.line)}</span>` : ''}</div>`).join('')}
+    <button class="mini-btn" data-action="errors-clear">Clear</button></div>` : '';
+  return _settingsNav(p) + card;
+};
+actions['errors-clear'] = () => { try { localStorage.removeItem('gomezfam:errors'); } catch { /* ignore */ } render(); };

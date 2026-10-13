@@ -1630,6 +1630,17 @@ views.settings = () => `
 /* =========================================================
    Router / render
    ========================================================= */
+// Recent problems (kept on this device only) so a screenshot of Settings can explain a glitch
+const ERR_KEY = 'gomezfam:errors';
+function noteError(where, e) {
+  try {
+    const list = JSON.parse(localStorage.getItem(ERR_KEY) || '[]').slice(-4);
+    list.push({ at: Date.now(), where: String(where).slice(0, 40), msg: String(e?.message || e).slice(0, 160), line: String(e?.stack || '').split('\n')[1]?.trim().slice(0, 120) || '' });
+    localStorage.setItem(ERR_KEY, JSON.stringify(list));
+  } catch { /* storage full or blocked */ }
+}
+window.addEventListener('error', (e) => noteError('script', e.error || e.message));
+window.addEventListener('unhandledrejection', (e) => noteError('async', e.reason));
 const viewEl = $('#view');
 function currentRoute() {
   const [name, param] = (location.hash.slice(1) || 'home').split('/');
@@ -1648,7 +1659,7 @@ function render() {
     html = (name === 'home' || name === 'kid' || detail ? '' : `<h1 class="large-title">${esc(title)}</h1>`) + views[name](param);
   } catch (e) {
     // One broken screen never strands you: show a way out instead of freezing on the old screen
-    console.error('render ' + name, e);
+    console.error('render ' + name, e); noteError('screen ' + name, e);
     html = `<div class="card empty"><span class="big">😵</span>This screen hit a snag. Your data is safe.<div class="btn-row" style="justify-content:center"><button class="btn" data-action="go" data-to="${typeof inKidMode === 'function' && inKidMode() ? 'kid' : 'home'}">Back to Home</button></div></div>`;
   }
   const key = name + '/' + (param || '');
@@ -1669,7 +1680,16 @@ function render() {
       viewEl.querySelector(sel)?.classList.add('pop');
       ui.pop = null;
     }
-    if (typeof afterRender === 'function') { try { afterRender(); } catch (e) { console.error('afterRender', e); } }
+    if (typeof afterRender === 'function') { try { afterRender(); } catch (e) { console.error('afterRender', e); noteError('after ' + name, e); } }
+    // Full-screen modes belong to one screen each. Whatever happened above, never leave one switched on elsewhere
+    // (a stuck game/story mode would hide the top bar and tabs).
+    try {
+      const b = document.body;
+      if (name !== 'world') { b.classList.remove('world-mode'); const L = document.getElementById('worldLayer'); if (L && !L.hidden) { if (typeof unmount === 'function') { try { unmount(); } catch { L.hidden = true; } } else L.hidden = true; } }
+      if (name !== 'wrapped') b.classList.remove('wrapped-mode');
+      if (name !== 'store') b.classList.remove('store-mode');
+      if (name !== 'room') b.classList.remove('house-editing');
+    } catch { /* never block a screen */ }
   };
   // Paint synchronously. (Safari's view transitions sometimes left the new screen undrawn until a scroll,
   // so screens now just fade in with a plain opacity animation.)
