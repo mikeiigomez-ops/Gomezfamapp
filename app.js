@@ -942,11 +942,12 @@ function recurringView() {
   const soon = next7;
   const later = recurringBetween(addDays(dueWindow(t)[1], 1), addDays(t, 30));
   const section = (title, list) => list.length ? `<div class="section-title"><span>${title}</span><span class="small" style="text-transform:none">${moneyW(sum(list.filter((x) => x.b.type !== 'income'), (x) => x.amount))}</span></div><div class="card flush">${list.map(recurRow).join('')}</div>` : '';
-  return toggle + `
+  // Page 1 is for paying: a compact summary, then overdue / due rows with their check circles.
+  return `
     <div class="card">
-      <h3>Coming up</h3>
-      <p style="margin:0 0 10px">${charges.length ? `You have <b>${charges.length}</b> recurring charge${charges.length > 1 ? 's' : ''} for <b>${moneyW(sum(charges, (x) => x.amount))}</b> in the next 7 days.` : 'No recurring charges in the next 7 days. 🎉'}</p>
-      <div class="wk">${['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d) => `<div class="dow">${d}</div>`).join('')}${strip}</div>
+      <h3 style="display:flex;justify-content:space-between;align-items:center;margin-top:-4px">Coming up<button class="mini-btn" style="text-transform:none;letter-spacing:0" data-action="recur-tab" data-tab="all">All recurring ›</button></h3>
+      <p style="margin:0 0 8px">${charges.length ? `<b>${charges.length}</b> charge${charges.length > 1 ? 's' : ''} · <b>${moneyW(sum(charges, (x) => x.amount))}</b> in the next 7 days` : 'No recurring charges in the next 7 days. 🎉'}</p>
+      <div class="wk compact">${['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d) => `<div class="dow">${d}</div>`).join('')}${strip}</div>
     </div>
     ${section('⚠️ Overdue', overdue)}
     ${section('Due next 7 days', soon)}

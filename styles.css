@@ -449,3 +449,7 @@ button.wk-day:active span { background: var(--accent-soft, var(--line)); }
 .cal-todo .time-col { font-size: 11px; }
 .cal-todo.done .title { text-decoration: line-through; color: var(--muted); }
 .quick-row:has(> .chip:nth-child(5)) { grid-template-columns: repeat(5, 1fr); }
+.wk.compact { padding: 4px 4px 2px; row-gap: 0; }
+.wk.compact .wk-day { padding: 1px 0; }
+.wk.compact .wk-day span { width: 28px; height: 28px; }
+.wk.compact .wk-day em { top: -2px; }
