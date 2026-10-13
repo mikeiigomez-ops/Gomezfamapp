@@ -607,6 +607,7 @@ views.play = () => {
     { to: 'gems', e: GEM, label: 'Gems', sub: me ? `${gemBalance(me)} gems` : 'Wallets', color: '#7c3aed' },
     // A kid can't turn on sync themselves: no dead end into Settings, just "ask a grown-up"
     friendsOk ? ((kid || (me && typeof isKidId === 'function' && isKidId(me))) && typeof syncReady === 'function' && !syncReady() ? { act: 'friends-ask', e: '👯', label: 'Friends', sub: 'Ask a grown-up', color: '#f43f5e' } : { to: 'friends', e: '👯', label: 'Friends', sub: 'Trade & chat', color: '#f43f5e' }) : null,
+    ...(typeof arcadeLaunch === 'function' ? arcadeLaunch() : []),
     { to: 'games', e: '🏆', label: 'Scores', sub: 'Champs', color: '#eab308' },
   ].filter(Boolean);
   return `${needMe()}<div class="launch">${tiles.map(tileHTML).join('')}</div>`;

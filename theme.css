@@ -1760,3 +1760,110 @@ html[data-theme="dark"] .gem-pill { background: linear-gradient(135deg, #1e2a44,
 .c4-col { min-width: 0; }
 .c4-cell { width: 100%; flex: none; }
 @supports not (aspect-ratio: 1) { .c4-cell { height: 0; padding-bottom: 100%; } }
+
+/* ---------- Arcade: Dots & Boxes, Sea Hunt, Doodle Guess, Five Dice, Checkers ---------- */
+.mp-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-bottom: 4px; }
+.mp-chip { --c: var(--accent); display: flex; align-items: center; gap: 5px; padding: 5px 10px 5px 6px; border-radius: 999px; background: var(--surface); box-shadow: var(--shadow); font-size: 13px; border: 2px solid transparent; }
+.mp-chip span { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; background: color-mix(in oklab, var(--c) 22%, transparent); font-size: 15px; }
+.mp-chip b { max-width: 84px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mp-chip i { font-style: normal; font-weight: 850; color: var(--c); min-width: 14px; text-align: right; }
+.mp-chip.turn { border-color: var(--c); }
+.mp-chip.small b { display: none; }
+.mp-chip.won { background: color-mix(in oklab, var(--c) 18%, var(--surface)); }
+.mp-status { font-size: 18px; margin: 4px 0 6px; }
+.mp-btns { margin-top: 8px; }
+.mp-who { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 4px; }
+.mp-pickb { display: flex; align-items: center; gap: 6px; padding: 8px 14px 8px 10px; border-radius: 999px; background: var(--surface-2, #f1f3f5); color: var(--text); font-weight: 750; border: 2px solid transparent; }
+.mp-pickb span { font-size: 20px; }
+.mp-pickb.on { border-color: var(--accent); background: var(--accent-soft, #fdecea); }
+.mp-pass { text-align: center; padding: 40px 16px; }
+.mp-pass-e { font-size: 72px; line-height: 1; margin-bottom: 8px; }
+.mp-pass h2 { margin: 0 0 6px; }
+.mp-pass .btn { margin-top: 18px; }
+/* Dots & Boxes */
+.db-board { --s: min(100%, 420px); width: var(--s); height: auto; aspect-ratio: 1; display: block; margin: 0 auto; touch-action: manipulation; }
+.game-stage .db-board { --s: min(358px, calc(100vh - 290px)); height: var(--s); }
+@supports (width: 1cqh) { .game-stage .db-board { --s: min(100cqw, 100cqh); } }
+.db-dot { fill: var(--text); }
+.db-free { stroke: color-mix(in oklab, var(--text) 22%, transparent); }
+.db-hit { stroke: transparent; cursor: pointer; pointer-events: stroke; }
+.db-hit:hover { stroke: color-mix(in oklab, var(--accent) 22%, transparent); }
+.db-last { animation: db-pop .5s var(--spring, ease-out); }
+@keyframes db-pop { from { stroke-width: 5; } }
+/* Sea Hunt */
+.sh-stage { position: relative; }
+.sh-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 3px; padding: 6px; border-radius: 16px; background: linear-gradient(160deg, #0ea5e9, #1e40af); aspect-ratio: 1; }
+.sh-grid.big { width: min(100%, 400px); margin: 0 auto; }
+.game-stage .sh-grid.big { width: min(100%, calc(100vh - 380px)); }
+@supports (width: 1cqh) { .game-stage .sh-grid.big { width: min(100cqw, 100cqh); } }
+.sh-grid.mini { width: 120px; flex: none; gap: 1px; padding: 3px; border-radius: 10px; }
+.sh-c { display: grid; place-items: center; border-radius: 5px; background: rgba(255, 255, 255, .16); font-size: min(4.2vw, 20px); line-height: 1; color: #fff; min-width: 0; aspect-ratio: 1; padding: 0; }
+.sh-grid.mini .sh-c { border-radius: 2px; font-size: 7px; }
+button.sh-c:active { background: rgba(255, 255, 255, .5); }
+.sh-c.boat { background: #475569; }
+.sh-c.hit { background: #f97316; }
+.sh-c.sunk { background: #7f1d1d; }
+.sh-c.miss { background: rgba(255, 255, 255, .06); color: rgba(255, 255, 255, .8); }
+.sh-c.last { box-shadow: 0 0 0 2px #fde047; }
+.sh-foot { display: flex; gap: 12px; align-items: center; margin-top: 8px; line-height: 1.5; }
+.sh-msg { position: absolute; z-index: 3; left: 50%; top: 40%; transform: translate(-50%, -50%); padding: 10px 18px; border-radius: 999px; background: rgba(15, 23, 42, .85); color: #fff; font: 850 20px/1 var(--font-display); white-space: nowrap; animation: check-pop .4s var(--spring, ease-out); pointer-events: none; }
+/* Doodle Guess */
+.dg-round { text-align: center; margin-bottom: 4px; }
+.dg-word { text-align: center; font-size: 17px; margin-bottom: 4px; }
+.dg-canvas { display: block; width: min(100%, 420px); aspect-ratio: 1; margin: 0 auto; border-radius: 18px; background: #fff; box-shadow: var(--shadow); touch-action: none; }
+.game-stage .dg-canvas { width: min(100%, calc(100vh - 360px)); }
+@supports (width: 1cqh) { .game-stage .dg-canvas { width: min(100cqw, 100cqh); } }
+.dg-picks { display: grid; gap: 10px; }
+.dg-pick { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-radius: 20px; background: var(--surface); box-shadow: var(--shadow); font: 800 19px/1.2 var(--font-display); color: var(--text); text-transform: capitalize; }
+.dg-pick span { font-size: 30px; }
+.dg-tools { display: flex; align-items: center; gap: 8px; justify-content: center; margin-top: 6px; }
+.dg-ink { width: 30px; height: 30px; border-radius: 50%; background: var(--c); border: 3px solid var(--surface); box-shadow: 0 0 0 1px var(--line); flex: none; }
+.dg-ink.on { box-shadow: 0 0 0 3px var(--c); }
+.dg-tool { width: 36px; height: 36px; border-radius: 12px; background: var(--surface-2, #f1f3f5); font-size: 18px; color: var(--text); flex: none; }
+.dg-tool.on { background: var(--accent-soft, #fdecea); }
+.dg-send { margin-left: 4px; padding: 8px 16px; min-height: 0; }
+.dg-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.dg-choice { padding: 11px 8px; border-radius: 16px; background: var(--surface); box-shadow: var(--shadow); font-weight: 800; color: var(--text); text-transform: capitalize; }
+.dg-choice.wrong { opacity: .4; text-decoration: line-through; }
+.dg-wait { text-align: center; font-size: 40px; color: var(--muted); }
+.dg-wait br + * { font-size: 16px; }
+.dg-gallery { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.dg-card { display: flex; flex-direction: column; align-items: center; gap: 2px; text-transform: capitalize; }
+.dg-card canvas { width: 100%; }
+.dg-card small { color: var(--muted); text-transform: none; }
+/* Five Dice */
+.fd-dice { display: flex; justify-content: center; gap: 8px; margin: 2px 0 6px; }
+.fd-die { width: 48px; height: 48px; padding: 7px; border-radius: 14px; background: #fff; box-shadow: 0 3px 0 #cbd5e1, var(--shadow); border: 2px solid transparent; flex: none; }
+.fd-die.held { border-color: var(--accent); transform: translateY(-4px); box-shadow: 0 3px 0 var(--accent), var(--shadow); }
+.fd-die.idle { opacity: .45; }
+.fd-die.roll { animation: fd-roll .45s ease-out; }
+@keyframes fd-roll { 0% { transform: rotate(-30deg) scale(.8); } 60% { transform: rotate(12deg) scale(1.08); } 100% { transform: none; } }
+.pips { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); width: 100%; height: 100%; gap: 2px; }
+.pips i { border-radius: 50%; }
+.pips i.on { background: #1f2937; }
+.fd-roll { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-bottom: 6px; }
+.fd-roll .btn { min-width: 200px; }
+.fd-stage { overflow: auto; align-self: stretch; place-items: start stretch !important; }
+.fd-sheet { width: 100%; border-collapse: collapse; font-size: 13.5px; background: var(--surface); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow); }
+.fd-sheet th, .fd-sheet td { padding: 0 6px; border-bottom: 1px solid var(--line); text-align: center; height: 24px; }
+@supports (height: 1cqh) { body.game-mode .fd-sheet th, body.game-mode .fd-sheet td { height: max(15px, min(26px, calc(100cqh / 17.5 - 1px))); } }
+.fd-sheet tbody th { text-align: left; font-weight: 650; white-space: nowrap; }
+.fd-sheet thead th { font-size: 16px; height: auto !important; padding: 2px 6px; border-bottom: 3px solid var(--c, var(--line)); }
+.fd-sheet .cur { background: color-mix(in oklab, var(--accent) 7%, transparent); }
+.fd-sheet.tight { font-size: 12px; }
+.fd-f { font-size: 16px; }
+.fd-sub td, .fd-sub th { color: var(--muted); font-size: 12px; }
+.fd-tot th, .fd-tot td { font-weight: 850; font-size: 15px; border-bottom: 0; }
+.fd-pick { width: 100%; padding: 0 4px; line-height: 1.2; border-radius: 8px; background: var(--accent-soft, #fdecea); color: var(--accent-ink, var(--accent)); font-weight: 850; }
+.fd-pick.zero { background: var(--surface-2, #f1f3f5); color: var(--muted); }
+/* Checkers */
+.ck-board { display: grid; grid-template-columns: repeat(8, 1fr); width: min(100%, 420px); aspect-ratio: 1; margin: 0 auto; border-radius: 12px; overflow: hidden; box-shadow: 0 0 0 6px #78350f, var(--shadow); }
+.game-stage .ck-board { width: min(100% - 12px, calc(100vh - 300px)); }
+@supports (width: 1cqh) { .game-stage .ck-board { width: min(100cqw - 12px, 100cqh - 12px); } }
+.ck-sq { display: grid; place-items: center; background: #fde7c4; padding: 0; min-width: 0; aspect-ratio: 1; }
+.ck-sq.dark { background: #a16207; }
+.ck-sq.last { background: #ca8a04; }
+.ck-sq.can { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .55); }
+.ck-sq.sel { background: #65a30d; }
+.ck-sq.next { background: #84cc16; box-shadow: inset 0 0 0 3px #fff; }
+.ck-pc { width: 78%; height: 78%; border-radius: 50%; display: grid; place-items: center; font-size: min(4vw, 18px); background: radial-gradient(circle at 35% 30%, color-mix(in oklab, var(--c) 60%, #fff), var(--c) 60%); box-shadow: 0 3px 0 color-mix(in oklab, var(--c) 60%, #000), inset 0 0 0 3px rgba(255, 255, 255, .25); }

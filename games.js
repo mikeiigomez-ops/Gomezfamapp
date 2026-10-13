@@ -401,9 +401,9 @@ views.games = () => {
   const done = c4Games().filter((g) => c4Status(g).over).sort((a, b) => (b.endAt || b.at) - (a.endAt || a.at)).slice(0, 3);
   const wrec = me ? wordOf(me) : null;
   const wordToday = state.members.filter((m) => wordOf(m.id)?.done);
-  // Monthly champs: Connect Four wins ×3, Family Word solves ×(7 − guesses), trivia answers right
+  // Monthly champs: game wins ×3, Family Word solves ×(7 − guesses), trivia answers right
   const pts = Object.fromEntries(state.members.map((m) => [m.id, 0]));
-  for (const g of c4Games()) if (g.winner && pts[g.winner] != null && thisMonth(g.endAt || g.at)) pts[g.winner] += 3;
+  for (const g of state.games) if (g.winner && pts[g.winner] != null && thisMonth(g.endAt || g.at)) pts[g.winner] += 3; // Connect Four and the arcade games
   for (const [d, xs] of Object.entries(state.wordle)) if (d.slice(0, 7) === monthKey(today())) for (const [id, r] of Object.entries(xs)) if (r.won && pts[id] != null) pts[id] += 7 - r.g.length;
   for (const s of state.scores) if (s.game === 'trivia' && pts[s.who] != null && thisMonth(s.at)) pts[s.who] += s.score;
   const champs = state.members.filter((m) => pts[m.id]).sort((a, b) => pts[b.id] - pts[a.id]);
@@ -414,7 +414,9 @@ views.games = () => {
       <button class="game-tile" data-action="c4-new" style="--g1:#dc2626;--g2:#f59e0b"><span class="gt-e">🔴</span><b>Connect Four</b><small>${myTurnGames().length ? `Your turn in ${myTurnGames().length}!` : 'Challenge someone'}</small></button>
       <button class="game-tile" data-action="go" data-to="memory" style="--g1:#7c3aed;--g2:#db2777"><span class="gt-e">🃏</span><b>Memory Match</b><small>Find the pairs</small></button>
       <button class="game-tile" data-action="trivia-open" style="--g1:#0284c7;--g2:#06b6d4"><span class="gt-e">🧠</span><b>Family Trivia</b><small>${me && triviaWaiting(me).length ? `${triviaWaiting(me).length} new!` : 'How well do you know us?'}</small></button>
+      ${typeof arcadeTiles === 'function' ? arcadeTiles() : ''}
     </div>
+    ${typeof arcadeList === 'function' ? arcadeList() : ''}
     ${active.length ? `<div class="section-title">Connect Four games</div><div class="card flush">${active.map(c4Card).join('')}</div>` : ''}
     ${done.length ? `<div class="section-title">Recent results</div><div class="card flush">${done.map(c4Card).join('')}</div>` : ''}`;
 };
