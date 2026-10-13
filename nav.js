@@ -116,3 +116,7 @@ views.settings = (p) => {
   return _settingsNav(p) + card;
 };
 actions['errors-clear'] = () => { try { localStorage.removeItem('gomezfam:errors'); } catch { /* ignore */ } render(); };
+
+// An earlier script may already have drawn the first screen before this file wired up the tabs and chips
+// (then the app's own first render is skipped): redraw once so a cold start on #budget gets them too.
+if (typeof lastRouteKey !== 'undefined' && lastRouteKey !== null) render();
