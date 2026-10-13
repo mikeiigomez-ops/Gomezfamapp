@@ -710,21 +710,37 @@ views.budget = () => {
     const leftover = incM - billM - flexB; // bills already inside a category budget aren't counted twice
     body = `
       ${ym === monthKey(today()) ? safeHero() : ''}
+      ${(() => {
+        // What actually happened: every dollar in and out this month (bills + everyday spending), not the plan
+        const cur = ym === monthKey(today()), out = s.spent + s.bills, net = s.income - out;
+        const coming = cur ? sum(recurringBetween(today(), mTo, 'income').filter((x) => !isPaid(x.b, x.date)), (x) => x.amount) : 0;
+        if (!s.income && !out) return '';
+        const mName = parse(mFrom).toLocaleDateString(undefined, { month: 'long' });
+        return `<div class="card actual-card">
+          <h3>${esc(mName)} — ${cur ? 'so far' : 'what actually happened'}</h3>
+          <div class="kv"><span class="muted">Money in</span><b style="color:var(--good)">+${moneyW(s.income)}</b></div>
+          <div class="kv"><span class="muted">Bills paid</span><b>−${moneyW(s.bills)}</b></div>
+          <div class="kv"><span class="muted">Everyday spending</span><b>−${moneyW(s.spent)}</b></div>
+          <div class="kv"><span class="muted">Total out</span><b>−${moneyW(out)}</b></div>
+          ${cur && coming ? `<div class="kv"><span class="muted">Pay still coming</span><b style="color:var(--good)">+${moneyW(coming)}</b></div>` : ''}
+          <div class="kv actual-net" style="border-top:1px solid var(--line);margin-top:6px;padding-top:8px"><span>${cur && coming ? (net + coming >= 0 ? 'Left after pay comes in' : 'Short even after pay comes in') : net >= 0 ? 'You saved' : 'You spent more than you made'}</span><b style="color:${(cur && coming ? net + coming : net) < 0 ? 'var(--bad)' : 'var(--good)'}">${moneyW(Math.abs(cur && coming ? net + coming : net))}</b></div>
+          ${!cur && net < 0 && s.income ? `<div class="small muted">Out was ${Math.round((out / s.income) * 100)}% of what came in.</div>` : ''}
+        </div>`;
+      })()}
       ${state.budget.bills.length ? `<div class="card">
-        <h3>${parse(mFrom).toLocaleDateString(undefined, { month: 'long' })} cash flow</h3>
+        <h3>${parse(mFrom).toLocaleDateString(undefined, { month: 'long' })} plan</h3>
         <div class="kv"><span class="muted">Expected income</span><b style="color:var(--good)">+${moneyW(incM)}</b></div>
         <div class="kv"><span class="muted">Recurring bills</span><b>−${moneyW(billM)}</b></div>
         <div class="kv"><span class="muted">Everyday spending budget</span><b>−${moneyW(flexB)}</b></div>
-        <div class="kv" style="border-top:1px solid var(--line);margin-top:6px;padding-top:8px"><span>Unbudgeted this month</span><b style="color:${leftover < 0 ? 'var(--bad)' : 'var(--good)'}">${moneyW(leftover)}</b></div>
+        <div class="kv" style="border-top:1px solid var(--line);margin-top:6px;padding-top:8px"><span>Left if you stick to the plan</span><b style="color:${leftover < 0 ? 'var(--bad)' : 'var(--good)'}">${moneyW(leftover)}</b></div>
       </div>` : ''}
       <div class="card">
         <div class="ring-wrap">
           <div class="ring"><span class="ring-label">${s.limit ? Math.round((s.spent / s.limit) * 100) : 0}%<small>used</small></span><svg viewBox="0 0 96 96"><circle class="track" cx="48" cy="48" r="42"/><circle class="val ${levelCls(s.limit ? s.spent / s.limit : 0)}" cx="48" cy="48" r="42" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - frac)}" stroke-linecap="round"/></svg></div>
           <div class="grow" style="flex:1">
             <div class="kv"><span class="muted">Budget</span><b>${moneyW(s.limit)}</b></div>
-            <div class="kv"><span class="muted">Spent</span><b>${moneyW(s.spent)}</b></div>
+            <div class="kv"><span class="muted">Everyday spent</span><b>${moneyW(s.spent)}</b></div>
             <div class="kv"><span class="muted">Budget left</span><b style="color:${s.left < 0 ? 'var(--bad)' : 'var(--good)'}">${moneyW(s.left)}</b></div>
-            ${s.income ? `<div class="kv"><span class="muted">Income</span><b>${moneyW(s.income)}</b></div>` : ''}
             ${ym === monthKey(today()) && s.limit && s.left > 0 ? `<div class="allowance">≈ <b>${money(s.left / (new Date(+ym.slice(0, 4), +ym.slice(5), 0).getDate() - parse(today()).getDate() + 1), { maximumFractionDigits: 0 })}/day</b> for the rest of the month</div>` : ''}
           </div>
         </div>
