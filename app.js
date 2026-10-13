@@ -534,7 +534,11 @@ function paceLine(x, P) {
   const w = (n) => '~' + moneyW(n);
   if (P.past) return [`Ended at ${moneyW(x.spent)}`, x.usual !== null ? `usually ${w(x.usual)}` : '', x.lim ? `budget ${moneyW(x.lim)}` : ''].filter(Boolean).join(' · ');
   if (!P.cur) return x.usual !== null ? `Usually ${w(x.usual)}` : '';
-  const a = x.ahead, pace = a === null ? '' : Math.abs(a) < 5 ? 'right on pace' : `${moneyW(Math.abs(a))} ${a > 0 ? 'ahead of' : 'under'} pace`;
+  if (!x.spent && !x.usual) return 'Nothing spent yet';
+  // The budget is the headline: already over it, or headed over it, beats "ahead of pace"
+  const a = x.ahead, over = x.lim ? x.spent - x.lim : 0, headed = x.lim ? x.likely - x.lim : 0;
+  const pace = over > 0.5 ? `${moneyW(over)} over budget` : headed >= 5 ? `heading ${w(headed)} over budget`
+    : a === null ? '' : Math.abs(a) < 5 ? 'right on pace' : `${moneyW(Math.abs(a))} ${a > 0 ? 'ahead of' : 'under'} pace`;
   return [`On pace for ${w(x.likely)}`, x.usual !== null ? `usually ${w(x.usual)}` : P.months.length ? '' : 'no history yet', pace].filter(Boolean).join(' · ');
 }
 // Everyday spending with no category, one entry per merchant (biggest first)
