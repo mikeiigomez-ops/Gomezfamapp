@@ -529,8 +529,11 @@ function catPace(ym) {
     const likely = past ? all : all + rate * left + billLeft;
     const cap = lim || usual || 0;
     const overB = !!lim && likely > lim + Math.max(5, lim * 0.02), overU = usual !== null && likely > usual * 1.05 + 5;
-    const level = (cap && all > cap + 0.5) || (overB && (usual === null || overU)) ? 'bad'
-      : overB || (!lim && overU) || (cur && should !== null && all - should > Math.max(10, cap * 0.1)) ? 'warn' : '';
+    // Red = over the budget by more than a little ($25 / 10%) or clearly headed there; a small overage, or beating
+    // your usual in a category with no budget, is amber (there's no budget to break)
+    const bigOver = lim && all - lim > Math.max(25, lim * 0.1);
+    const level = bigOver || (lim && overB && overU && likely - lim > Math.max(25, lim * 0.1)) ? 'bad'
+      : (lim && all > lim + 0.5) || overB || (!lim && overU && usual > 0 && all > usual * 1.05 + 5) || (cur && should !== null && all - should > Math.max(10, cap * 0.1)) ? 'warn' : '';
     return { key, spent: r(all), every: r(every), lim, usual: usual === null ? null : r(usual), should: should === null ? null : r(should), likely: r(likely), ahead: should === null ? null : r(all - should), cap, level };
   };
   const cats = everydayCats().map((c) => ({ c, ...one(c.id, catLimit(c, ym)) }));
@@ -544,7 +547,7 @@ function catPace(ym) {
 // "On pace for ~$740 · usually ~$560 · $200 ahead of pace" (or, for a finished month, how it ended)
 function paceLine(x, P) {
   const w = (n) => '~' + moneyW(n);
-  if (P.past) return [`Ended at ${moneyW(x.spent)}`, x.usual !== null ? `usual month ${w(x.usual)}` : '', x.lim ? `budget ${moneyW(x.lim)}` : ''].filter(Boolean).join(' · ');
+  if (P.past) return [`Ended at ${moneyW(x.spent)}`, x.lim ? (x.spent > x.lim + 0.5 ? `${moneyW(x.spent - x.lim)} over budget` : `${moneyW(x.lim - x.spent)} under budget`) : '', x.usual !== null ? `usual month ${w(x.usual)}` : ''].filter(Boolean).join(' · ');
   if (!P.cur) return x.usual !== null ? `Usual month ${w(x.usual)}` : '';
   if (!x.spent && !x.usual) return 'Nothing spent yet';
   // The budget is the headline: already over it, or headed over it, beats "ahead of pace"
@@ -561,7 +564,7 @@ function paceBar(x, P) {
   if (!scale) return '';
   const pc = (n) => Math.max(0, Math.min(100, (n / scale) * 100)).toFixed(1) + '%';
   const cap = x.cap && scale > x.cap + 0.5 ? `<s class="cap" style="left:${pc(x.cap)}"></s>` : '';
-  const now = `<div class="bar pace-bar" title="Spent so far"><i class="${x.level}" style="width:${pc(x.spent)}"></i>${P.cur && x.should !== null ? `<s class="tick" style="left:${pc(x.should)}" title="Should be about ${esc(moneyW(x.should))} by today"></s>` : ''}${cap}</div>`;
+  const now = `<div class="bar pace-bar" title="Spent so far"><i class="${x.level}${x.lim && x.spent > x.lim + 0.5 ? ' over' : ''}" style="width:${pc(x.spent)};--cap:${x.lim && x.spent > x.lim ? ((x.lim / x.spent) * 100).toFixed(1) : 100}%"></i>${P.cur && x.should !== null ? `<s class="tick" style="left:${pc(x.should)}" title="Should be about ${esc(moneyW(x.should))} by today"></s>` : ''}${cap}</div>`;
   const fc = P.past || !P.cur ? '' : `<div class="bar pace-bar pace-fc" title="Forecast by ${esc(P.endLabel)}"><i class="${x.level}" style="width:${pc(x.likely)}"></i>${cap}</div>`;
   return now + fc;
 }

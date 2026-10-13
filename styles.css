@@ -591,3 +591,6 @@ body:not(.paged) .budget-tabs { position: sticky; top: -6px; z-index: 6; transit
 .pd-row b.up { color: var(--bad); }
 .pd-row b.down { color: var(--good); }
 .pd-tag { display: inline-block; font-size: 10.5px; font-weight: 750; text-transform: uppercase; letter-spacing: .04em; padding: 1px 6px; border-radius: 6px; background: var(--surface-2); color: var(--muted); vertical-align: 1px; }
+/* Over budget: the part inside the budget stays muted, only the overage is coloured */
+.pace-bar > i.over { background: linear-gradient(90deg, color-mix(in srgb, var(--muted) 45%, transparent) 0 var(--cap), var(--bad) var(--cap)); }
+.pace-bar > i.over.warn { background: linear-gradient(90deg, color-mix(in srgb, var(--muted) 45%, transparent) 0 var(--cap), var(--warn) var(--cap)); }
