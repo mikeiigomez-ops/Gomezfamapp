@@ -78,34 +78,53 @@ The `circles` rule is for **Friends Circles** (shared with friend families). If 
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    function signedIn() { return request.auth != null && request.auth.token.email_verified; }
+    function me() { return request.auth.token.email; }
+    function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
     match /families/{familyId} {
-      function signedIn() { return request.auth != null && request.auth.token.email_verified; }
-      function isMember() { return signedIn() && request.auth.token.email in resource.data.emails; }
+      function isMember() { return signedIn() && me() in resource.data.emails; }
       // Kid logins (listed in "kids") can sync app data but never change who has access or delete the family
-      function isKid() { return request.auth.token.email in resource.data.get('kids', []); }
+      function isKid() { return me() in resource.data.get('kids', []); }
+      // Every write is signed with the writer's own email and moves the revision forward by one
+      function honest() {
+        return (!changed().hasAny(['updatedBy']) || request.resource.data.updatedBy == me())
+          && (!changed().hasAny(['rev']) || request.resource.data.rev == resource.data.get('rev', 0) + 1);
+      }
       allow read: if isMember();
-      allow update: if isMember() && (!isKid()
-        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['data', 'rev', 'updatedAt', 'updatedBy', 'live']));
+      allow update: if isMember() && honest() && (!isKid()
+        || changed().hasOnly(['data', 'rev', 'updatedAt', 'updatedBy', 'live']));
       allow delete: if isMember() && !isKid();
-      allow create: if signedIn() && request.auth.token.email in request.resource.data.emails;
+      allow create: if signedIn() && me() in request.resource.data.emails
+        && request.resource.data.get('kids', []).size() == 0;
     }
     // Live visits: each person's spot in Dream House or Squishvale, readable by the family
     match /families/{familyId}/live/{memberId} {
-      allow read, write: if request.auth != null
-        && request.auth.token.email_verified
-        && request.auth.token.email in get(/databases/$(database)/documents/families/$(familyId)).data.emails;
+      allow read, write: if signedIn()
+        && me() in get(/databases/$(database)/documents/families/$(familyId)).data.emails;
     }
+    // Friends Circles: only the family that started the circle ("owners") can remove people or change owners.
+    // Other families can add emails (their own partner/kids) but never take anyone off the list.
     match /circles/{circleId} {
-      allow read, update: if request.auth != null
-        && request.auth.token.email_verified
-        && request.auth.token.email in resource.data.emails;
-      allow create: if request.auth != null
-        && request.auth.token.email_verified
-        && request.auth.token.email in request.resource.data.emails;
+      function inCircle() { return signedIn() && me() in resource.data.emails; }
+      function isOwner() { return me() in resource.data.get('owners', []); }
+      allow read: if inCircle();
+      allow update: if inCircle() && (isOwner() || (
+        request.resource.data.emails.hasAll(resource.data.emails)
+        && (!changed().hasAny(['owners']) || !('owners' in resource.data))
+        && !changed().hasAny(['createdAt'])));
+      allow create: if signedIn()
+        && me() in request.resource.data.emails
+        && me() in request.resource.data.get('owners', [me()]);
     }
   }
 }
 ```
+
+What the rules enforce, and what the app checks itself:
+- Only emails on a family's list can read or write it. `updatedBy` must be the writer's own email, and a write may only move `rev` up by exactly one.
+- Kid logins (the `kids` list) can only change the app data (`data`, `rev`, `updatedAt`, `updatedBy`, `live`): never the access list, the kid list, or delete the family. A family can't be created with kids already on it.
+- Friends Circles: only the family that started a circle (`owners`) can take emails off it or change `owners`. Other families can only add emails. Circles made before `owners` existed get it the next time the starting family syncs.
+- Still client-side only: the family data is one JSON blob, so the rules can't see inside it. What a kid may change inside it (Kid Mode only allows their own chores, posts and to-dos), and what one friend family may change inside a circle's data (chat, trades, other families' profiles), is enforced by the app, not by Firebase. Live spots can be written by any family member for any member.
 
 ## Hosting
 The `.github/workflows/pages.yml` workflow deploys the app to GitHub Pages on every push to `main`.

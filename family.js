@@ -75,7 +75,10 @@ function tripStats(t) { const n = t.items.length, d = t.items.filter((i) => i.do
 views.packing = () => {
   const kidId = typeof kidModeId === 'function' ? kidModeId() : '';
   const trips = [...state.trips].sort((a, b) => (a.date || '9999').localeCompare(b.date || '9999'));
-  return `${trips.map((t) => {
+  const sug = kidId ? [] : packSuggestions();
+  return `${sug.length ? `<div class="section-title">Coming up — pack for it?</div><div class="card flush">${sug.map(({ ev, d, tpl }) => `<button class="row tap" style="width:100%;text-align:left" data-action="trip-new" data-ev="${ev.id}" data-d="${d}"><div class="avatar">${esc(tpl ? PACK_TEMPLATES[tpl].emoji : '🧳')}</div><div class="grow"><div class="title">${esc(ev.title)}</div><div class="sub">${fmtDate(d, { weekday: 'short', month: 'short', day: 'numeric' })} · in ${daysBetween(today(), d)} days</div></div><span class="mini-btn">+ List</span></button>`).join('')}</div>` : ''}
+  ${trips.length && sug.length ? '<div class="section-title">Packing lists</div>' : ''}
+  ${trips.map((t) => {
     const items = kidId ? t.items.filter((i) => !i.memberId || i.memberId === kidId) : t.items;
     const d = items.filter((i) => i.done).length;
     const days = t.date ? daysBetween(today(), t.date) : null;
@@ -84,7 +87,7 @@ views.packing = () => {
         <div style="flex:1;min-width:0"><b style="font-size:17px">${esc(t.name)}</b><div class="small muted">${days != null ? (days > 0 ? `in ${days} day${days > 1 ? 's' : ''}` : days === 0 ? 'Today!' : 'Done') + ' · ' : ''}${d}/${items.length} packed</div></div>
         <div class="ring-box">${ring(items.length ? d / items.length : 0, 48, 5, d === items.length && items.length ? 'done' : '')}<span style="font-size:12px;font-weight:800">${items.length ? Math.round((d / items.length) * 100) : 0}%</span></div></div>
     </button>`;
-  }).join('') || `<div class="card empty"><span class="big">🧳</span>${kidId ? 'No trips yet!' : 'Make a packing list for your next trip — with a list for every person.'}</div>`}
+  }).join('') || `<div class="card empty"><span class="big">🧳</span>${kidId ? 'No trips yet!' : `Make a packing list for your next trip — with a list for every person.<br><button class="btn" style="margin-top:12px" data-action="trip-new">Start a packing list</button>`}</div>`}
   ${kidId ? '' : `<button class="fab" data-action="trip-new" aria-label="New trip">${ICON.plus}</button>`}`;
 };
 views.trip = (id) => {
@@ -103,11 +106,27 @@ views.trip = (id) => {
         </div>`;
     }).join('')}`;
 };
-function tripForm(t) {
+// Upcoming events (countdowns or trip-sounding ones) in the next 60 days that don't have a packing list yet.
+const TRIP_WORDS = /\b(trip|vacation|getaway|holiday|cruise|camping|camp|beach|disney|flight|fly|travel|visit|road ?trip|grandma|grandpa|cabin|resort|hotel|weekend away|ski)\b/i;
+function packSuggestions() {
+  const t = today(), out = [];
+  for (const ev of state.events) {
+    if (!ev.countdown && !TRIP_WORDS.test(ev.title)) continue;
+    if (state.trips.some((x) => x.eventId === ev.id || (x.name && norm(x.name) === norm(ev.title)))) continue;
+    const d = typeof nextOccurrence === 'function' ? nextOccurrence(ev, t, 60) : ev.date;
+    if (!d || daysBetween(t, d) > 60) continue;
+    const tpl = Object.keys(PACK_TEMPLATES).find((k) => new RegExp(k === 'grandma' ? 'grand' : k, 'i').test(ev.title));
+    out.push({ ev, d, tpl });
+  }
+  return out.sort((a, b) => a.d.localeCompare(b.d)).slice(0, 3);
+}
+function tripForm(t, fromEv) {
   const isNew = !t;
+  const ev = fromEv && state.events.find((x) => x.id === fromEv.id);
+  const evTpl = ev && Object.keys(PACK_TEMPLATES).find((k) => new RegExp(k === 'grandma' ? 'grand' : k, 'i').test(ev.title));
   openSheet({
     title: isNew ? 'New packing list' : 'Edit trip',
-    values: t ? { ...t, ...Object.fromEntries(state.members.map((m) => ['p_' + m.id, t.people.includes(m.id)])) } : { emoji: '🧳', template: '', ...Object.fromEntries(state.members.map((m) => ['p_' + m.id, true])) },
+    values: t ? { ...t, ...Object.fromEntries(state.members.map((m) => ['p_' + m.id, t.people.includes(m.id)])) } : { emoji: ev ? (evTpl ? PACK_TEMPLATES[evTpl].emoji : '🧳') : '🧳', template: evTpl || '', name: ev?.title || '', date: ev ? fromEv.d : '', ...Object.fromEntries(state.members.map((m) => ['p_' + m.id, ev && eventWho(ev).length ? eventWho(ev).includes(m.id) : true])) },
     fields: [
       ...(isNew ? [{ name: 'template', label: 'Trip type', type: 'select', options: [{ value: '', label: '✏️ Blank list' }, ...Object.entries(PACK_TEMPLATES).map(([k, x]) => ({ value: k, label: `${x.emoji} ${x.name}` }))] }] : []),
       { row: [{ name: 'emoji', label: 'Emoji', placeholder: '🧳' }, { name: 'name', label: 'Trip', placeholder: 'e.g. Disney trip' }] },
@@ -127,7 +146,7 @@ function tripForm(t) {
       const people = state.members.filter((m) => v['p_' + m.id]).map((m) => m.id);
       if (isNew) {
         const x = PACK_TEMPLATES[v.template];
-        const nt = { id: uid(), name: v.name || x?.name || 'Trip', emoji: v.emoji || x?.emoji || '🧳', date: v.date, people, items: [] };
+        const nt = { id: uid(), name: v.name || x?.name || 'Trip', emoji: v.emoji || x?.emoji || '🧳', date: v.date, people, items: [], ...(ev ? { eventId: ev.id } : {}) };
         if (x) {
           for (const s of x.shared) nt.items.push({ id: uid(), text: s, memberId: '', done: false });
           for (const pid of people) for (const s of x.each) nt.items.push({ id: uid(), text: s, memberId: pid, done: false });
@@ -251,11 +270,11 @@ views.subs = () => {
   const hikes = subs.filter((b) => (b.priceHistory || []).length);
   return `
     <div class="card sub-hero">
-      <div class="grid2" style="margin:0"><div><div class="stat-label">Per month</div><div class="stat">${money(mo)}</div></div><div><div class="stat-label">Per year</div><div class="stat">${money(mo * 12, { maximumFractionDigits: 0 })}</div></div></div>
+      <div class="grid2" style="margin:0"><div><div class="stat-label">Per month</div><div class="stat">${moneyW(mo)}</div></div><div><div class="stat-label">Per year</div><div class="stat">${money(mo * 12, { maximumFractionDigits: 0 })}</div></div></div>
       ${flagged.length ? `<div class="allowance" style="margin-top:12px">✂️ Cancelling ${flagged.length} flagged would save <b>${money(sum(flagged, perMonth) * 12, { maximumFractionDigits: 0 })}/year</b></div>` : ''}
     </div>
-    ${streaming.length >= 2 ? `<div class="insight warn" style="max-width:none;margin-bottom:12px"><span class="ii">📺</span><b>${streaming.length} streaming services · ${money(sum(streaming, perMonth))}/mo</b><small>${streaming.map((b) => b.name).join(', ')} — rotate them?</small></div>` : ''}
-    ${hikes.map((b) => { const h = b.priceHistory.at(-1), up = h.to > h.from, diff = Math.abs(h.to - h.from), yr = perMonth({ freq: b.freq, amount: diff }) * 12; return `<div class="insight ${up ? 'bad' : 'good'}" style="max-width:none;margin-bottom:12px"><span class="ii">${up ? '📈' : '📉'}</span><b>${esc(b.name)} went ${up ? 'up' : 'down'} ${money(diff)}</b><small>${money(h.from)} → ${money(h.to)} on ${fmtDate(h.date, { month: 'short', day: 'numeric' })} · ${money(yr)}/yr ${up ? 'more' : 'saved'}</small></div>`; }).join('')}
+    ${streaming.length >= 2 ? `<div class="insight warn" style="max-width:none;margin-bottom:12px"><span class="ii">📺</span><b>${streaming.length} streaming services · ${moneyW(sum(streaming, perMonth))}/mo</b><small>${streaming.map((b) => esc(b.name)).join(', ')} — rotate them?</small></div>` : ''}
+    ${hikes.map((b) => { const h = b.priceHistory.at(-1), up = h.to > h.from, diff = Math.abs(h.to - h.from), yr = perMonth({ freq: b.freq, amount: diff }) * 12; return `<div class="insight ${up ? 'bad' : 'good'}" style="max-width:none;margin-bottom:12px"><span class="ii">${up ? '📈' : '📉'}</span><b>${esc(b.name)} went ${up ? 'up' : 'down'} ${money(diff)}</b><small>${money(h.from)} → ${money(h.to)} on ${fmtDate(h.date, { month: 'short', day: 'numeric' })} · ${moneyW(yr)}/yr ${up ? 'more' : 'saved'}</small></div>`; }).join('')}
     <div class="section-title">All subscriptions</div>
     <div class="card flush">${subs.map((b) => `<div class="row">
       ${letterAvatar(b.name)}
@@ -356,9 +375,9 @@ Object.assign(actions, {
     if (r[me]) delete r[me]; else r[me] = true;
     save(); render();
   },
-  'note-del': (el) => withUndo('Removed from the fridge', () => { state.board = state.board.filter((x) => x.id !== el.dataset.id); }),
+  'note-del': (el) => kidCan(findIn(state.board, el.dataset.id)?.who) && withUndo('Removed from the fridge', () => { state.board = state.board.filter((x) => x.id !== el.dataset.id); }),
   'poll-close': (el) => { const p = findIn(state.board, el.dataset.id); p.closed = !p.closed; save(); render(); },
-  'trip-new': () => tripForm(null),
+  'trip-new': (el) => tripForm(null, el?.dataset?.ev ? { id: el.dataset.ev, d: el.dataset.d } : null),
   'trip-edit': (el) => tripForm(findIn(state.trips, el.dataset.id)),
   'trip-toggle': (el) => {
     const t = findIn(state.trips, el.dataset.t), i = findIn(t.items, el.dataset.id);

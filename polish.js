@@ -167,9 +167,15 @@ sqBook = function (me) {
     return `<button class="book-head${open ? ' open' : ''}" data-action="sq-book" data-k="${k}" aria-expanded="${open}">
         <span class="bh-e">${e}</span><span class="bh-name">${name}<i class="bh-bar"><b style="width:${pct}%"></b></i></span><span class="bh-n">${note}</span><span class="bh-chev">›</span></button>
       ${open ? `${k !== 'ult' && got < all.length ? '<div class="small muted bh-tip">Finish the set for +100 💎</div>' : k === 'ult' ? '<div class="small muted bh-tip">Earn these in 👑 Goals</div>' : ''}
-      <div class="sq-grid book">${all.map((s) => ownsSid(me, s.id) ? sqTile(s.id, '', '', { shiny: shinySids.has(s.id) }) : `<button class="sq-tile missing r-${s.r}" data-action="go" data-to="squishy/${s.id}">${squishySVG(s.id, { cls: 'shadow' })}<span class="sq-name">${s.r === 'U' ? '🔒 ' + esc(s.name) : '???'}</span></button>`).join('')}</div>` : ''}`;
+      <div class="sq-grid book">${all.map((s) => ownsSid(me, s.id) ? sqTile(s.id, '', '', { shiny: shinySids.has(s.id) }) : bookMissing(s, me)).join('')}</div>` : ''}`;
   }).join('') + `<p class="small muted" style="margin:10px 4px">✨ Shinies glow in your book. Every box has a small chance to be shiny!</p>`;
 };
+// A squishy you don't have yet: if it lives in Squishvale's grass where you've been, say where and send you there
+function bookMissing(s, me) {
+  const r = s.r !== 'U' && typeof wildWhere === 'function' ? wildWhere(s.id) : -1, R = r >= 0 ? WREG[r] : null, q = me && state.world?.[me];
+  if (R && q && (q.visited?.[r] || q.ch >= R.ch)) return `<button class="sq-tile missing wild r-${s.r}" data-action="go" data-to="world">${squishySVG(s.id, { cls: 'shadow' })}<span class="sq-name">???</span><span class="sq-wild">Wild in ${esc(R.name)} 🌿 <b>Go</b></span></button>`;
+  return `<button class="sq-tile missing r-${s.r}" data-action="go" data-to="squishy/${s.id}">${squishySVG(s.id, { cls: 'shadow' })}<span class="sq-name">${s.r === 'U' ? '🔒 ' + esc(s.name) : R ? '🌿 ???' : '???'}</span></button>`;
+}
 actions['sq-book'] = (el) => { ui.bookOpen ||= {}; ui.bookOpen[el.dataset.k] = !ui.bookOpen[el.dataset.k]; render(); };
 KID_ACTIONS.add('sq-book');
 

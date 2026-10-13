@@ -81,7 +81,7 @@ views.goal = (id) => {
     <div class="card" style="text-align:center">
       <div class="ring-box big">${ring(pl.pct, 150, 12, pl.pct >= 1 ? 'done' : '')}<span>${esc(g.emoji || '🎯')}<b>${Math.round(pl.pct * 100)}%</b></span></div>
       <div style="font-size:22px;font-weight:750;margin-top:6px">${esc(g.name)}</div>
-      <div class="muted">${money(pl.saved)} of ${money(pl.target)}</div>
+      <div class="muted">${moneyW(pl.saved)} of ${moneyW(pl.target)}</div>
       ${g.deadline ? `<div class="small muted" style="margin-top:4px">Target date ${fmtDate(g.deadline, { month: 'long', day: 'numeric', year: 'numeric' })}</div>` : ''}
     </div>
     ${pl.pct < 1 ? `<div class="grid2">
@@ -322,7 +322,20 @@ function searchResults(q) {
     .sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8)
     .map((t) => row(`data-action="edit-tx" data-id="${t.id}"`, t.type === 'income' ? '💰' : esc(category(t.categoryId).emoji), t.note || category(t.categoryId).name, `${fmtDate(t.date, { month: 'short', day: 'numeric', year: 'numeric' })} · ${category(t.categoryId).name}`, `<span class="amount">${money(t.amount)}</span>`)));
   add('Recurring', state.budget.bills.filter((b) => has(b.name, b.group)).map((b) => row(`data-action="edit-bill" data-id="${b.id}"`, b.type === 'income' ? '💰' : '💳', b.name, scheduleLabel(b), `<span class="amount">${money(b.amount)}</span>`)));
-  add('Calendar', state.events.filter((e) => has(e.title, e.location, e.notes)).slice(0, 8).map((e) => row(`data-action="edit-event" data-id="${e.id}"`, '📅', e.title, `${fmtDate(e.date, { month: 'short', day: 'numeric', year: 'numeric' })}${e.repeat && e.repeat !== 'none' ? ' · repeats' : ''}`)));
+  // Events by their next date (a repeating one shows its next time), upcoming first, then the past (newest first).
+  const t = today();
+  const evs = state.events.filter((e) => has(e.title, e.location, e.notes)).map((e) => {
+    const rep = e.repeat && e.repeat !== 'none';
+    const next = rep ? nextOccurrence(e, t, 800) : e.date >= t ? e.date : null;
+    return { e, rep, d: next || (rep ? (e.until || e.date) : e.date), up: !!next };
+  });
+  const evRow = ({ e, rep, d }) => row(`data-action="edit-event" data-id="${e.id}"${rep && d ? ` data-date="${d}"` : ''}`, rep ? '🔁' : '📅', e.title, `${fmtDate(d, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}${e.time ? ' · ' + fmtTime(e.time) : ''}${rep ? ` · ${REPEAT_LABEL[e.repeat] || 'repeats'}` : ''}`);
+  add('Upcoming', evs.filter((x) => x.up).sort((a, b) => a.d.localeCompare(b.d)).slice(0, 8).map(evRow));
+  add('To-dos', (state.todos || []).filter((x) => has(x.text)).sort((a, b) => (a.done - b.done) || (a.due || '9999').localeCompare(b.due || '9999')).slice(0, 8)
+    .map((x) => row(`data-action="todo-edit" data-id="${x.id}"`, x.done ? '✅' : '☑️', x.text, [x.done ? 'Done' : x.due ? `Due ${fmtDate(x.due, { weekday: 'short', month: 'short', day: 'numeric' })}` : 'To-do', x.for && state.members.some((m) => m.id === x.for) ? member(x.for).name : ''].filter(Boolean).join(' · '))));
+  add('Packing', (state.trips || []).flatMap((tr) => [...(has(tr.name) ? [{ tr }] : []), ...(tr.items || []).filter((i) => has(i.text)).map((i) => ({ tr, i }))]).slice(0, 8)
+    .map(({ tr, i }) => row(`data-action="go" data-to="trip/${tr.id}"`, i ? (i.done ? '✅' : '🧳') : esc(tr.emoji || '🧳'), i ? i.text : tr.name, i ? `${tr.name}${i.memberId && state.members.some((m) => m.id === i.memberId) ? ' · ' + member(i.memberId).name : ''}${i.done ? ' · packed' : ''}` : `Packing list${tr.date ? ' · ' + fmtDate(tr.date, { month: 'short', day: 'numeric' }) : ''}`)));
+  add('Past events', evs.filter((x) => !x.up).sort((a, b) => b.d.localeCompare(a.d)).slice(0, 6).map(evRow));
   add('Shopping', [
     ...state.shop.list.filter((i) => has(i.name, i.qty)).map((i) => row(`data-action="edit-item" data-id="${i.id}"`, i.done ? '✅' : '🛒', i.name, `On the list${i.qty ? ' · ' + i.qty : ''}`)),
     ...state.shop.staples.filter((s) => has(s.name, s.store)).map((s) => row(`data-action="edit-staple" data-id="${s.id}"`, '📦', s.name, `Staple · ${STAPLE_LABEL[s.status]}`)),
@@ -365,12 +378,20 @@ function extraEventsOn(s) {
   for (const g of state.goals) {
     if (g.deadline === s && goalPlan(g).pct < 1) out.push({ kind: 'goal', id: g.id, title: `${g.emoji || '🎯'} ${g.name} goal date`, time: '', color: '#9b51e0', who: EVERYONE });
   }
+  // Dated to-dos: on their due day; still-open overdue ones also show on today.
+  const t = today();
+  for (const x of state.todos || []) {
+    if (!x.due || (x.done && x.due !== s)) continue;
+    if (x.due === s || (s === t && !x.done && x.due < t)) out.push({ kind: 'todo', id: x.id, date: s, title: `✅ ${x.text}`, time: '', color: '#06b6d4', done: !!x.done, overdue: !x.done && x.due < t, who: x.for && state.members.some((m) => m.id === x.for) ? member(x.for) : EVERYONE });
+  }
   return out;
 }
 
 const WHATS_NEW = 'v15';
 function whatsNewCard() {
   if (state.settings.whatsNewSeen === WHATS_NEW) return '';
+  // A brand-new family has nothing to compare against: skip it (saved with their next change).
+  if (state.members.length < 2) { state.settings.whatsNewSeen = WHATS_NEW; return ''; }
   const item = (attrs, emoji, title, text) => `<button class="row tap" style="width:100%;text-align:left;padding:10px 0;background:none" ${attrs}><div class="avatar">${emoji}</div><div class="grow"><div class="title">${title}</div><div class="sub" style="white-space:normal">${text}</div></div>${ICON.chev}</button>`;
   return `<div class="card install-tip">
     <h3>🗺️ New: Squishvale adventure</h3>
@@ -387,6 +408,7 @@ function homeQuickAdd() {
     <button class="chip" data-action="add-tx"><span class="qi">💸</span>Expense</button>
     <button class="chip" data-action="quick-grocery"><span class="qi">🛒</span>Grocery</button>
     <button class="chip" data-action="add-event" data-date="${today()}"><span class="qi">📅</span>Event</button>
+    <button class="chip" data-action="todo-new"><span class="qi">✅</span>To-do</button>
     <button class="chip" data-action="add-chore"><span class="qi">🧹</span>Chore</button>
   </div>`;
 }
@@ -682,43 +704,127 @@ function parseWhen(text) {
   return { date, time, rest: t.replace(/\s+/g, ' ').trim() };
 }
 
-function parseMagic(raw) {
-  const text = String(raw || '').trim();
-  if (!text) return null;
-  const low = norm(text);
-  // Chore
+// Category from the words alone (null when nothing matches, unlike guessCategory's "Other" fallback).
+function hintCategory(text) {
+  const n = norm(text);
+  for (const [re, key] of CATEGORY_HINTS) if (re.test(n)) { const c = state.budget.categories.find((c) => norm(c.name).includes(key)); if (c) return c; }
+  const past = state.budget.transactions.find((t) => t.note && norm(t.note) === n);
+  return past ? category(past.categoryId) : null;
+}
+// A family member's name as the first or last word: "Sofia dentist Fri 3pm", "pick up cake for Leo".
+function magicWho(text) {
+  const words = text.trim().split(/\s+/);
+  if (words.length < 2 || !state.members.length) return { text, memberId: '' };
+  const hit = (w) => state.members.find((m) => norm(m.name) === norm(w.replace(/[,.:;!?]+$/, '').replace(/['’]s$/i, '')));
+  let m = hit(words[0]);
+  if (m) return { text: words.slice(1).join(' ').replace(/^(?:needs? to|has to|should|to)\s+/i, ''), memberId: m.id };
+  m = hit(words.at(-1));
+  if (m) return { text: words.slice(0, -1).join(' ').replace(/\s+(?:for|with|by|to)$/i, ''), memberId: m.id };
+  return { text, memberId: '' };
+}
+// "every Monday", "daily", "weekly", "monthly" → a repeat; the weekday stays in the text so it sets the start day.
+function magicRepeat(text) {
+  let repeat = '', wd = false;
+  const t = text.replace(/\bevery\s+other\s+(?=(?:sun|mon|tue|wed|thu|fri|sat)[a-z]*\b)/i, () => { repeat = 'biweekly'; wd = true; return ''; })
+    .replace(/\bevery\s+(?=(?:sun|mon|tue|wed|thu|fri|sat)[a-z]*\b)/i, () => { repeat ||= 'weekly'; wd = true; return ''; })
+    .replace(/\b(?:every\s*day|each\s+day|daily)\b/i, () => { repeat ||= 'daily'; return ''; })
+    .replace(/\b(?:every\s+other\s+week|biweekly|every\s+2\s+weeks)\b/i, () => { repeat ||= 'biweekly'; return ''; })
+    .replace(/\b(?:every\s+week|each\s+week|weekly)\b/i, () => { repeat ||= 'weekly'; return ''; })
+    .replace(/\b(?:every\s+month|each\s+month|monthly)\b/i, () => { repeat ||= 'monthly'; return ''; })
+    .replace(/\b(?:every\s+year|yearly|annually)\b/i, () => { repeat ||= 'yearly'; return ''; })
+    .replace(/\s+/g, ' ').trim();
+  return { text: t, repeat, wd };
+}
+const REPEAT_LABEL = { daily: 'every day', weekly: 'every week', biweekly: 'every 2 weeks', monthly: 'every month', yearly: 'every year' };
+const MAGIC_KINDS = { event: '📅 Event', todo: '✅ To-do', tx: '💸 Expense', shop: '🛒 List', chore: '🧹 Chore' };
+// Dates, times, repeats and names pulled out of a phrase (for events and to-dos).
+function magicWhen(text, memberId = '') {
+  const rp = magicRepeat(text);
+  const when = parseWhen(rp.text);
+  // "every Tuesday" said on a Tuesday starts today, not next week.
+  if (rp.wd && when.date === addDays(today(), 7)) when.date = today();
+  if (rp.repeat && !when.date) when.date = today();
+  return { ...when, repeat: rp.repeat, memberId };
+}
+const whoLabel = (id) => (id ? `${member(id).emoji} ${member(id).name}` : '');
+function magicEvent(text, memberId) {
+  const w = magicWhen(text, memberId);
+  const title = cap((w.rest || text).replace(/^(add|schedule)\s+/i, ''));
+  const date = w.date || today();
+  return { kind: 'event', title, date, time: w.time, repeat: w.repeat || 'none', memberId, label: w.date ? '📅 Calendar event' : '📅 Calendar event (today)',
+    detail: [`${fmtDate(date, { weekday: 'long', month: 'short', day: 'numeric' })}${w.time ? ' · ' + fmtTime(w.time) : ''}`, w.repeat ? `🔁 ${REPEAT_LABEL[w.repeat]}` : '', whoLabel(memberId)].filter(Boolean).join(' · ') };
+}
+function magicTodo(text, memberId) {
+  const w = magicWhen(text, memberId);
+  const repeat = ['daily', 'weekly', 'monthly'].includes(w.repeat) ? w.repeat : w.repeat === 'biweekly' ? 'weekly' : '';
+  const title = cap((w.rest || text).trim());
+  return { kind: 'todo', title, due: w.date || '', repeat, memberId, label: '✅ To-do',
+    detail: [w.date ? `due ${fmtDate(w.date, { weekday: 'short', month: 'short', day: 'numeric' })}` : 'no due date', repeat ? `🔁 ${REPEAT_LABEL[repeat]}` : '', whoLabel(memberId)].filter(Boolean).join(' · ') };
+}
+function magicTx(text, m, memberId = '') {
+  m ||= text.match(/\$\s?(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d+(?:[.,]\d{1,2})?)/) || text.match(/(?:^|\s)(\d+(?:[.,]\d{1,2})?)(?:\s|$)/);
+  const amount = !m ? 0 : /,\d{3}/.test(m[1]) ? parseFloat(m[1].replace(/,/g, '')) : parseFloat(m[1].replace(',', '.'));
+  const income = /\b(income|paycheck|got paid|earned|refund|deposit|sold)\b/i.test(text);
+  let note = (m ? text.replace(m[0], ' ') : text).replace(/^\s*(spent|paid|income|got paid|earned)\b/i, ' ').replace(/\b(for|on|at)\s*$/i, '').replace(/^\s*(for|on|at)\b/i, '').replace(/\s+/g, ' ').trim();
+  const when = parseWhen(note);
+  note = when.rest.replace(/^(for|on|at)\s+/i, '');
+  const cat = income ? null : guessCategory(note || text);
+  const date = when.date && when.date <= today() ? when.date : (when.date === addDays(today(), -1) ? when.date : today());
+  const yest = /\byesterday\b/i.test(text);
+  const clean = cap(note.replace(/\byesterday\b/i, '').trim());
+  return { kind: 'tx', type: income ? 'income' : 'expense', amount, note: clean, categoryId: cat?.id || '', date: yest ? addDays(today(), -1) : date, memberId,
+    label: !amount ? '💸 Expense · add an amount' : income ? `💰 Income · ${money(amount)}` : `💸 Expense · ${money(amount)}`, detail: [clean, cat ? `${cat.emoji} ${cat.name}` : '', yest ? 'Yesterday' : '', whoLabel(memberId)].filter(Boolean).join(' · ') };
+}
+function magicShop(text) {
+  const m = text.match(/^(buy|need|get|grab|add)\s+(.+)$/i);
+  const items = (m ? m[2] : text).split(/,|\band\b/).map((x) => x.trim()).filter(Boolean);
+  return { kind: 'shop', items, label: `🛒 Shopping list${items.length > 1 ? ` · ${items.length} items` : ''}`, detail: items.join(', ') };
+}
+
+function magicGuess(text, memberId) {
+  // Chore / to-do prefixes
   let m = text.match(/^chore[:\s]+(.+)$/i);
-  if (m) return { kind: 'chore', title: m[1].trim(), label: '🧹 New chore', detail: m[1].trim() };
+  if (m) return { kind: 'chore', title: m[1].trim(), memberId, label: '🧹 New chore', detail: [m[1].trim(), whoLabel(memberId)].filter(Boolean).join(' · ') };
+  m = text.match(/^(?:to-?\s?do|task)\s*[:\s]\s*(.+)$/i) || text.match(/^remind me to\s+(.+)$/i);
+  if (m) return magicTodo(m[1], memberId);
+  if (/^(call|pick up|drop off)\s+\S/i.test(text)) {
+    // "pick up milk" where every item is a staple is still shopping
+    const rest = text.replace(/^pick up\s+/i, '');
+    if (/^pick up/i.test(text) && rest.split(/,|\band\b/).every((x) => stapleByName(x.trim()))) return magicShop(rest);
+    return magicTodo(text, memberId);
+  }
   // Money: "$45 costco", "costco 45.20", "paid 30 for pizza", "income 500 side job"
   m = text.match(/\$\s?(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d+(?:[.,]\d{1,2})?)/) || text.match(/(?:^|\s)(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?)(?:\s|$)/) || text.match(/(?:^|\s)(\d+\.\d{2})(?:\s|$)/) || (/^(spent|paid|income|got paid|earned)\b/i.test(text) && text.match(/(?:^|\s)(\d+(?:\.\d{1,2})?)(?:\s|$)/));
-  if (m) {
-    const amount = /,\d{3}/.test(m[1]) ? parseFloat(m[1].replace(/,/g, '')) : parseFloat(m[1].replace(',', '.'));
-    const income = /\b(income|paycheck|got paid|earned|refund|deposit|sold)\b/i.test(text);
-    let note = text.replace(m[0], ' ').replace(/^\s*(spent|paid|income|got paid|earned)\b/i, ' ').replace(/\b(for|on|at)\s*$/i, '').replace(/^\s*(for|on|at)\b/i, '').replace(/\s+/g, ' ').trim();
-    const when = parseWhen(note);
-    note = when.rest.replace(/^(for|on|at)\s+/i, '');
-    const cat = income ? null : guessCategory(note || text);
-    const date = when.date && when.date <= today() ? when.date : (when.date === addDays(today(), -1) ? when.date : today());
-    const yest = /\byesterday\b/i.test(text);
-    return { kind: 'tx', type: income ? 'income' : 'expense', amount, note: cap(note.replace(/\byesterday\b/i, '').trim()), categoryId: cat?.id || '', date: yest ? addDays(today(), -1) : date,
-      label: income ? `💰 Income · ${money(amount)}` : `💸 Expense · ${money(amount)}`, detail: [cap(note.replace(/\byesterday\b/i, '').trim()), cat ? `${cat.emoji} ${cat.name}` : '', yest ? 'Yesterday' : ''].filter(Boolean).join(' · ') };
+  if (m) return magicTx(text, m, memberId);
+  // A bare amount next to a store or spending word: "Target 25", "Uber 18", "45 gas"
+  const bare = parseWhen(text).rest.match(/(?:^|\s)(\d+(?:\.\d{1,2})?)(?:\s|$)/);
+  if (bare && +bare[1] > 0) {
+    const words = parseWhen(text).rest.replace(bare[0], ' ').replace(/\s+/g, ' ').trim();
+    if (words && words.split(' ').length <= 3 && hintCategory(words)) return magicTx(text, text.match(new RegExp(`(?:^|\\s)(${bare[1].replace('.', '\\.')})(?:\\s|$)`)), memberId);
   }
-  // Event: has a date or time
-  const when = parseWhen(text);
-  if (when.date && when.rest) {
-    return { kind: 'event', title: cap(when.rest.replace(/^(add|schedule|remind me( to)?)\s+/i, '')), date: when.date, time: when.time,
-      label: '📅 Calendar event', detail: `${fmtDate(when.date, { weekday: 'long', month: 'short', day: 'numeric' })}${when.time ? ' · ' + fmtTime(when.time) : ''}` };
+  // Event: has a date, time or repeat
+  const w = magicWhen(text);
+  if (w.date && w.rest) return magicEvent(text.replace(/^(?:add|schedule)\s+/i, ''), memberId);
+  // Shopping: "buy …", "need …", "get …", or a comma list; a word or three is probably groceries
+  if (/^(buy|need|get|grab|add)\s+/i.test(text) || text.includes(',') || norm(text).split(' ').length <= 3) return magicShop(text);
+  const r = magicEvent(text, memberId);
+  return { ...r, detail: memberId ? r.detail : 'Add a day or time to schedule it, e.g. “Friday 3pm”' };
+}
+
+// kind: force a type (the chips under the preview) instead of guessing.
+function parseMagic(raw, kind) {
+  const text = String(raw || '').trim();
+  if (!text) return null;
+  const who = magicWho(text);
+  let r;
+  if (kind && MAGIC_KINDS[kind]) {
+    r = kind === 'event' ? magicEvent(who.text, who.memberId) : kind === 'todo' ? magicTodo(who.text, who.memberId) : kind === 'tx' ? magicTx(text) : kind === 'shop' ? magicShop(text)
+      : { kind: 'chore', title: cap(who.text.replace(/^chore[:\s]+/i, '')), memberId: who.memberId, label: '🧹 New chore', detail: [cap(who.text), whoLabel(who.memberId)].filter(Boolean).join(' · ') };
+  } else {
+    r = magicGuess(who.text, who.memberId);
+    if (r.kind === 'shop' && who.memberId) r = magicGuess(text, ''); // names don't go on the grocery list
   }
-  // Shopping: "buy …", "need …", "get …", or a comma list
-  m = text.match(/^(buy|need|get|pick up|grab|add)\s+(.+)$/i);
-  const listText = m ? m[2] : (text.includes(',') ? text : null);
-  if (listText) {
-    const items = listText.split(/,|\band\b/).map((x) => x.trim()).filter(Boolean);
-    return { kind: 'shop', items, label: `🛒 Shopping list · ${items.length} item${items.length > 1 ? 's' : ''}`, detail: items.join(', ') };
-  }
-  // A single word or two that matches a staple → shopping
-  if (low.split(' ').length <= 3) return { kind: 'shop', items: [text], label: '🛒 Shopping list', detail: text };
-  return { kind: 'event', title: cap(text), date: today(), time: '', label: '📅 Calendar event (today)', detail: 'Add a day or time to schedule it, e.g. “Friday 3pm”' };
+  return r;
 }
 
 function magicPreview(r) {
@@ -727,13 +833,20 @@ function magicPreview(r) {
       <button type="button" class="chip" data-action="magic-example">$42 Costco</button>
       <button type="button" class="chip" data-action="magic-example">Dentist Friday 3pm</button>
       <button type="button" class="chip" data-action="magic-example">milk, eggs, bread</button>
-      <button type="button" class="chip" data-action="magic-example">chore: take out trash</button>
-      <button type="button" class="chip" data-action="magic-example">paid 18.50 for pizza yesterday</button>
+      <button type="button" class="chip" data-action="magic-example">remind me to call the bank tomorrow</button>
+      <button type="button" class="chip" data-action="magic-example">soccer every Tuesday 5pm Leo</button>
+      <button type="button" class="chip" data-action="magic-example">Uber 18</button>
     </div>`;
-  return `<div class="magic-card"><div class="magic-label">${esc(r.label)}</div>${r.detail ? `<div class="magic-detail">${esc(r.detail)}</div>` : ''}<div class="small muted" style="margin-top:6px">Tap <b>Add</b> to save — you can edit it anytime.</div></div>`;
+  return `<div class="magic-card"><div class="magic-label">${esc(r.label)}</div>${r.detail ? `<div class="magic-detail">${esc(r.detail)}</div>` : ''}
+    <div class="chips magic-kinds" role="group" aria-label="Add it as">${Object.entries(MAGIC_KINDS).map(([k, l]) => `<button type="button" class="chip${r.kind === k ? ' on' : ''}" data-action="magic-kind" data-kind="${k}" aria-pressed="${r.kind === k}">${l}</button>`).join('')}</div>
+    <div class="small muted" style="margin-top:6px">Not right? Tap a type above. <b>Add</b> saves it — you can edit it anytime.</div></div>`;
 }
+let magicKind = '';
+const magicNow = (q) => parseMagic(q, magicKind);
+function magicRefresh() { const input = $('#sheetForm [name="q"]'); if (input && $('#magicPreview')) $('#magicPreview').innerHTML = magicPreview(magicNow(input.value)); }
 
 function openMagic() {
+  magicKind = '';
   openSheet({
     title: '✨ Magic Add',
     saveLabel: 'Add',
@@ -742,21 +855,26 @@ function openMagic() {
       { name: 'q', label: 'What do you want to add?', placeholder: 'Type anything…' },
       { type: 'html', html: `<div id="magicPreview">${magicPreview(null)}</div>` },
     ],
-    onInput(form, e) { if (e.target.name === 'q') $('#magicPreview').innerHTML = magicPreview(parseMagic(e.target.value)); },
+    onInput(form, e) { if (e.target.name === 'q') { if (!e.target.value.trim()) magicKind = ''; $('#magicPreview').innerHTML = magicPreview(magicNow(e.target.value)); } },
     onSave(v) {
-      const r = parseMagic(v.q);
+      const r = magicNow(v.q);
+      magicKind = '';
       if (!r) { toast('Type something to add'); return false; }
       if (r.kind === 'tx') {
-        state.budget.transactions.push({ id: uid(), created: Date.now(), type: r.type, amount: r.amount, note: r.note, categoryId: r.categoryId, date: r.date, memberId: '' });
+        if (!r.amount) { toast('Add an amount, e.g. “$20 Target”'); return false; }
+        state.budget.transactions.push({ id: uid(), created: Date.now(), type: r.type, amount: r.amount, note: r.note, categoryId: r.categoryId, date: r.date, memberId: r.memberId || '' });
         toast(`${r.type === 'income' ? '💰' : '💸'} ${money(r.amount)} logged${r.categoryId ? ' to ' + category(r.categoryId).name : ''}`);
       } else if (r.kind === 'event') {
-        state.events.push({ id: uid(), title: r.title, date: r.date, time: r.time, repeat: 'none', memberId: '' });
-        toast(`📅 ${r.title} · ${fmtDate(r.date)}`);
+        state.events.push({ id: uid(), title: r.title, date: r.date, time: r.time, repeat: r.repeat || 'none', memberId: r.memberId || '' });
+        toast(`📅 ${r.title} · ${fmtDate(r.date)}${r.repeat && r.repeat !== 'none' ? ' · repeats' : ''}`);
+      } else if (r.kind === 'todo') {
+        state.todos.push({ id: uid(), at: Date.now(), by: (typeof actor === 'function' && actor()) || '', text: r.title, for: r.memberId || '', due: r.due, repeat: r.repeat || '', claimedBy: r.memberId || '', done: false });
+        toast(`✅ To-do added${r.due ? ' · due ' + fmtDate(r.due) : ''}`);
       } else if (r.kind === 'shop') {
         const n = r.items.filter((x) => addToList(x, '', true)).length;
         toast(n ? `🛒 Added ${n} to the list` : 'Already on the list');
       } else if (r.kind === 'chore') {
-        state.chores.push({ id: uid(), title: cap(r.title), memberId: '', freq: 'once', points: 1, log: [] });
+        state.chores.push({ id: uid(), title: cap(r.title), memberId: r.memberId || '', freq: 'once', points: 1, log: [] });
         toast(`🧹 Chore added: ${cap(r.title)}`);
       }
     },
@@ -770,9 +888,11 @@ Object.assign(actions, {
   'magic-example': (el) => {
     const input = $('#sheetForm [name="q"]');
     input.value = el.textContent;
-    $('#magicPreview').innerHTML = magicPreview(parseMagic(input.value));
+    magicKind = '';
+    magicRefresh();
     input.focus();
   },
+  'magic-kind': (el) => { magicKind = el.dataset.kind; magicRefresh(); },
 });
 
 /* =========================================================

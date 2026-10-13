@@ -89,13 +89,15 @@ function activityRow(a) {
   </button>`;
 }
 views.activity = () => {
-  const list = state.activity || [];
+  const all = state.activity || [], shown = ui.actN || 60, list = all.slice(0, shown); // newest 60, more on request
   const byDay = {};
   for (const a of list) (byDay[iso(new Date(a.at))] ||= []).push(a);
   return `${!meId() && state.members.length > 1 ? whoAmICard() : ''}
     ${Object.entries(byDay).map(([d, xs]) => `<div class="section-title">${d === today() ? 'Today' : d === addDays(today(), -1) ? 'Yesterday' : fmtDate(d, { weekday: 'long', month: 'short', day: 'numeric' })}</div>
-    <div class="card flush">${xs.map(activityRow).join('')}</div>`).join('') || `<div class="card empty"><span class="big">📰</span>Everything the family does shows up here — groceries added, bills paid, chores done.</div>`}`;
+    <div class="card flush">${xs.map(activityRow).join('')}</div>`).join('') || `<div class="card empty"><span class="big">📰</span>Everything the family does shows up here — groceries added, bills paid, chores done.</div>`}
+    ${all.length > shown ? '<button class="btn secondary block" data-action="act-more">Show more</button>' : ''}`;
 };
+actions['act-more'] = () => { ui.actN = (ui.actN || 60) + 60; render(); };
 function whoAmICard() {
   return `<div class="card whoami"><h3>👋 Who's using this phone?</h3>
     <div class="whoami-row">${state.members.map((m) => `<button data-action="set-me" data-id="${m.id}">${avatar(m)}<span>${esc(m.name)}</span></button>`).join('')}</div>
@@ -205,44 +207,179 @@ function forecastCard() {
    4 · Chore rewards store
    ========================================================= */
 const STARTER_REWARDS = [['📱', '30 min screen time', 10], ['🍽️', 'Pick tonight’s dinner', 15], ['🌙', 'Stay up 30 min late', 20], ['🍦', 'Ice cream trip', 25], ['🎬', 'Choose movie night', 15], ['💵', '$5 allowance', 30]];
-function pointsEarned(id) { let n = 0; for (const c of state.chores) for (const l of c.log || []) if (l.memberId === id) n += Number(c.points) || 1; return n; }
+// One reward currency for the whole family: chore ⭐ stars (Gems 💎 are play money, the piggy bank is real money).
+const starsTxt = (n) => `${n} star${n === 1 ? '' : 's'}`;
+// A kid's tick that is waiting for a grown-up's OK earns nothing yet (points, gems, streaks, badges).
+const logOk = (l) => !!l && l.status !== 'pending';
+function pointsEarned(id) { let n = 0; for (const c of state.chores) for (const l of c.log || []) if (l.memberId === id && logOk(l)) n += Number(c.points) || 1; return n; }
 function pointsSpent(id) { return sum((state.redemptions || []).filter((r) => r.memberId === id && r.status !== 'denied'), (r) => r.cost); }
 const pointsBalance = (id) => pointsEarned(id) - pointsSpent(id);
+// Rewards can be just for some kids (forIds) and cost a different amount per kid (costs[id]).
+const rewardFor = (r, id) => !id || !Array.isArray(r.forIds) || !r.forIds.length || r.forIds.includes(id);
+const rewardCost = (r, id) => Math.max(1, Math.round(Number(r.costs?.[id]) || Number(r.cost) || 1));
+const rewardsFor = (id) => state.rewards.filter((r) => rewardFor(r, id)).sort((a, b) => rewardCost(a, id) - rewardCost(b, id));
+
+/* ---------- Chore pictures ---------- */
+const CHORE_EMOJI = [[/trash|garbage|recycl|\bbins?\b/, '🗑️'], [/\bdogs?\b|puppy/, '🐶'], [/\bcats?\b|litter|kitty/, '🐱'], [/fish/, '🐠'], [/dish|plate|table/, '🍽️'], [/\bbed\b/, '🛏️'], [/laundry|clothes|fold|hamper|sock/, '🧺'], [/room|toys?\b|tidy/, '🧸'], [/plant|garden|flower/, '🪴'], [/homework|reading|study|practice|piano/, '📚'], [/teeth|tooth|floss/, '🪥'], [/vacuum|sweep|mop|floor|dust/, '🧹'], [/\bcar\b/, '🚗'], [/bath|shower/, '🛁'], [/lawn|mow|leaves|rake|yard/, '🍂'], [/cook|dinner|lunch|breakfast|snack/, '🍳'], [/feed|pet\b/, '🥣'], [/shoe|backpack|coat/, '🎒']];
+function choreEmojiFor(title) { const t = norm(title); for (const [re, e] of CHORE_EMOJI) if (re.test(t)) return e; return '🧹'; }
+const choreEmoji = (c) => c.emoji || choreEmojiFor(c.title);
+const CHORE_PICKS = ['🗑️', '🐶', '🍽️', '🛏️', '🧺', '🧸', '🪴', '📚', '🪥', '🧹', '🐱', '🚗', '🍳', '🛁', '🍂', '🎒'];
+// This period's check-offs (today / this week / ever, by how often it repeats)
+const choreFrom = (c, t = today()) => (c.freq === 'daily' ? t : c.freq === 'weekly' ? weekStart(t) : '0000');
+const choreNow = (c) => (c.log || []).filter((l) => l.date >= choreFrom(c) && l.date <= today());
+
+/* ---------- Starter chores by age ---------- */
+const STARTER_CHORES = {
+  '4-6': [['🧸', 'Pick up toys', 'daily', 1], ['🛏️', 'Make bed', 'daily', 1], ['🍽️', 'Clear your plate', 'daily', 1], ['🧺', 'Clothes in the hamper', 'daily', 1], ['🐶', 'Feed the pet', 'daily', 1], ['🪥', 'Brush teeth', 'daily', 1]],
+  '7-10': [['🛏️', 'Make bed', 'daily', 1], ['🍽️', 'Set the table', 'daily', 1], ['🐶', 'Feed the dog', 'daily', 1], ['📚', 'Homework done', 'daily', 2], ['🧺', 'Fold laundry', 'weekly', 2], ['🪴', 'Water the plants', 'weekly', 2], ['🧸', 'Tidy your room', 'weekly', 2]],
+  '11+': [['🗑️', 'Take out the trash', 'weekly', 3], ['🍽️', 'Load the dishwasher', 'daily', 2], ['🧺', 'Do your own laundry', 'weekly', 3], ['🧹', 'Vacuum the living room', 'weekly', 3], ['🐶', 'Walk the dog', 'daily', 2], ['🧸', 'Clean your room', 'weekly', 3], ['🍳', 'Help make dinner', 'weekly', 3]],
+};
+const AGE_BANDS = [['4-6', '🧒 Ages 4–6'], ['7-10', '👧 Ages 7–10'], ['11+', '🧑 Ages 11+']];
+function starterChoresSheet(kidId) {
+  const ks = typeof kids === 'function' && kids().length ? kids() : state.members;
+  if (!ks.length) { toast('Add family members first (Settings)'); return; }
+  const k0 = ks.find((k) => k.id === kidId) || ks[0];
+  const band = k0.ageBand || (k0.simple ? '4-6' : '7-10');
+  const list = (b) => STARTER_CHORES[b].map(([e, t, f, p], i) => `<label class="toggle-row starter-row"><span><span class="chore-pic sm">${e}</span> ${esc(t)} <small class="muted">${FREQ_LABEL[f]} · ⭐ ${p}</small></span><input type="checkbox" name="st_${i}" checked></label>`).join('');
+  openSheet({
+    title: '🧹 Starter chores',
+    saveLabel: 'Add chores',
+    values: { kid: k0.id, band },
+    fields: [
+      { row: [{ name: 'kid', label: 'For', type: 'select', options: ks.map((m) => ({ value: m.id, label: `${m.emoji} ${m.name}` })) }, { name: 'band', label: 'Age', type: 'select', options: AGE_BANDS.map(([value, label]) => ({ value, label })) }] },
+      { type: 'html', html: `<div id="starterList">${list(band)}</div><p class="small muted" style="margin:6px 4px 0">Untick any you don’t want. You can edit them later.</p>` },
+    ],
+    onInput(form, e) { if (e.target.name === 'band') $('#starterList').innerHTML = list(e.target.value); },
+    onSave(v) {
+      const form = $('#sheetForm'), have = new Set(state.chores.filter((c) => c.memberId === v.kid).map((c) => norm(c.title)));
+      let n = 0;
+      STARTER_CHORES[v.band].forEach(([emoji, title, freq, points], i) => {
+        if (!form.elements['st_' + i]?.checked || have.has(norm(title))) return;
+        state.chores.push({ id: uid(), title, emoji, memberId: v.kid, freq, points, log: [] }); n++;
+      });
+      const m = state.members.find((x) => x.id === v.kid); if (m) m.ageBand = v.band;
+      toast(n ? `🧹 Added ${n} chore${n > 1 ? 's' : ''} for ${whoName(v.kid)}` : 'Nothing new to add');
+    },
+  });
+}
+
+/* ---------- Weekly goals (each kid against their own goal, not each other) ---------- */
+function weekStars(id, from = weekStart(today())) {
+  const to = addDays(from, 7);
+  let n = 0;
+  for (const c of state.chores) for (const l of c.log || []) if (l.memberId === id && logOk(l) && l.date >= from && l.date < to) n += Number(c.points) || 1;
+  return n;
+}
+function weekGoal(id) {
+  const m = state.members.find((x) => x.id === id);
+  if (Number(m?.weeklyGoal) > 0) return Math.round(m.weeklyGoal);
+  return Math.max(5, sum(state.chores.filter((c) => c.memberId === id && c.freq !== 'once'), (c) => (Number(c.points) || 1) * (c.freq === 'daily' ? 7 : 1)));
+}
+// Stars per finished week (oldest first), not counting this week
+function weekHistory(id) {
+  const wk = {}, cur = weekStart(today());
+  for (const c of state.chores) for (const l of c.log || []) if (l.memberId === id && logOk(l) && l.date) { const w = weekStart(l.date); if (w < cur) wk[w] = (wk[w] || 0) + (Number(c.points) || 1); }
+  return Object.entries(wk).sort((a, b) => a[0].localeCompare(b[0])).map(([, n]) => n);
+}
+const bestWeek = (id) => Math.max(0, ...weekHistory(id));
+// "Champion": beat your own best week (this week counts as soon as it goes past it)
+function beatOwnBest(id) {
+  const h = [...weekHistory(id), weekStars(id)];
+  let best = 0;
+  for (let i = 0; i < h.length; i++) { if (i > 0 && best > 0 && h[i] > best) return true; best = Math.max(best, h[i]); }
+  return false;
+}
+function goalsBoard() {
+  const ks = typeof kids === 'function' ? kids() : [];
+  if (!ks.length) return '';
+  return `<div class="section-title">This week’s goals</div><div class="card flush">${ks.map((k) => {
+    const got = weekStars(k.id), goal = weekGoal(k.id), best = bestWeek(k.id), st = typeof choreStreak === 'function' ? choreStreak(k.id) : 0;
+    return `<div class="row goal-row">${avatar(k)}<div class="grow"><div class="title">${esc(k.name)} <span class="small muted">⭐ ${got} / ${goal}</span></div>
+      <div class="bar"><i style="width:${Math.min(100, (got / goal) * 100)}%;background:${k.color}"></i></div>
+      <div class="sub">${got >= goal ? '🎉 Goal reached!' : `${goal - got} to go`}${best ? ` · best week ⭐ ${best}` : ''}${st >= 2 ? ` · 🔥 ${st} days` : ''}</div></div>
+      <button class="mini-btn" data-action="kid-settings" data-id="${k.id}">Goal</button></div>`;
+  }).join('')}</div><p class="small muted" style="margin:6px 4px 0">Each kid works toward their own goal — no ranking against siblings. Set it in Kid settings.</p>`;
+}
+
+/* ---------- Parent chores screen: the list first, then the goals ---------- */
+function choreRowP(c) {
+  const isDone = choreDone(c), m = c.memberId ? member(c.memberId) : null, now = choreNow(c);
+  const last = now.at(-1), by = isDone && last?.memberId && state.members.some((x) => x.id === last.memberId) ? member(last.memberId) : null;
+  const wait = now.some((l) => l.status === 'pending');
+  return `<div class="row chore-row${isDone ? ' done' : ''}">
+    <button class="check${isDone ? ' on' : ''}" data-action="toggle-chore" data-id="${c.id}" aria-label="Done">${ICON.check}</button>
+    <span class="chore-pic" aria-hidden="true">${esc(choreEmoji(c))}</span>
+    <button class="grow" style="text-align:left" data-action="edit-chore" data-id="${c.id}">
+      <div class="title">${esc(c.title)}</div>
+      <div class="sub">${FREQ_LABEL[c.freq] || ''} · ⭐ ${c.points || 1}${wait ? ' · ⏳ needs your OK' : by ? ` · done by ${esc(by.name)}` : ''}</div>
+    </button>
+    ${by ? avatar(by, true) : m ? avatar(m, true) : '<span class="pill">Anyone</span>'}
+  </div>`;
+}
+function choresParent() {
+  const todo = state.chores.filter((c) => !choreDone(c)), done = state.chores.filter((c) => choreDone(c));
+  return `${typeof approvalCard === 'function' ? approvalCard() : ''}
+    <div class="section-title">To do${state.chores.length ? '<button data-action="chore-starters">+ Starter chores</button>' : ''}</div>
+    <div class="card flush">${todo.map(choreRowP).join('') || (state.chores.length ? '<div class="empty"><span class="big">✨</span>All done! Nice work, team.</div>'
+      : '<div class="empty"><span class="big">✨</span>Add chores and assign them to family members. Each one earns ⭐ stars.<br><button class="btn" style="margin-top:12px" data-action="chore-starters">Starter chores by age</button></div>')}</div>
+    ${done.length ? `<div class="section-title">Done</div><div class="card flush">${done.map(choreRowP).join('')}</div>` : ''}
+    ${goalsBoard()}
+    <button class="fab" data-action="add-chore" aria-label="Add chore">${ICON.plus}</button>`;
+}
 
 function rewardsView() {
   const pending = (state.redemptions || []).filter((r) => r.status === 'pending');
   const recent = (state.redemptions || []).filter((r) => r.status !== 'pending').slice(-5).reverse();
+  const ks = typeof kids === 'function' && kids().length ? kids() : state.members;
+  const forTag = (r) => (Array.isArray(r.forIds) && r.forIds.length ? `<small class="r-for">${r.forIds.filter((id) => state.members.some((m) => m.id === id)).map((id) => esc(member(id).name)).join(' & ')} only</small>` : '');
+  const costTxt = (r) => { const cs = [...new Set(ks.filter((k) => rewardFor(r, k.id)).map((k) => rewardCost(r, k.id)))].sort((a, b) => a - b); return cs.length > 1 ? `⭐ ${cs[0]}–${cs.at(-1)}` : `⭐ ${cs[0] ?? r.cost}`; };
   return `
-    <div class="wallets">${state.members.map((m) => `<div class="wallet" style="--c:${m.color}">${avatar(m)}<b>${pointsBalance(m.id)}</b><span>${esc(m.name)}</span></div>`).join('')}</div>
+    <div class="wallets">${ks.map((m) => `<div class="wallet" style="--c:${m.color}">${avatar(m)}<b>⭐ ${pointsBalance(m.id)}</b><span>${esc(m.name)}</span></div>`).join('')}</div>
     ${pending.length ? `<div class="section-title">Waiting for a grown-up</div><div class="card flush">${pending.map((r) => {
       const rw = state.rewards.find((x) => x.id === r.rewardId);
-      return `<div class="row">${avatar(member(r.memberId), true)}<div class="grow"><div class="title">${esc(rw?.emoji || '🎟️')} ${esc(rw?.name || 'Reward')}</div><div class="sub">${esc(whoName(r.memberId))} · ${r.cost} pts</div></div>
+      return `<div class="row">${avatar(member(r.memberId), true)}<div class="grow"><div class="title">${esc(rw?.emoji || '🎟️')} ${esc(rw?.name || 'Reward')}</div><div class="sub">${esc(whoName(r.memberId))} · ⭐ ${r.cost}</div></div>
         <button class="mini-btn" style="color:var(--bad)" data-action="reward-deny" data-id="${r.id}">Deny</button><button class="btn" style="padding:8px 14px" data-action="reward-approve" data-id="${r.id}">Approve</button></div>`;
     }).join('')}</div>` : ''}
     <div class="section-title">Rewards<button data-action="reward-new">+ Reward</button></div>
     ${state.rewards.length ? `<div class="reward-grid">${state.rewards.slice().sort((a, b) => a.cost - b.cost).map((r) => `<button class="reward" data-action="reward-redeem" data-id="${r.id}">
-      <span class="r-emoji">${esc(r.emoji || '🎁')}</span><b>${esc(r.name)}</b><span class="r-cost">${r.cost} pts</span></button>`).join('')}</div>`
-      : `<div class="card empty"><span class="big">🏆</span>Turn chore points into rewards the kids actually want.<br><button class="btn" style="margin-top:12px" data-action="reward-starters">Add starter rewards</button></div>`}
-    ${recent.length ? `<div class="section-title">History</div><div class="card flush">${recent.map((r) => { const rw = state.rewards.find((x) => x.id === r.rewardId); return `<div class="row"><div class="grow"><div class="title">${esc(rw?.name || 'Reward')}</div><div class="sub">${esc(whoName(r.memberId))} · ${timeAgo(r.at)}</div></div><span class="pill ${r.status === 'approved' ? 'good' : 'bad'}">${r.status === 'approved' ? `−${r.cost}` : 'Denied'}</span></div>`; }).join('')}</div>` : ''}
-    ${state.rewards.length ? `<p class="small muted" style="margin:10px 4px">Tap a reward to redeem it (or edit it). Points come from chores.</p>` : ''}
+      <span class="r-emoji">${esc(r.emoji || '🎁')}</span><b>${esc(r.name)}</b><span class="r-cost">${costTxt(r)}</span>${forTag(r)}</button>`).join('')}</div>`
+      : `<div class="card empty"><span class="big">🏆</span>Turn chore stars into rewards the kids actually want.<br><button class="btn" style="margin-top:12px" data-action="reward-starters">Add starter rewards</button></div>`}
+    ${recent.length ? `<div class="section-title">History</div><div class="card flush">${recent.map((r) => { const rw = state.rewards.find((x) => x.id === r.rewardId); return `<div class="row"><div class="grow"><div class="title">${esc(rw?.name || (r.rewardId === 'cash' ? 'Cashed in' : 'Reward'))}</div><div class="sub">${esc(whoName(r.memberId))} · ${timeAgo(r.at)}</div></div><span class="pill ${r.status === 'approved' ? 'good' : 'bad'}">${r.status === 'approved' ? `−${r.cost} ⭐` : 'Denied'}</span></div>`; }).join('')}</div>` : ''}
+    ${state.rewards.length ? `<p class="small muted" style="margin:10px 4px">Tap a reward to redeem it (or edit it). Kids earn ⭐ stars from chores and high-fives.</p>` : ''}
   `;
 }
 const _choresView = views.chores;
 views.chores = () => {
   const tab = ui.choreTab || 'chores';
   const tabs = `<div class="segmented"><button class="${tab === 'chores' ? 'active' : ''}" data-action="chore-tab" data-tab="chores">Chores</button><button class="${tab === 'rewards' ? 'active' : ''}" data-action="chore-tab" data-tab="rewards">Rewards</button></div>`;
-  return tabs + (tab === 'rewards' ? rewardsView() : _choresView());
+  return tabs + (tab === 'rewards' ? rewardsView() : choresParent());
 };
+void _choresView;
 function rewardForm(r) {
   const isNew = !r;
+  const ks = typeof kids === 'function' ? kids() : [];
+  const v0 = { ...(r || { emoji: '🎁', cost: 10 }) };
+  for (const k of ks) { v0['for_' + k.id] = rewardFor(r || {}, k.id); v0['cost_' + k.id] = r?.costs?.[k.id] ?? ''; }
   openSheet({
     title: isNew ? 'New reward' : 'Edit reward',
-    values: r || { emoji: '🎁', cost: 10 },
+    values: v0,
     fields: [
       { row: [{ name: 'emoji', label: 'Emoji', placeholder: '🎁' }, { name: 'name', label: 'Reward', required: true, placeholder: 'e.g. Pizza party' }] },
-      { name: 'cost', label: 'Cost (points)', type: 'number', required: true },
+      { name: 'cost', label: 'Cost (⭐ stars)', type: 'number', required: true },
+      ...(ks.length > 1 ? [{ type: 'html', html: '<p class="small muted" style="margin:4px 4px 8px">Who can get it, and what it costs them (blank = the usual cost):</p>' },
+        ...ks.map((k) => ({ row: [{ name: 'for_' + k.id, label: `${k.emoji} ${k.name}`, type: 'checkbox' }, { name: 'cost_' + k.id, label: `${k.name} pays ⭐`, type: 'number', placeholder: 'usual' }] }))] : []),
     ],
-    onSave(v) { v.cost = Math.max(1, Math.round(v.cost)); if (isNew) state.rewards.push({ id: uid(), ...v }); else Object.assign(r, v); },
+    onSave(v) {
+      const out = { emoji: v.emoji, name: v.name, cost: Math.max(1, Math.round(v.cost)) };
+      if (ks.length > 1) {
+        const on = ks.filter((k) => v['for_' + k.id]).map((k) => k.id);
+        if (!on.length) { toast('Pick at least one kid'); return false; }
+        out.forIds = on.length === ks.length ? [] : on;
+        out.costs = {};
+        for (const k of ks) { const n = Math.round(Number(v['cost_' + k.id]) || 0); if (n > 0 && n !== out.cost) out.costs[k.id] = n; }
+      }
+      if (isNew) state.rewards.push({ id: uid(), ...out }); else Object.assign(r, out);
+    },
     onDelete: isNew ? null : () => withUndo(`${r.name} deleted`, () => { state.rewards = state.rewards.filter((x) => x.id !== r.id); }),
   });
 }
@@ -517,11 +654,11 @@ async function createPasskey() {
    ========================================================= */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 const _parseMagic = parseMagic;
-parseMagic = function (raw) {
+parseMagic = function (raw, kind) {
   let t = String(raw || '');
   t = t.replace(/(\d+(?:\.\d{1,2})?)\s*(dollars?|bucks)\b/gi, '$$$1');
   t = t.replace(/\$(\d+)\s+and\s+(\d{1,2})\s*cents?/gi, (m, a, b) => `$${a}.${b.padStart(2, '0')}`);
-  return _parseMagic(t);
+  return _parseMagic(t, kind);
 };
 let rec = null;
 function toggleVoice() {
@@ -660,24 +797,29 @@ Object.assign(actions, {
   'reward-redeem': (el) => {
     const r = findIn(state.rewards, el.dataset.id);
     const me = meId();
+    const who = (state.members.some((m) => m.kid) ? state.members.filter((m) => m.kid) : state.members).filter((m) => rewardFor(r, m.id));
+    const can = (id) => pointsBalance(id) >= rewardCost(r, id);
     openSheet({
       title: `${r.emoji || '🎁'} ${r.name}`,
       saveLabel: 'Redeem',
-      values: { memberId: me && pointsBalance(me) >= r.cost ? me : (state.members.find((m) => pointsBalance(m.id) >= r.cost)?.id || state.members[0]?.id) },
+      values: { memberId: me && who.some((m) => m.id === me) && can(me) ? me : (who.find((m) => can(m.id))?.id || who[0]?.id) },
       fields: [
-        { name: 'memberId', label: `Who’s using ${r.cost} points?`, type: 'select', options: state.members.map((m) => ({ value: m.id, label: `${m.emoji} ${m.name} — ${pointsBalance(m.id)} pts` })) },
+        ...(who.length ? [{ name: 'memberId', label: 'Who’s using it?', type: 'select', options: who.map((m) => ({ value: m.id, label: `${m.emoji} ${m.name} — has ⭐ ${pointsBalance(m.id)}, costs ⭐ ${rewardCost(r, m.id)}` })) }] : []),
         { type: 'html', html: '<p class="small muted" style="margin:0 4px">A grown-up approves it on the Rewards tab.</p><div class="btn-row"><button type="button" class="btn secondary" data-action="reward-edit" data-id="' + r.id + '">Edit reward</button></div>' },
       ],
       onSave(v) {
-        if (pointsBalance(v.memberId) < r.cost) { toast(`Not enough points yet — ${r.cost - pointsBalance(v.memberId)} to go!`); return false; }
-        (state.redemptions ||= []).push({ id: uid(), rewardId: r.id, memberId: v.memberId, cost: r.cost, at: Date.now(), status: 'pending' });
+        if (!v.memberId) return false;
+        const cost = rewardCost(r, v.memberId);
+        if (pointsBalance(v.memberId) < cost) { toast(`Not enough stars yet — ${cost - pointsBalance(v.memberId)} to go!`); return false; }
+        (state.redemptions ||= []).push({ id: uid(), rewardId: r.id, memberId: v.memberId, cost, at: Date.now(), status: 'pending' });
         toast('🎟️ Request sent for approval');
       },
     });
   },
+  'chore-starters': (el) => starterChoresSheet(el.dataset.id),
   'reward-edit': (el) => { closeSheet(); rewardForm(findIn(state.rewards, el.dataset.id)); },
   'reward-approve': (el) => { const r = findIn(state.redemptions, el.dataset.id); r.status = 'approved'; r.decided = Date.now(); save(); render(); confetti(); toast('🏆 Approved — enjoy!'); },
-  'reward-deny': (el) => { const r = findIn(state.redemptions, el.dataset.id); r.status = 'denied'; r.decided = Date.now(); save(); render(); toast('Points returned'); },
+  'reward-deny': (el) => { const r = findIn(state.redemptions, el.dataset.id); r.status = 'denied'; r.decided = Date.now(); save(); render(); toast('Stars returned'); },
   'plan-week': planMyWeek,
   'story-next': (el) => { const n = Number(el.dataset.n); if ((ui.storyIdx || 0) >= n - 1) { actions['story-close'](); return; } ui.storyIdx = (ui.storyIdx || 0) + 1; render(); },
   'story-prev': () => { ui.storyIdx = Math.max(0, (ui.storyIdx || 0) - 1); render(); },
@@ -747,13 +889,59 @@ afterRender = function () {
   storyTick();
 };
 
+/* ---------- Month review (days 1–5): biggest over/under categories + subscriptions to check ---------- */
+const reviewYm = (t = today()) => (parse(t).getDate() <= 5 ? addMonths(monthKey(t), -1) : null);
+function monthReviewItems(ym) {
+  const cats = state.budget.categories.filter((c) => c.limit).map((c) => { const spent = spentIn(ym, c.id), lim = catLimit(c, ym); return { c, spent, lim, diff: spent - lim }; })
+    .filter((x) => Math.abs(x.diff) >= 1).sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff)).slice(0, 3);
+  const subs = typeof isSub === 'function' ? state.budget.bills.filter((b) => isSub(b) && !b.review) : [];
+  return { cats, subs };
+}
+function monthReviewBody(ym) {
+  const { cats, subs } = monthReviewItems(ym), done = (ui.reviewDone ||= {});
+  const mName = parse(ym + '-01').toLocaleDateString(undefined, { month: 'long' });
+  const catRows = cats.filter((x) => !done[x.c.id]).map((x) => {
+    const over = x.diff > 0, to = over ? Math.ceil(x.spent / 10) * 10 : Math.max(10, Math.ceil(x.spent / 10) * 10);
+    return `<div class="row"><div class="avatar">${esc(x.c.emoji)}</div><div class="grow"><div class="title">${esc(x.c.name)}</div>
+      <div class="sub" style="color:${over ? 'var(--bad)' : 'var(--good)'}">${moneyW(Math.abs(x.diff))} ${over ? 'over' : 'under'} · ${moneyW(x.spent)} of ${moneyW(x.lim)}</div>
+      <div class="btn-row" style="margin:6px 0 0"><button type="button" class="mini-btn" data-action="review-limit" data-id="${x.c.id}" data-v="${to}">${over ? 'Raise' : 'Lower'} limit to ${moneyW(to)}</button><button type="button" class="mini-btn" data-action="review-keep" data-id="${x.c.id}">Keep ${moneyW(x.c.limit)}</button></div></div></div>`;
+  }).join('');
+  const subRows = subs.map((b) => `<div class="row">${letterAvatar(b.name)}<div class="grow"><div class="title">${esc(b.name)}</div><div class="sub">${money(b.amount)} · ${moneyW(perMonth(b) * 12)}/yr</div></div>
+    <button type="button" class="mini-btn" data-action="review-sub" data-id="${b.id}" data-v="keep">👍 Keep</button><button type="button" class="mini-btn" data-action="review-sub" data-id="${b.id}" data-v="cancel">✂️ Cancel</button></div>`).join('');
+  return `${catRows ? `<div class="section-title" style="margin-top:0">${esc(mName)} budget</div><div class="card flush">${catRows}</div>` : `<p class="small muted">✅ Budget limits all set.</p>`}
+    ${subRows ? `<div class="section-title">Subscriptions not reviewed</div><div class="card flush">${subRows}</div>` : ''}`;
+}
+function monthReviewSheet(ym) {
+  ui.reviewDone = {};
+  openSheet({
+    title: `Review ${parse(ym + '-01').toLocaleDateString(undefined, { month: 'long' })}`, saveLabel: 'Done reviewing', values: {}, reviewYm: ym,
+    fields: [{ type: 'html', html: `<div id="reviewBody">${monthReviewBody(ym)}</div>` }],
+    onSave() { (state.budget.reviewed ||= {})[ym] = true; toast('Month reviewed ✓'); },
+  });
+}
+const reviewRefresh = () => { const ym = sheetCfg?.reviewYm; if (ym) { save(); $('#reviewBody').innerHTML = monthReviewBody(ym); } };
+Object.assign(actions, {
+  'month-review': (el) => monthReviewSheet(el.dataset.ym),
+  'review-limit': (el) => { const c = findIn(state.budget.categories, el.dataset.id); if (c) { c.limit = Number(el.dataset.v); ui.reviewDone[c.id] = 1; toast(`${c.name}: ${moneyW(c.limit)}/month`); } reviewRefresh(); },
+  'review-keep': (el) => { ui.reviewDone[el.dataset.id] = 1; reviewRefresh(); },
+  'review-sub': (el) => { const b = findIn(state.budget.bills, el.dataset.id); if (b) b.review = el.dataset.v; reviewRefresh(); },
+});
+
 // Heads-up when the forecast dips low.
 const _homeInsights = homeInsights;
 homeInsights = function () {
   let html = _homeInsights();
+  const rym = reviewYm();
+  if (rym && !state.budget.reviewed?.[rym] && state.budget.transactions.some((x) => x.date.startsWith(rym))) {
+    const { cats, subs } = monthReviewItems(rym);
+    if (cats.length || subs.length) {
+      const c = `<button class="insight" data-action="month-review" data-ym="${rym}"><span class="ii">🗓️</span><b>Review ${esc(parse(rym + '-01').toLocaleDateString(undefined, { month: 'long' }))}</b><small>${[cats.length ? `${cats.length} budget${cats.length > 1 ? 's' : ''} to adjust` : '', subs.length ? `${subs.length} subscription${subs.length > 1 ? 's' : ''} to check` : ''].filter(Boolean).join(' · ')}</small></button>`;
+      html = html ? html.replace('<div class="insights">', '<div class="insights">' + c) : `<div class="insights">${c}</div>`;
+    }
+  }
   const s = safeToSpend();
   if (s) {
-    const c = `<button class="insight ${s.safe < 0 ? 'bad' : s.stale > 7 ? 'warn' : 'good'}" data-action="${s.stale > 7 ? 'edit-balance' : 'go'}" data-to="budget" data-btab="bills"><span class="ii">💳</span><b>${money(s.safe, { maximumFractionDigits: 0 })} safe to spend</b><small>${s.stale > 7 ? `Balance is ${s.stale} days old — tap to update` : `until payday ${dueLabel(s.pay.date)} · about ${money(Math.max(0, s.perDay), { maximumFractionDigits: 0 })}/day`}</small></button>`;
+    const c = `<button class="insight ${s.safe < 0 ? 'bad' : s.stale > 7 ? 'warn' : 'good'}" data-action="${s.stale > 7 ? 'edit-balance' : 'go'}" data-to="budget" data-btab="overview"><span class="ii">💳</span><b>${money(s.safe, { maximumFractionDigits: 0 })} safe to spend</b><small>${s.stale > 7 ? `Balance is ${s.stale} days old — tap to update` : `until payday ${dueLabel(s.pay.date)} · about ${money(Math.max(0, s.perDay), { maximumFractionDigits: 0 })}/day`}</small></button>`;
     html = html ? html.replace('<div class="insights">', '<div class="insights">' + c) : `<div class="insights">${c}</div>`;
   }
   const pts = forecastSeries();

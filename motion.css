@@ -172,3 +172,7 @@ body.kid-mode .launch .tile:nth-child(3n) .tile-e { animation-delay: -1.8s; }
 .hsel-bar.try .try-yes { width: auto; min-width: 0; }
 /* App, not a web page: no pinch or double-tap zoom (screens are designed to fit) */
 html, body { touch-action: pan-x pan-y; }
+/* Clay art in list icons: same box as the emoji it replaces, so nothing moves */
+.row > .avatar.has-art .art-svg, .mini-tile .emoji.has-art .art-svg { width: 84%; height: 84%; }
+.empty .big.has-art { width: 48px; height: 48px; margin: 0 auto 6px; }
+.empty .big.has-art .art-svg { width: 100%; height: 100%; }

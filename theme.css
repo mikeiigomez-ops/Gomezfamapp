@@ -83,6 +83,14 @@ html[data-accent] { --accent-soft: color-mix(in srgb, var(--accent) 14%, var(--s
 }
 html[data-accent][data-theme="dark"] { --grad: linear-gradient(135deg, color-mix(in oklab, var(--accent) 72%, black), color-mix(in oklab, var(--accent-2) 66%, black)); }
 
+/* Solid accent / alert fills that carry white text. Dark mode's accents are light, so the fills go deeper
+   (like --grad) to keep white text at 4.5:1 or better. */
+:root { --accent-fill: var(--accent); --bad-fill: var(--bad); --on-accent: #fff; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --accent-fill: color-mix(in oklab, var(--accent) 70%, black); --bad-fill: color-mix(in oklab, var(--bad) 70%, black); }
+}
+:root[data-theme="dark"] { --accent-fill: color-mix(in oklab, var(--accent) 70%, black); --bad-fill: color-mix(in oklab, var(--bad) 70%, black); }
+
 /* ---------- Canvas ---------- */
 html[data-accent] body {
   background:
@@ -217,10 +225,10 @@ main { padding-bottom: calc(var(--tabbar-h) + var(--tab-gap) + 110px); }
   box-shadow: 0 14px 28px -10px color-mix(in srgb, var(--accent) 85%, transparent), inset 0 1px 0 rgba(255, 255, 255, .25);
 }
 .fab:active { transform: scale(.92) rotate(90deg); }
-/* Toasts drop in from the top like an iOS banner, so they never cover inputs or the keyboard. */
+/* Toasts rise from the bottom, just above the page dots / tab bar, so they never cover the title or the bell. */
 .toast {
-  top: calc(var(--safe-top) + 8px); bottom: auto;
-  transform: translate(-50%, -140%) scale(.96);
+  top: auto; bottom: calc(var(--barspace, 90px) + var(--pgh, 0px) + var(--extra, 0px) + 8px);
+  transform: translate(-50%, 24px) scale(.96); opacity: 0;
   border-radius: 22px; padding: 12px 18px; min-height: 44px; max-width: min(92vw, 440px);
   background: color-mix(in srgb, var(--text) 94%, transparent); color: var(--bg);
   backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
@@ -1744,3 +1752,6 @@ html[data-theme="dark"] .earn-btn { color: #c4b5fd; }
 html[data-theme="dark"] .gem-pill { background: linear-gradient(135deg, #1e2a44, #2e2450); color: #d8b4fe; }
 .sq-tabs3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .sq-tabs3 button { min-width: 0; }
+/* Dark-safe fills for small solid badges and today markers (tokens at the top) */
+.cal-day.today span, .wk-day.today span, .pick:has(input:checked)::after { background: var(--accent-fill); color: var(--on-accent); }
+.bell-dot, .tab-badge, .tile-badge, .subnav .chip i { background: var(--bad-fill); color: #fff; }

@@ -33,6 +33,8 @@ body.store-mode main#view, body.house-editing main#view { padding-bottom: calc(v
 
 /* ---------- Pages ---------- */
 .pg-off { display: none !important; }
+body.paged #view:not(.pg-cols) .pg-last { margin-bottom: 0 !important; }
+body.paged #view:not(.pg-cols) .pg-first { margin-top: 0 !important; }
 #view.pg-cols { column-count: 2; column-gap: 28px; column-fill: auto; overflow: hidden; }
 #view.pg-cols > *, #view.pg-cols .row, #view.pg-cols .tile, #view.pg-cols .card:not(.flush), #view.pg-cols .section-title { break-inside: avoid; -webkit-column-break-inside: avoid; }
 #view.pg-cols .pg-break { break-before: column; -webkit-column-break-before: always; }
@@ -261,7 +263,7 @@ body.house-editing .h-drawer-space { display: none; }
 .kh-lock { width: 44px; height: 44px; }
 .kh-level { min-height: 44px; display: inline-flex; align-items: center; }
 .kid-hi2 { background: linear-gradient(135deg, color-mix(in oklab, var(--c, #8b5cf6) 85%, black), color-mix(in oklab, color-mix(in oklab, var(--c, #8b5cf6) 70%, #ff9de2) 78%, black)); }
-.tile-badge { background: var(--bad); }
+.tile-badge { background: var(--bad-fill, var(--bad)); }
 body.paged .fab { bottom: calc(var(--tabbar-h) + var(--tab-gap) + 66px); }
 #view.pg-cols .card { -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 
@@ -337,9 +339,12 @@ body.kid-mode .tile-e { background: #fff; box-shadow: 0 3px 0 color-mix(in srgb,
 .topbar .icon-btn svg { width: 21px; height: 21px; stroke-width: 1.9; }
 
 /* 7 — Pager: lighter, smaller, and it shares one row with the + button */
-.pg-ctl { height: 44px; gap: 4px; padding: 0 2px; background: var(--glass); backdrop-filter: blur(18px) saturate(1.6); -webkit-backdrop-filter: blur(18px) saturate(1.6);
+.pg-ctl { height: 48px; gap: 4px; padding: 0 2px; background: var(--glass); backdrop-filter: blur(18px) saturate(1.6); -webkit-backdrop-filter: blur(18px) saturate(1.6);
   box-shadow: 0 8px 20px -12px rgba(40,30,20,.35), inset 0 0 0 1px var(--hair); }
-.pg-ctl button { width: 44px; height: 40px; font-size: 22px; font-weight: 700; }
+.pg-ctl button { width: 44px; height: 44px; font-size: 22px; font-weight: 700; }
+.pg-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.pg-dots .pg-i { display: flex; align-items: center; gap: inherit; }
+#view [tabindex="-1"]:focus { outline: none; }
 .pg-dots { gap: 6px; font-size: 13px; }
 .pg-dots i { width: 7px; height: 7px; }
 .pg-dots i.on { width: 18px; }
@@ -390,12 +395,12 @@ body.kid-mode .topbar .icon-btn.bell { border-radius: 50% !important; padding: 0
   transition: background .18s, color .18s, transform .12s;
 }
 .subnav .chip:active { transform: scale(.95); }
-.subnav .chip.on { background: var(--accent); color: #fff; box-shadow: 0 4px 12px color-mix(in oklab, var(--accent) 35%, transparent); }
+.subnav .chip.on { background: var(--accent-fill, var(--accent)); color: var(--on-accent, #fff); box-shadow: 0 4px 12px color-mix(in oklab, var(--accent) 35%, transparent); }
 .subnav .chip i {
   display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; margin-left: 6px; border-radius: 9px;
-  font: 800 11px/1 system-ui; font-style: normal; background: var(--bad, #e5484d); color: #fff; vertical-align: 1px;
+  font: 800 11px/1 system-ui; font-style: normal; background: var(--bad-fill, var(--bad, #e5484d)); color: #fff; vertical-align: 1px;
 }
-.subnav .chip.on i { background: #fff; color: var(--accent); }
+.subnav .chip.on i { background: #fff; color: var(--accent-fill, var(--accent)); }
 body.has-subnav main#view { padding-top: 0; }
 body.game-mode .subnav, body.store-mode .subnav, body.wrapped-mode .subnav, body.house-editing .subnav { display: none; }
 /* Settings lives on Home (top right), not on every screen */
@@ -405,3 +410,69 @@ body:not([data-route="home"]) .topbar [data-to="settings"] { display: none; }
 .hh-more { position: absolute; top: 12px; right: 14px; z-index: 1; padding: 5px 11px; border-radius: 14px; font-size: 13px; font-weight: 800; background: rgba(255, 255, 255, .2); color: #fff; }
 /* Month grid: rows shrink on short screens so the whole month fits under the section chips */
 @media (max-width: 999px) and (min-height: 501px) { .cal-day { aspect-ratio: auto; height: clamp(34px, calc((100dvh - 440px) / 6), calc((100vw - 48px) / 7)); } }
+
+/* =========================================================
+   UX pass 2
+   ========================================================= */
+/* Home greeting: the "My day ›" pill never sits on top of the greeting */
+.home-hi .hh-text { padding-right: 86px; }
+
+/* Plan / Money / Family on phones: the chip row takes the title's place in the top bar (the selected chip
+   already says where you are), giving the screen back a whole row. The title stays for screen readers. */
+@media (max-width: 999px) {
+  body.has-subnav .topbar h1 { width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); left: 0; right: auto; }
+  body.has-subnav .subnav {
+    position: absolute; z-index: 21; top: calc(var(--safe-top) + 4px); left: 0; right: 104px; height: 44px; align-items: center;
+    padding-top: 0; padding-bottom: 0; padding-right: 18px;
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 22px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 22px), transparent);
+  }
+  body.has-subnav main#view { padding-top: 4px; }
+}
+/* Chips: 36px to see, 44px to hit */
+.subnav .chip { height: 36px; border-radius: 18px; }
+.subnav .chip::after { content: ''; position: absolute; inset: -4px -4px; }
+/* Section "+ Add" / "+ Person" links: 44px hit area without making the heading taller */
+.section-title button { position: relative; min-height: 44px; padding: 0 8px; margin: -12px -8px -12px 0; }
+.section-title button::after { content: ''; position: absolute; inset: 0 -6px; }
+
+/* The + button never covers the last thing on a screen: it always sits in the page-dots row, and screens
+   that have one keep that row free whether or not they're paged (so the split doesn't flip-flop). */
+body:has(main#view > .fab) { --pgh: 50px; }
+@media (max-width: 999px) { .fab, body.paged .fab { bottom: calc(var(--barspace) - 10px); width: 56px; height: 56px; border-radius: 19px; } }
+
+/* Memory: once the game is won (game mode is off again) the board stays screen-sized and the win card sits on it */
+body:not(.game-mode) .game-stage:has(> .mem-board) { position: relative; display: grid; place-items: center; container-type: inline-size; }
+body:not(.game-mode) .game-stage:has(> .mem-board) > * { grid-area: 1 / 1; }
+body:not(.game-mode) .game-stage .mem-board {
+  --bw: min(100cqw, 360px, calc((100dvh - var(--topbar-h) - var(--barspace) - 150px - (var(--rows) - 1) * 8px) / var(--rows) * .75 * var(--cols) + (var(--cols) - 1) * 8px));
+  width: var(--bw); max-width: none; margin: 0 auto;
+}
+body:not(.game-mode) .game-stage:has(> .game-over) .mem-board { opacity: .3; pointer-events: none; }
+body:not(.game-mode) .game-stage > .game-over { position: relative; z-index: 2; align-self: center; }
+
+/* Sync trouble: a small dot on the Home settings gear, and a slim note on Home that opens Settings */
+body.sync-offline .topbar [data-to="settings"], body.sync-error .topbar [data-to="settings"] { position: relative; }
+body.sync-offline .topbar [data-to="settings"]::after, body.sync-error .topbar [data-to="settings"]::after {
+  content: ''; position: absolute; top: 5px; right: 5px; width: 9px; height: 9px; border-radius: 50%; box-shadow: 0 0 0 2px var(--bg); background: var(--warn);
+}
+body.sync-error .topbar [data-to="settings"]::after { background: var(--bad-fill, var(--bad)); }
+.sync-note { display: none; }
+body.sync-offline .sync-note, body.sync-error .sync-note {
+  display: flex; align-items: center; gap: 8px; width: 100%; min-height: 36px; margin: 0 0 10px; padding: 6px 12px; border-radius: 14px;
+  background: var(--warn-soft); color: var(--text); font-size: 13.5px; font-weight: 650; text-align: left;
+}
+body.sync-error .sync-note { background: var(--bad-soft); }
+.sync-note b { margin-left: auto; color: var(--accent-ink, var(--accent)); }
+body.sync-offline .sync-note .sn-err, body.sync-error .sync-note .sn-off { display: none; }
+/* Short phones (SE): a little less air between sections so more fits on each page */
+@media (max-height: 700px) and (max-width: 699px) {
+  body { --tabbar-h: 56px; --barspace: calc(var(--tabbar-h) + var(--tab-gap) + 8px); }
+  body.paged { --pgh: 48px; }
+  body:has(main#view > .fab) { --pgh: 48px; }
+  .tabbar { padding: 4px 6px; }
+  .section-title { margin-top: 14px; margin-bottom: 6px; }
+  #view .card { margin-bottom: 10px; }
+  #view .card:not(.flush):not(.home-hi) { padding-top: 12px; padding-bottom: 12px; }
+  .segmented { margin-bottom: 10px; }
+  .month-nav { margin-bottom: 8px; }
+}

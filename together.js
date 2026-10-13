@@ -40,7 +40,7 @@ function chatTimeline() {
     ...state.chat.map((m) => ({ ...m, kind: 'msg' })),
     ...state.kudos.filter((k) => Date.now() - k.at < 30 * 86400000).map((k) => ({ ...k, kind: 'kudos' })),
   ].sort((a, b) => a.at - b.at);
-  return items.slice(-150);
+  return items;
 }
 function rxChips(item, action) {
   const rx = item.rx || {};
@@ -50,7 +50,7 @@ function rxChips(item, action) {
 }
 views.chat = () => {
   const me = actor();
-  const items = chatTimeline();
+  const all = chatTimeline(), shown = ui.chatN || 60, items = all.slice(-shown); // long chats: newest 60, more on request
   let lastDay = '', lastWho = '', lastAt = 0;
   const out = items.map((x) => {
     const day = iso(new Date(x.at));
@@ -73,13 +73,13 @@ views.chat = () => {
       </div>
     </div>`;
   }).join('');
-  return `${needMe()}<div class="chat">${out || `<div class="card empty"><span class="big">💬</span>The family group chat. Say hi! 👋<div class="small muted" style="margin-top:6px">Type <b>@</b> to mention someone · tap a message to react</div></div>`}</div>`;
+  return `${needMe()}<div class="chat">${all.length > shown ? '<button class="mini-btn chat-more" style="display:block;margin:4px auto 10px" data-action="chat-more">Show earlier</button>' : ''}${out || `<div class="card empty"><span class="big">💬</span>The family group chat. Say hi! 👋<div class="small muted" style="margin-top:6px">Type <b>@</b> to mention someone · tap a message to react</div></div>`}</div>`;
 };
 function kudosBubble(k) {
   const f = isMember(k.from) ? member(k.from) : null, t = isMember(k.to) ? member(k.to) : null;
   return `<div class="kudos-bubble" style="--c:${t ? t.color : 'var(--accent)'}">
     <div class="kb-emoji">${esc(k.emoji || '🙌')}</div>
-    <div class="grow"><b>${esc(f ? f.name : 'Someone')} → ${esc(t ? t.name : 'Someone')}</b><div>${esc(k.text || 'High-five!')}</div>${k.stars ? `<span class="pill accent">+${k.stars} ⭐</span>` : ''}</div>
+    <div class="grow"><b>${esc(f ? f.name : 'Someone')} → ${esc(t ? t.name : 'Someone')}</b><div>${esc(k.text || 'High-five!')}</div>${k.stars ? `<span class="pill accent">+${k.stars} stars ⭐</span>` : ''}</div>
     ${rxChips(k, 'kudos-react')}
   </div>`;
 }
@@ -246,34 +246,49 @@ function todoRow(t) {
   const canDel = !kidHere() || t.by === me;
   return `<div class="row todo${t.done ? ' done' : ''}">
     <button class="check${t.done ? ' on' : ''}" data-action="todo-toggle" data-id="${t.id}" aria-label="Done">${ICON.check}</button>
-    <div class="grow"><div class="title">${esc(t.text)}</div><div class="sub">${t.done ? `✅ ${esc(whoName(t.doneBy))} · ${timeAgo(t.doneAt)}` : [t.for && isMember(t.for) ? `for ${esc(member(t.for).name)}` : '', t.due ? `due ${fmtDate(t.due, { weekday: 'short', month: 'short', day: 'numeric' })}` : '', `added by ${esc(whoName(t.by))}`].filter(Boolean).join(' · ')}</div></div>
+    <${kidHere() ? 'div' : `button data-action="todo-edit" data-id="${t.id}" style="text-align:left"`} class="grow"><div class="title">${esc(t.text)}${t.repeat ? ' <span class="small muted" title="Repeats">🔁</span>' : ''}</div><div class="sub">${t.done ? `✅ ${esc(whoName(t.doneBy))} · ${timeAgo(t.doneAt)}` : [t.for && isMember(t.for) ? `for ${esc(member(t.for).name)}` : '', t.due ? `<span${t.due < today() ? ' style="color:var(--bad);font-weight:650"' : ''}>${t.due === today() ? 'due today' : `due ${fmtDate(t.due, { weekday: 'short', month: 'short', day: 'numeric' })}`}</span>` : '', `added by ${esc(whoName(t.by))}`].filter(Boolean).join(' · ')}</div></${kidHere() ? 'div' : 'button'}>
     ${t.done ? '' : claim ? `<button class="claim on${t.claimedBy === me ? ' mine' : ''}" data-action="todo-claim" data-id="${t.id}" style="--c:${claim.color}">${esc(claim.emoji)} ${t.claimedBy === me ? 'You’re on it' : `${esc(claim.name)}’s on it`}</button>` : `<button class="claim" data-action="todo-claim" data-id="${t.id}">🙋 I’ll do it!</button>`}
     ${canDel ? `<button class="del-btn" data-action="todo-del" data-id="${t.id}" aria-label="Delete">${ICON.x}</button>` : ''}
   </div>`;
 }
+// Open to-dos by when they're due: Overdue · Today · Upcoming · Someday.
+function todoGroups(list = state.todos) {
+  const t = today(), open = list.filter((x) => !x.done).sort((a, b) => (a.due || '9999').localeCompare(b.due || '9999') || a.at - b.at);
+  return [
+    ['overdue', 'Overdue', open.filter((x) => x.due && x.due < t)],
+    ['today', 'Today', open.filter((x) => x.due === t)],
+    ['upcoming', 'Upcoming', open.filter((x) => x.due > t)],
+    ['someday', 'Someday', open.filter((x) => !x.due)],
+  ];
+}
+const TODO_REPEAT = { '': 'Doesn’t repeat', daily: 'Every day', weekly: 'Every week', monthly: 'Every month' };
+const todoNext = (x) => { const from = x.due && x.due >= today() ? x.due : today(); return x.repeat === 'daily' ? addDays(from, 1) : x.repeat === 'weekly' ? addDays(from, 7) : addMonthsTo(from, 1); };
 views.todos = () => {
-  const open = state.todos.filter((t) => !t.done).sort((a, b) => (a.due || '9999').localeCompare(b.due || '9999') || a.at - b.at);
+  const groups = todoGroups();
+  const open = groups.flatMap(([, , xs]) => xs);
   const done = state.todos.filter((t) => t.done && Date.now() - (t.doneAt || 0) < 7 * 86400000).sort((a, b) => b.doneAt - a.doneAt);
   const free = open.filter((t) => !t.claimedBy).length;
   return `${needMe()}
-    <form class="quick-add card" data-submit="todo-add" style="padding:8px"><input type="text" name="todoText" placeholder="Add a to-do for the family…" autocomplete="off"><button class="btn" type="submit" aria-label="Add">${ICON.plus}</button></form>
+    <form class="quick-add card" data-submit="todo-add" style="padding:8px"><input type="text" name="todoText" placeholder="Add a to-do… “call dentist Fri”, “trash every Mon”" aria-label="Add a to-do" autocomplete="off"><button class="btn" type="submit" aria-label="Add">${ICON.plus}</button></form>
     ${free ? `<p class="small muted" style="margin:0 4px 10px">🙋 ${free} up for grabs — tap <b>I’ll do it!</b> so everyone knows you’ve got it.</p>` : ''}
-    <div class="card flush">${open.map(todoRow).join('') || '<div class="empty">🎉 Nothing to do! Add something above.</div>'}</div>
-    ${done.length ? `<div class="section-title">Done this week</div><div class="card flush">${done.map(todoRow).join('')}</div>` : ''}
-    ${kidHere() ? '' : `<button class="fab" data-action="todo-new" aria-label="New to-do">${ICON.plus}</button>`}`;
+    ${groups.filter(([, , xs]) => xs.length).map(([k, label, xs]) => `<div class="section-title todo-g-${k}"${k === 'overdue' ? ' style="color:var(--bad)"' : ''}>${label} · ${xs.length}</div><div class="card flush todo-group" data-group="${k}">${xs.map(todoRow).join('')}</div>`).join('')
+      || '<div class="card empty">🎉 Nothing to do! Add something above.</div>'}
+    ${done.length ? `<div class="section-title">Done this week</div><div class="card flush">${done.map(todoRow).join('')}</div>` : ''}`;
 };
-function todoForm(t) {
+function todoForm(t, preset) {
   const isNew = !t;
   openSheet({
     title: isNew ? 'New to-do' : 'Edit to-do',
-    values: t || { for: '' },
+    values: t || { for: '', repeat: '', ...preset },
     fields: [
       { name: 'text', label: 'To-do', required: true, placeholder: 'e.g. Return library books' },
       { row: [{ name: 'for', label: 'For', type: 'select', options: [{ value: '', label: '🙋 Anyone' }, ...state.members.map((m) => ({ value: m.id, label: `${m.emoji} ${m.name}` }))] }, { name: 'due', label: 'Due', type: 'date' }] },
+      { name: 'repeat', label: 'Repeat', type: 'select', options: Object.entries(TODO_REPEAT).map(([value, label]) => ({ value, label })) },
     ],
     onSave(v) {
-      if (isNew) state.todos.push({ id: uid(), at: Date.now(), by: actor(), text: v.text, for: v.for, due: v.due, claimedBy: v.for || '', done: false });
-      else Object.assign(t, { text: v.text, for: v.for, due: v.due });
+      if (v.repeat && !v.due) v.due = today();
+      if (isNew) state.todos.push({ id: uid(), at: Date.now(), by: actor(), text: v.text, for: v.for, due: v.due, repeat: v.repeat, claimedBy: v.for || '', done: false });
+      else Object.assign(t, { text: v.text, for: v.for, due: v.due, repeat: v.repeat });
     },
     onDelete: isNew ? null : () => withUndo('To-do deleted', () => { state.todos = state.todos.filter((x) => x.id !== t.id); }),
   });
@@ -284,8 +299,11 @@ document.addEventListener('submit', (e) => {
   e.preventDefault();
   const text = f.elements.todoText.value.trim();
   if (!text) return;
-  state.todos.push({ id: uid(), at: Date.now(), by: actor(), text, for: '', due: '', claimedBy: '', done: false });
+  // Same smarts as Magic Add: "call dentist Friday", "Leo practice piano every day"
+  const r = typeof magicTodo === 'function' ? magicTodo(magicWho(text).text, magicWho(text).memberId) : { title: text, due: '', memberId: '', repeat: '' };
+  state.todos.push({ id: uid(), at: Date.now(), by: actor(), text: r.title || text, for: r.memberId || '', due: r.due || '', repeat: r.repeat || '', claimedBy: r.memberId || '', done: false });
   save(); render();
+  if (r.due || r.memberId) toast(`✅ ${r.detail}`);
   $('[data-submit="todo-add"] input')?.focus();
 });
 
@@ -409,6 +427,7 @@ function checkChallenges() {
 function inboxItems() {
   const me = actor(), s = seen(), items = [];
   if (!me) return items;
+  items.push(...inboxUtility(me));
   const unread = state.chat.filter((m) => m.at > (s.chat || 0) && m.who !== me);
   const atMe = unread.filter((m) => mentionsIn(m.text).includes(me));
   for (const m of atMe.slice(-3)) items.push({ n: 1, icon: '💬', title: `${whoName(m.who)} mentioned you`, sub: m.text, to: 'chat' });
@@ -416,13 +435,36 @@ function inboxItems() {
   for (const k of state.kudos.filter((k) => k.to === me && Date.now() - k.at < 2 * 86400000)) items.push({ n: k.at > (s.kudosInbox || 0) ? 1 : 0, icon: k.emoji || '🙌', title: `${whoName(k.from)} high-fived you${k.stars ? ` · +${k.stars} ⭐` : ''}`, sub: k.text, to: 'kudos' });
   if (typeof myTurnGames === 'function') for (const g of myTurnGames()) items.push({ n: 1, icon: '🔴', title: `Your turn · Connect Four`, sub: `vs ${whoName(g.a === me ? g.b : g.a)}`, to: `c4/${g.id}` });
   for (const x of rsvpUpcoming(14).filter(({ ev, d }) => !ev.rsvp?.[d]?.[me])) items.push({ n: 1, icon: '🙋', title: `Who’s in? ${x.ev.title}`, sub: fmtDate(x.d, { weekday: 'long', month: 'short', day: 'numeric' }), rsvp: x });
-  for (const t of state.todos.filter((t) => !t.done && t.for === me)) items.push({ n: 1, icon: '✅', title: t.text, sub: `To-do from ${whoName(t.by)}`, to: 'todos' });
+  for (const t of state.todos.filter((t) => !t.done && t.for === me && !(t.due && t.due <= today()))) items.push({ n: 1, icon: '✅', title: t.text, sub: `To-do from ${whoName(t.by)}`, to: 'todos' });
   if (typeof triviaWaiting === 'function') { const n = triviaWaiting(me).length; if (n) items.push({ n: 1, icon: '🧠', title: `${n} new trivia question${n > 1 ? 's' : ''} about the family`, sub: 'How well do you know us?', to: 'trivia' }); }
   if (isGrownUp()) for (const r of (state.redemptions || []).filter((r) => r.status === 'pending')) items.push({ n: 1, icon: '🎟️', title: `${whoName(r.memberId)} wants ${state.rewards.find((x) => x.id === r.rewardId)?.name || 'a reward'}`, sub: `${r.cost} points · tap to approve`, to: 'chores', ctab: 'rewards' });
   // Gentle daily nudges (not counted on the badge)
   if (!checkinOf(me)) items.push({ n: 0, icon: '😊', title: 'Daily check-in', sub: 'How are you feeling today?', to: 'checkin', nudge: true });
   if (typeof wordPlayed === 'function' && !wordPlayed(me)) items.push({ n: 0, icon: '🔤', title: 'Today’s Family Word', sub: 'Same puzzle for everyone — can you get it?', to: 'word', nudge: true });
   return items;
+}
+// What needs doing soon, straight from the family's data (read-only; each row opens the right screen).
+function inboxUtility(me) {
+  const out = [], t = today(), now = new Date(), hm = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  const soon = new Date(now.getTime() + 2 * 3600000), soonHm = soon.getDate() === now.getDate() ? `${pad(soon.getHours())}:${pad(soon.getMinutes())}` : '24:00';
+  for (const e of eventsOn(t).filter((e) => e.kind === 'event' && e.time && e.time >= hm && e.time <= soonHm && (!e.whoIds?.length || e.whoIds.includes(me))))
+    out.push({ n: 1, util: true, icon: '⏰', title: `${e.title} at ${fmtTime(e.time)}`, sub: ['Coming up in the next 2 hours', e.location ? `📍 ${e.location}` : ''].filter(Boolean).join(' · '), to: 'calendar' });
+  for (const x of state.todos.filter((x) => !x.done && x.due && x.due <= t && (x.for === me || x.claimedBy === me)))
+    out.push({ n: 1, util: true, icon: x.due < t ? '🔴' : '✅', title: x.text, sub: x.due < t ? `Overdue · was due ${fmtDate(x.due, { weekday: 'short', month: 'short', day: 'numeric' })}` : 'To-do due today', to: 'todos' });
+  if (isGrownUp()) {
+    const bills = [...overdueBills(t).map((x) => ({ ...x, late: true })), ...recurringBetween(t, addDays(t, 3), 'bill').filter(({ b, date }) => !b.autopay && !isPaid(b, date))];
+    for (const { b, date, amount, late } of bills) out.push({ n: 1, util: true, icon: '💳', title: `${b.name} · ${money(amount ?? b.amount)}`, sub: late ? `Overdue · was due ${fmtDate(date, { month: 'short', day: 'numeric' })}` : `Due ${dueLabel(date)}`, to: 'budget', btab: 'bills' });
+    for (const u of state.maintenance.filter((u) => typeof upkeepStatus === 'function' && upkeepStatus(u).key === 'overdue'))
+      out.push({ n: 1, util: true, icon: u.emoji || '🔧', title: u.title, sub: 'Upkeep overdue', to: 'upkeep' });
+    const y = parse(t).getFullYear();
+    for (const p of state.people) {
+      const nb = nextBirthday(p); if (!nb) continue;
+      const n = daysBetween(t, nb);
+      if (n >= 0 && n <= 7 && !state.gifts.some((g) => g.personId === p.id && (Number(g.year) === y || Number(g.year) === parse(nb).getFullYear())))
+        out.push({ n: 1, util: true, icon: '🎂', title: `${p.name}’s birthday ${n === 0 ? 'is today' : n === 1 ? 'is tomorrow' : `in ${n} days`}`, sub: 'No gift idea yet — tap to add one', to: `person/${p.id}` });
+    }
+  }
+  return out;
 }
 const inboxCount = () => sum(inboxItems(), (x) => x.n);
 views.inbox = () => {
@@ -431,7 +473,7 @@ views.inbox = () => {
   const items = inboxItems();
   const act = items.filter((x) => !x.nudge), nudges = items.filter((x) => x.nudge);
   const wins = (state.activity || []).filter((a) => a.who && a.who !== me && isMember(a.who) && Date.now() - a.at < 86400000 && /did|finished|completed|solved|won|checked/.test(a.text)).slice(0, 4);
-  const row = (x) => x.rsvp ? rsvpCard(x.rsvp) : `<button class="row tap inbox-row${x.n ? ' new' : ''}" style="width:100%;text-align:left" data-action="go" data-to="${esc(x.to)}" ${x.ctab ? `data-ctab="${x.ctab}"` : ''} ${x.sqTab ? `data-sq-tab="${x.sqTab}"` : ''}><div class="avatar">${esc(x.icon)}</div><div class="grow"><div class="title">${esc(x.title)}</div><div class="sub">${esc(x.sub || '')}</div></div>${x.n ? '<span class="dot-new"></span>' : ICON.chev}</button>`;
+  const row = (x) => x.rsvp ? rsvpCard(x.rsvp) : `<button class="row tap inbox-row${x.n ? ' new' : ''}${x.util ? ' util' : ''}" style="width:100%;text-align:left" data-action="go" data-to="${esc(x.to)}" ${x.ctab ? `data-ctab="${x.ctab}"` : ''} ${x.btab ? `data-btab="${x.btab}"` : ''} ${x.sqTab ? `data-sq-tab="${x.sqTab}"` : ''}><div class="avatar">${esc(x.icon)}</div><div class="grow"><div class="title">${esc(x.title)}</div><div class="sub">${esc(x.sub || '')}</div></div>${x.n ? '<span class="dot-new"></span>' : ICON.chev}</button>`;
   const rsvps = act.filter((x) => x.rsvp), rest = act.filter((x) => !x.rsvp);
   return `${rest.length ? `<div class="card flush">${rest.map(row).join('')}</div>` : ''}
     ${rsvps.map(row).join('')}
@@ -459,7 +501,7 @@ function checkKudos() {
   const stars = sum(fresh, (x) => Number(x.stars) || 0);
   setTimeout(() => {
     confetti();
-    celebrate(`${k.emoji || '🙌'} ${whoName(k.from)} high-fived you!`, `${k.text || 'High-five!'}${stars ? ` · +${stars} ⭐` : ''}${fresh.length > 1 ? ` (and ${fresh.length - 1} more)` : ''}`);
+    celebrate(`${k.emoji || '🙌'} ${whoName(k.from)} high-fived you!`, `${k.text || 'High-five!'}${stars ? ` · +${stars} stars ⭐` : ''}${fresh.length > 1 ? ` (and ${fresh.length - 1} more)` : ''}`);
     if (typeof isSimple === 'function' && isSimple(me) && typeof readAloudOn === 'function' && readAloudOn(me)) speak(`${whoName(k.from)} sent you a high five! ${k.text || ''}`);
   }, 350);
 }
@@ -529,7 +571,7 @@ views.kid = () => {
   return i < 0 ? html + extra : html.slice(0, i) + extra + html.slice(i);
 };
 KID_ROUTES.push('chat', 'kudos', 'checkin', 'todos', 'challenges', 'inbox');
-for (const a of ['msg-tap', 'msg-react', 'msg-del', 'kudos-new', 'kudos-react', 'checkin-mood', 'checkin-heart', 'todo-toggle', 'todo-claim', 'todo-del', 'rsvp', 'challenge-plus', 'set-me']) KID_ACTIONS.add(a);
+for (const a of ['msg-tap', 'msg-react', 'msg-del', 'kudos-new', 'kudos-react', 'checkin-mood', 'checkin-heart', 'todo-toggle', 'todo-claim', 'todo-del', 'rsvp', 'challenge-plus', 'chat-more']) KID_ACTIONS.add(a);
 
 const _moreGridT = moreGrid;
 moreGrid = function () {
@@ -560,7 +602,8 @@ Object.assign(actions, {
     if (r[me]) delete r[me]; else r[me] = true;
     ui.msgPick = null; save(); render();
   },
-  'msg-del': (el) => { ui.msgPick = null; withUndo('Message deleted', () => { state.chat = state.chat.filter((x) => x.id !== el.dataset.id); }); },
+  'chat-more': () => { const h = viewEl.scrollHeight, t = viewEl.scrollTop; ui.chatN = (ui.chatN || 60) + 60; ui.chatStick = false; render(); viewEl.scrollTop = t + viewEl.scrollHeight - h; },
+  'msg-del': (el) => { ui.msgPick = null; if (!kidCan(findIn(state.chat, el.dataset.id)?.who)) return; withUndo('Message deleted', () => { state.chat = state.chat.filter((x) => x.id !== el.dataset.id); }); },
   'kudos-new': (el) => kudosForm(el.dataset.to, el.dataset.text),
   'kudos-react': (el) => {
     const k = findIn(state.kudos, el.dataset.id); const me = actor() || 'anon';
@@ -576,6 +619,8 @@ Object.assign(actions, {
     day[me] = { ...(day[me] || {}), mood: el.dataset.m, at: Date.now() };
     if (first) logAct(el.dataset.m, `checked in feeling ${MOODS.find(([e]) => e === el.dataset.m)?.[1].toLowerCase() || el.dataset.m}`, 'checkin');
     if (typeof isSimple === 'function' && isSimple(me) && readAloudOn(me)) speak(`You feel ${MOODS.find(([e]) => e === el.dataset.m)?.[1]}. Thanks for telling us!`);
+    // Sad / grumpy / sick kids: the grown-ups get a "Send a hug" in their inbox (kids.js moodAlerts)
+    if (member(me)?.kid && typeof LOW_MOODS !== 'undefined' && LOW_MOODS.includes(el.dataset.m)) toast('💛 Thanks for telling us. A grown-up will check on you.');
     save(); render();
   },
   'checkin-heart': (el) => {
@@ -587,10 +632,18 @@ Object.assign(actions, {
   'todo-new': () => todoForm(null),
   'todo-toggle': (el) => {
     const t = findIn(state.todos, el.dataset.id);
+    if (!t || !kidCan(t.by, t.for, t.claimedBy)) return;
     t.done = !t.done;
     if (t.done) { t.doneBy = actor() || t.claimedBy; t.doneAt = Date.now(); logAct('✅', `finished “${t.text}”`, 'todos'); ui.pop = { a: 'todo-toggle', id: t.id }; }
+    // A repeating to-do comes back: finishing it adds the next one (once — un-ticking and re-ticking doesn't add another).
+    if (t.done && t.repeat && !t.nextId) {
+      const n = { id: uid(), at: Date.now(), by: t.by, text: t.text, for: t.for || '', due: todoNext(t), repeat: t.repeat, claimedBy: t.for || '', done: false };
+      t.nextId = n.id; state.todos.push(n);
+      toast(`🔁 Next: ${fmtDate(n.due, { weekday: 'short', month: 'short', day: 'numeric' })}`);
+    }
     save(); render();
   },
+  'todo-edit': (el) => { const t = state.todos.find((x) => x.id === el.dataset.id); if (t) todoForm(t); },
   'todo-claim': (el) => {
     const me = actor();
     if (!me) { toast('Pick who you are first (Settings → This phone)'); return; }
@@ -600,7 +653,7 @@ Object.assign(actions, {
     if (t.claimedBy) { logAct('🙋', `will do “${t.text}”`, 'todos'); toast('🙋 You’ve got it!'); }
     save(); render();
   },
-  'todo-del': (el) => withUndo('To-do deleted', () => { state.todos = state.todos.filter((x) => x.id !== el.dataset.id); }),
+  'todo-del': (el) => kidCan(findIn(state.todos, el.dataset.id)?.by) && withUndo('To-do deleted', () => { state.todos = state.todos.filter((x) => x.id !== el.dataset.id); }),
   'rsvp': (el) => {
     const me = actor();
     if (!me) { toast('Pick who you are first'); return; }

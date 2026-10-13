@@ -85,14 +85,42 @@ body.world-mode .toast { top: calc(var(--safe-top) + 118px); bottom: auto; z-ind
 .we-farm { background: radial-gradient(circle at 50% 55%, #fff9db, #94d82d 75%); } .we-carnival { background: radial-gradient(circle at 50% 55%, #fff0f6, #f783ac 75%); }
 .we-peaks { background: radial-gradient(circle at 50% 55%, #ffffff, #a5d8ff 75%); } .we-hollow { background: radial-gradient(circle at 50% 55%, #9775fa, #2b1b5a 75%); }
 .we-frost { background: radial-gradient(circle at 50% 55%, #ffffff, #74c0fc 75%); }
+/* Per-region scenery (pure CSS): a ground the squishy stands on plus a few shapes from that place */
+.we-bg::before, .we-bg::after { content: ''; position: absolute; inset: 0; pointer-events: none; }
+.we-bg::after { top: 58%; border-radius: 50% 50% 0 0 / 22% 22% 0 0; background: linear-gradient(#5fbf4a, #3f9a3a); box-shadow: inset 0 10px 0 rgba(255, 255, 255, .18); }
+.we-meadow::before { background: radial-gradient(ellipse 45% 14% at 18% 60%, #8fd16a 98%, transparent), radial-gradient(ellipse 55% 16% at 86% 61%, #7fc45c 98%, transparent), radial-gradient(ellipse 60px 18px at 22% 14%, rgba(255, 255, 255, .85) 98%, transparent), radial-gradient(ellipse 80px 22px at 74% 8%, rgba(255, 255, 255, .8) 98%, transparent); }
+.we-meadow::after { background: radial-gradient(circle, #fff 0 4px, transparent 5px) 12px 30px / 86px 64px, radial-gradient(circle, #ffd43b 0 3px, transparent 4px) 50px 8px / 104px 76px, linear-gradient(#5fbf4a, #3f9a3a); }
+.we-shore::before { background: radial-gradient(circle at 82% 16%, #fff3bf 0 32px, rgba(255, 243, 191, 0) 70px), repeating-radial-gradient(ellipse 60px 10px at 50% 58%, rgba(255, 255, 255, .55) 0 2px, transparent 3px 18px); }
+.we-shore::after { background: linear-gradient(#ffe8a1, #f2c94c); }
+.we-woods::before { background: radial-gradient(circle at 8% 40%, #2b8a3e 0 60px, transparent 61px), radial-gradient(circle at 92% 36%, #2f9e44 0 70px, transparent 71px), radial-gradient(circle at 30% 30%, #ff5c8d 0 6px, transparent 7px), radial-gradient(circle at 72% 26%, #ff5c8d 0 6px, transparent 7px); }
+.we-woods::after { background: linear-gradient(#4c9e3f, #2b7a2f); }
+.we-farm::before { background: repeating-linear-gradient(90deg, rgba(219, 165, 108, .0) 0 26px, rgba(219, 165, 108, .9) 26px 32px) 0 46% / 100% 22px no-repeat, linear-gradient(transparent 49%, #dba56c 49% 51%, transparent 51%) 0 0 / 100% 100%; }
+.we-farm::after { background: repeating-linear-gradient(90deg, #a3d65c 0 22px, #94c94f 22px 44px); }
+.we-carnival::before { background: repeating-conic-gradient(from 0deg at 50% 120%, rgba(255, 255, 255, .35) 0 6deg, transparent 6deg 12deg); }
+.we-carnival::after { background: repeating-linear-gradient(90deg, #fff0f6 0 30px, #f783ac 30px 60px); }
+.we-peaks::before { background: linear-gradient(135deg, transparent 49.5%, #dbe4f0 50%) 0 100% / 50% 45% no-repeat, linear-gradient(225deg, transparent 49.5%, #c8d4e6 50%) 100% 100% / 55% 50% no-repeat, radial-gradient(ellipse 70px 22px at 25% 22%, #fff 98%, transparent), radial-gradient(ellipse 90px 26px at 78% 14%, #fff 98%, transparent); }
+.we-peaks::after { background: linear-gradient(#ffffff, #d0ebff); }
+.we-hollow::before { background: radial-gradient(circle at 80% 15%, #fff3bf 0 26px, rgba(255, 243, 191, .25) 40px, transparent 70px), radial-gradient(circle, #fff 0 1.5px, transparent 2px) 0 0 / 46px 52px, radial-gradient(circle, rgba(180, 255, 170, .9) 0 2px, transparent 3px) 20px 30px / 80px 90px; }
+.we-hollow::after { background: linear-gradient(#3b2a6b, #1e1630); box-shadow: inset 0 10px 0 rgba(150, 125, 200, .25); }
+.we-frost::before { background: radial-gradient(circle, #fff 0 3px, transparent 4px) 0 0 / 40px 44px, radial-gradient(circle, rgba(255, 255, 255, .8) 0 2px, transparent 3px) 20px 22px / 60px 50px; }
+.we-frost::after { background: linear-gradient(#f8fbff, #cfe8fb); }
 .we-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; padding: 10px 16px; border-radius: 18px; background: rgba(255, 255, 255, .92); color: #3a2b3d; font-size: 16px; box-shadow: 0 6px 18px rgba(0, 0, 0, .15); text-align: center; }
 .we-team { padding: 3px 10px; border-radius: 10px; background: #d3f9d8; color: #2b8a3e; font-size: 12.5px; font-weight: 800; }
 .we-stage { position: relative; width: min(78vw, 46vh, 340px); aspect-ratio: 1; display: grid; place-items: center; }
 .we-stage.small { width: min(64vw, 34vh, 260px); margin: 0 auto 8px; }
 .we-ring { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; z-index: 1; pointer-events: none; }
-.we-zone { fill: none; stroke: rgba(255, 255, 255, .55); }
+/* The target zone: a green band (like the story games) with a white rim so it shows on any backdrop; it pulses, and lights up while the ring is inside */
+.we-zone { fill: none; stroke: rgba(43, 138, 62, .78); filter: drop-shadow(0 0 1.2px #fff) drop-shadow(0 0 1.2px #fff) drop-shadow(0 0 3px rgba(0, 0, 0, .25)); animation: wzone 1.1s ease-in-out infinite; transition: stroke .12s; }
+.we-zone.hot { stroke: rgba(81, 207, 102, .95); animation: none; }
+@keyframes wzone { 50% { stroke: rgba(43, 138, 62, .5); } }
+@media (prefers-reduced-motion: reduce) { .we-zone { animation: none; } }
+/* The bubble you toss: a little arc from below up to the squishy */
+.we-ball { position: absolute; left: 50%; top: 50%; width: 15%; aspect-ratio: 1; margin: -7.5% 0 0 -7.5%; z-index: 2; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(circle at 32% 30%, #fff 0 14%, rgba(165, 216, 255, .55) 40%, rgba(116, 192, 252, .85) 100%); box-shadow: 0 0 0 2px rgba(77, 171, 247, .8), 0 6px 14px rgba(0, 0, 0, .2); animation: wtoss .3s cubic-bezier(.3, .6, .5, 1) forwards; }
+@keyframes wtoss { 0% { transform: translate(60%, 330%) scale(.55); } 55% { transform: translate(25%, -60%) scale(.95); } 100% { transform: translate(0, 0) scale(1.1); opacity: .2; } }
+.we-btns button:disabled { opacity: .55; }
 .we-cur { fill: none; stroke: #fff; stroke-width: 4.5; filter: drop-shadow(0 0 2px rgba(0, 0, 0, .6)); }
-.we-cur.in { stroke: #2f9e44; stroke-width: 5; }
+.we-cur.in { stroke: #1e6b30; stroke-width: 6; filter: drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1.5px #fff); }
 .we-sq { width: 46%; animation: wfloat 1.6s ease-in-out infinite; }
 .we-sq svg, .we-sq .sq-svg { width: 100%; height: auto; display: block; }
 @keyframes wfloat { 50% { transform: translateY(-8px) scale(1.03, .97); } }
@@ -188,3 +216,38 @@ body.world-mode .toast { top: calc(var(--safe-top) + 118px); bottom: auto; z-ind
   .we-throw, .we-run { min-height: 50px; font-size: 18px; } .we-throw { min-width: 170px; }
   .wh-pad { width: 132px; height: 132px; } .wh-a { width: 64px; height: 64px; }
 }
+
+/* Play launcher: Squishvale hero */
+.play-hero { margin: 0 0 12px; }
+.ph-main { width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 22px; text-align: left; color: var(--text);
+  background: linear-gradient(135deg, color-mix(in srgb, #22b8cf 22%, var(--surface)), color-mix(in srgb, #51cf66 20%, var(--surface))); box-shadow: var(--shadow); }
+.ph-e { flex: none; width: 52px; height: 52px; display: grid; place-items: center; border-radius: 16px; font-size: 32px; background: color-mix(in srgb, #22b8cf 28%, var(--surface)); }
+.ph-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.ph-txt > b { font-size: 16px; font-weight: 850; } .ph-txt > b small { margin-left: 4px; font-size: 12.5px; font-weight: 800; color: var(--muted); }
+.ph-goal { font-size: 13.5px; font-weight: 650; line-height: 1.25; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ph-bar { display: block; height: 7px; border-radius: 4px; background: color-mix(in srgb, var(--text) 10%, transparent); overflow: hidden; }
+.ph-bar b { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #ffd43b, #ff922b); }
+.ph-go { flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; background: #22b8cf; color: #fff; font-size: 15px; box-shadow: 0 4px 10px rgba(34, 184, 207, .35); }
+.ph-chips { display: flex; gap: 8px; margin-top: 8px; }
+.ph-chip { flex: 1; min-height: 44px; padding: 6px 12px; border-radius: 16px; background: var(--surface); box-shadow: var(--shadow); color: var(--text); font-size: 14px; font-weight: 800; }
+.ph-chip.hot { background: color-mix(in srgb, #dc2626 14%, var(--surface)); color: color-mix(in srgb, #dc2626 80%, var(--text)); }
+/* Collection book: where a missing squishy lives in the wild */
+.sq-tile .sq-wild { display: block; margin-top: 3px; font-size: 11px; font-weight: 750; line-height: 1.2; color: #2b8a3e; text-align: center; }
+.sq-tile .sq-wild b { display: inline-block; margin-left: 2px; padding: 1px 7px; border-radius: 8px; background: #2f9e44; color: #fff; font-size: 11px; }
+/* Connect Four: quick start */
+.c4q { display: grid; gap: 10px; padding: 2px 0 6px; }
+.c4q-row { display: flex; gap: 8px; align-items: stretch; }
+.c4q-row .c4q-btn { flex: 1; }
+.c4q-btn { --c: #dc2626; display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 12px; align-items: center; min-height: 64px; padding: 10px 16px; border-radius: 20px; text-align: left; color: var(--text);
+  background: color-mix(in srgb, var(--c) 12%, var(--surface)); box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--c) 30%, transparent); }
+.c4q-btn span { grid-row: 1 / 3; font-size: 32px; line-height: 1; } .c4q-btn b { font-size: 17px; font-weight: 850; } .c4q-btn small { font-size: 12.5px; color: var(--muted); display: inline-flex; align-items: center; gap: 5px; }
+.c4q-btn b:last-child { grid-row: 1 / 3; }
+.c4q-btn.bot { --c: #7c3aed; }
+.c4q-lvl { flex: none; display: flex; flex-direction: column; gap: 6px; }
+.c4q-lvl button { flex: 1; min-width: 92px; min-height: 29px; padding: 4px 10px; border-radius: 12px; background: var(--surface-2, #f1f3f5); color: var(--text); font-size: 13.5px; font-weight: 800; }
+.c4q-lvl button.on { background: #7c3aed; color: #fff; }
+.c4q .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good, #2f9e44); display: inline-block; }
+/* Game Gems on the end card */
+.gm-gem { margin: 8px auto 2px; width: max-content; max-width: 100%; padding: 4px 12px; border-radius: 12px; background: color-mix(in srgb, #7048e8 14%, var(--surface)); color: #7048e8; font-weight: 850; font-size: 14px; }
+.gm-gem.off { background: transparent; color: var(--muted); font-weight: 650; font-size: 12.5px; }
+#sheet:has(.c4q) #sheetSave { visibility: hidden; }

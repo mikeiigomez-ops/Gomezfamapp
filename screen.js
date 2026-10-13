@@ -31,6 +31,10 @@ function pgSplittable(el) {
     && !parseFloat(cs.borderTopWidth) && ['block', 'grid', 'flex'].includes(cs.display) && (cs.display !== 'flex' || cs.flexDirection === 'column' || cs.flexWrap === 'wrap');
 }
 // Leaf units in reading order, each with the wrappers it sits in.
+// Row lists (.card.flush, .list) always split between their rows; other boxes only when they're tall.
+// openT / closeB: the box chrome (margin + border + padding) that reappears when a page starts / ends inside a box.
+const PG_ROWS = '.card.flush, .list';
+const pgChrome = (cs, side) => (parseFloat(cs['margin' + side]) || 0) + (parseFloat(cs['border' + side + 'Width']) || 0) + (parseFloat(cs['padding' + side]) || 0);
 function pgUnits(container, H, depth = 0, parents = [], out = []) {
   for (const el of container.children) {
     if (el.classList.contains('pg-mini')) continue;
@@ -38,26 +42,65 @@ function pgUnits(container, H, depth = 0, parents = [], out = []) {
     if (cs.display === 'none' || cs.position === 'fixed' || cs.position === 'absolute') continue;
     const r = el.getBoundingClientRect();
     if (!r.height) continue;
-    if (r.height > H * 0.5 && depth < 4 && pgSplittable(el)) pgUnits(el, H, depth + 1, [...parents, el], out);
-    else out.push({ el, parents, top: r.top - (parseFloat(cs.marginTop) || 0), bottom: r.bottom + (parseFloat(cs.marginBottom) || 0), title: el.matches('.section-title, .more-label, .av-label, h2, h3') });
+    const top = r.top - (parseFloat(cs.marginTop) || 0), bottom = r.bottom + (parseFloat(cs.marginBottom) || 0);
+    const rows = el.matches(PG_ROWS);
+    if (depth < 4 && pgSplittable(el) && (r.height > H * 0.5 || (rows ? el.children.length > 4 && r.height > H * 0.25 : r.height > H * 0.3))) {
+      const f = out.length;
+      pgUnits(el, H, depth + 1, [...parents, el], out);
+      const l = out.length - 1;
+      if (l < f) continue;
+      if (top <= out[f].top) { out[f].top = top; out[f].mt = parseFloat(cs.marginTop) || 0; }
+      if (bottom >= out[l].bottom) { out[l].bottom = bottom; out[l].mb = parseFloat(cs.marginBottom) || 0; }
+      // (A page's last box loses its bottom margin, see pgApply, so only border + padding count at the end.)
+      const ct = pgChrome(cs, 'Top') - (parseFloat(cs.marginTop) || 0), cb = pgChrome(cs, 'Bottom') - (parseFloat(cs.marginBottom) || 0);
+      for (let k = f + 1; k <= l; k++) out[k].openT += ct;
+      for (let k = f; k < l; k++) out[k].closeB += cb;
+      // A box that isn't a plain list keeps its short intro with what follows and its short ending with what precedes
+      // (a card's label never sits alone at the bottom, its button never alone at the top).
+      // Lists never leave a single row behind or alone on the next page.
+      if (rows && l > f + 2) { out[f].title = true; out[l].tail = true; }
+      if (!rows && l > f) {
+        if (out[f].bottom - out[f].top < 100) out[f].title = true;
+        if (out[l].bottom - out[l].top < 56) out[l].tail = true;
+      }
+    } else out.push({ el, parents, top, bottom, openT: 0, closeB: 0, mt: parseFloat(cs.marginTop) || 0, mb: parseFloat(cs.marginBottom) || 0, title: el.matches('.section-title, .more-label, .av-label, h2, h3'), tail: false });
   }
   return out;
 }
-// Greedy split into pages of height H; headings travel with what follows them.
-function pgSplit(units, H) {
+// Greedy split into pages of height H (less cut[p] for page p); headings travel with what follows them.
+function pgSplit(units, H, cut = {}) {
   const pages = [];
   let start = null;
   units.forEach((u, i) => {
-    if (start == null || u.bottom - units[start].top > H) {
+    const lim = H - (cut[pages.length - 1] || 0);
+    if (start == null || u.bottom - u.mb + u.closeB - (units[start].top + units[start].mt - units[start].openT) > lim) {
+      // Step back over headings (and anything glued to the unit before it), never emptying the page.
       let s = i;
-      if (start != null && i > start && units[i - 1].title && i - 1 > start) s = i - 1;
-      if (start != null && s === i - 1) pages[pages.length - 1].pop();
+      while (start != null && s - 1 > start && (units[s - 1].title || units[s].tail)) s--;
+      if (start != null) pages[pages.length - 1].splice(pages[pages.length - 1].length - (i - s));
       pages.push([]);
       start = s;
-      if (s === i - 1) pages[pages.length - 1].push(i - 1);
+      for (let k = s; k < i; k++) pages[pages.length - 1].push(k);
     }
     pages[pages.length - 1].push(i);
   });
+  return pages;
+}
+// Split, then check each page really fits; only a page that spills is re-split (smaller), from there on.
+function pgFit(box, units, H, floor, pad) {
+  const cut = {};
+  let pages = pgSplit(units, H, cut), tries = 0;
+  for (let p = 0; p < pages.length && tries < 24; p++) {
+    if (pages[p].length < 2) continue;
+    pad?.(true);
+    pgApply(box, units, pages, [p], false);
+    const over = box.scrollHeight - box.clientHeight;
+    pad?.(false);
+    if (over <= 1 || H - (cut[p] || 0) - over < floor) continue;
+    cut[p] = (cut[p] || 0) + over + 2;
+    for (const k of Object.keys(cut)) if (k > p) delete cut[k];
+    pages = pgSplit(units, H, cut); tries++; p--;
+  }
   return pages;
 }
 function pgApply(container, units, pages, shown, spread) {
@@ -70,11 +113,18 @@ function pgApply(container, units, pages, shown, spread) {
     for (const w of u.parents) wraps.set(w, (wraps.get(w) || false) || on.has(i));
   });
   for (const [w, vis] of wraps) w.classList.toggle('pg-off', !vis);
+  // Each page's first / last box drops its outer margin (a gap at the page edge is just lost space).
+  for (const el of container.querySelectorAll('.pg-first, .pg-last')) el.classList.remove('pg-first', 'pg-last');
+  for (const p of shown) {
+    const a = units[pages[p]?.[0]], z = units[pages[p]?.at(-1)];
+    if (a) for (const el of [a.el, ...a.parents]) el.classList.add('pg-first');
+    if (z) for (const el of [z.el, ...z.parents]) el.classList.add('pg-last');
+  }
   if (spread && shown.length > 1 && pages[shown[1]]?.length) units[pages[shown[1]][0]].el.classList.add('pg-break');
 }
 function pgReset(container) {
   container.classList.remove('pg-cols');
-  for (const el of container.querySelectorAll('.pg-off, .pg-break')) el.classList.remove('pg-off', 'pg-break');
+  for (const el of container.querySelectorAll('.pg-off, .pg-break, .pg-first, .pg-last')) el.classList.remove('pg-off', 'pg-break', 'pg-first', 'pg-last');
 }
 
 /* ---------- Whole-screen pages ---------- */
@@ -100,56 +150,47 @@ function paginate() {
   const contentW = viewEl.clientWidth - padL - padR;
   // Measure in a single column as wide as one page.
   if (spread) viewEl.style.paddingRight = (padR + (contentW + PG_GAP) / 2) + 'px';
-  // (A few px of slack covers a card's own padding when it continues onto the next page.)
-  let H = viewEl.clientHeight - parseFloat(cs.paddingTop) - parseFloat(getComputedStyle(viewEl).paddingBottom) - 8;
+  let H = viewEl.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) - 2;
   const units = pgUnits(viewEl, H);
   viewEl.style.paddingRight = '';
   if (!units.length) return;
-  let pages, tries = 0;
   const per = spread ? 2 : 1;
   const want = pg.page[key] || 0;
-  for (;;) {
-    pages = pgSplit(units, H);
-    const total = Math.ceil(pages.length / per);
-    const n = Math.min(want, total - 1);
-    pg.page[key] = n;
-    const shown = per === 2 ? [n * 2, n * 2 + 1] : [n];
-    if (spread) { viewEl.style.paddingRight = (padR + (contentW + PG_GAP) / 2) + 'px'; }
-    pgApply(viewEl, units, pages, shown, false);
-    // Check every page really fits; if margins/padding made one spill, shrink and try again.
-    // (A single item taller than the screen can't be helped by smaller pages, so it's skipped.)
-    let over = 0;
-    for (let p = 0; p < pages.length; p++) {
-      if (pages[p].length < 2) continue;
-      pgApply(viewEl, units, pages, [p], false);
-      over = Math.max(over, viewEl.scrollHeight - viewEl.clientHeight);
-    }
-    viewEl.style.paddingRight = '';
-    if (over <= 1 || tries++ > 8 || H - over < 120) { pgApply(viewEl, units, pages, shown, spread); break; }
-    H -= over + 4;
-    // Re-measure: hidden units changed nothing about their own sizes, so the old numbers still hold.
-  }
-  if (spread) viewEl.classList.add('pg-cols');
+  const pages = pgFit(viewEl, units, H, 120, !spread ? null : ((on) => { viewEl.style.paddingRight = on ? (padR + (contentW + PG_GAP) / 2) + 'px' : ''; }));
   const total = Math.ceil(pages.length / per);
-  if (total <= 1) { document.body.classList.toggle('paged', false); return; }
-  const n = pg.page[key];
+  const n = pg.page[key] = Math.min(want, total - 1);
+  pgApply(viewEl, units, pages, per === 2 ? [n * 2, n * 2 + 1] : [n], spread);
+  if (spread) viewEl.classList.add('pg-cols');
+  // One page after all: no controls, but stay in paged layout (it's what made it fit).
+  if (total <= 1) return;
   ctl.hidden = false;
+  // The dots are decoration; VoiceOver hears the hidden "Page 2 of 3" text in the live region.
   ctl.innerHTML = `<button data-action="pg" data-d="-1" aria-label="Previous page" ${n === 0 ? 'disabled' : ''}>‹</button>
-    <span class="pg-dots" role="status" aria-label="Page ${n + 1} of ${total}">${total <= 8 ? [...Array(total)].map((_, i) => `<i class="${i === n ? 'on' : ''}"></i>`).join('') : `<b>${n + 1}</b> of ${total}`}</span>
+    <span class="pg-dots" role="status"><span class="pg-sr">Page ${n + 1} of ${total}</span>${total <= 8 ? `<span class="pg-i" aria-hidden="true">${[...Array(total)].map((_, i) => `<i class="${i === n ? 'on' : ''}"></i>`).join('')}</span>` : `<span aria-hidden="true"><b>${n + 1}</b> of ${total}</span>`}</span>
     <button data-action="pg" data-d="1" aria-label="Next page" ${n === total - 1 ? 'disabled' : ''}>›</button>`;
   ctl.dataset.total = total;
   pg.last = { key, units, pages, per, spread, total };
 }
 // Turning a page reuses the split already measured: one style change instead of re-measuring every page.
 function pgShow(L, n) {
+  pg.page[L.key] = n;
   pgApply(viewEl, L.units, L.pages, L.per === 2 ? [n * 2, n * 2 + 1] : [n], L.spread);
   const ctl = $('#pgCtl');
   ctl.querySelector('[data-d="-1"]').disabled = n === 0;
   ctl.querySelector('[data-d="1"]').disabled = n === L.total - 1;
   const dots = ctl.querySelector('.pg-dots');
-  dots.setAttribute('aria-label', `Page ${n + 1} of ${L.total}`);
+  dots.querySelector('.pg-sr').textContent = `Page ${n + 1} of ${L.total}`;
   if (L.total <= 8) dots.querySelectorAll('i').forEach((i, k) => i.classList.toggle('on', k === n));
   else dots.querySelector('b').textContent = n + 1;
+}
+// After a page turn, screen readers continue from the top of the new page.
+function pgFocusFirst() {
+  const L = pg.last;
+  const u = L?.units.find((x) => !x.el.classList.contains('pg-off') && !x.el.closest('.pg-off'));
+  if (!u) return;
+  const el = u.el;
+  if (!el.matches('a[href], button, input, select, textarea, [tabindex]')) el.setAttribute('tabindex', '-1');
+  try { el.focus({ preventScroll: true }); } catch { el.focus(); }
 }
 function pgGo(d, anim = true) {
   const total = Number($('#pgCtl').dataset.total || 1);
@@ -159,6 +200,18 @@ function pgGo(d, anim = true) {
   const L = pg.last;
   if (L && L.key === pg.key && L.units.every((u) => u.el.isConnected)) pgShow(L, n); else paginate();
   if (anim) slideIn(viewEl, d);
+  pgFocusFirst();
+}
+// Jump to the page holding an element (a selector or the element itself). Returns true when it's on screen.
+function pgReveal(target) {
+  const el = typeof target === 'string' ? viewEl.querySelector(target) : target;
+  const L = pg.last;
+  if (!el || !L || L.key !== pg.key) return !!el;
+  const k = L.units.findIndex((u) => u.el === el || u.el.contains(el) || el.contains(u.el));
+  if (k < 0) return false;
+  const n = Math.floor(L.pages.findIndex((pp) => pp.includes(k)) / L.per);
+  if (n >= 0 && n !== pg.page[pg.key]) pgShow(L, n);
+  return true;
 }
 function slideIn(el, d) {
   if (navigator.webdriver || reduceMotion()) return;
@@ -184,18 +237,10 @@ function paginateRegion(box) {
   if (H < 80) { box.classList.remove('pg-region'); return; }
   const units = pgUnits(box, H);
   if (!units.length) return;
-  let pages, tries = 0;
   const want = pg.page[key] || 0;
-  for (;;) {
-    pages = pgSplit(units, H);
-    const n = Math.min(want, pages.length - 1);
-    pg.page[key] = n;
-    let over = 0;
-    for (let p = 0; p < pages.length; p++) { if (pages[p].length < 2) continue; pgApply(box, units, pages, [p], false); over = Math.max(over, box.scrollHeight - box.clientHeight); }
-    pgApply(box, units, pages, [n], false);
-    if (over <= 1 || tries++ > 4 || H - over < 60) break;
-    H -= over + 4;
-  }
+  const pages = pgFit(box, units, H, 60);
+  pg.page[key] = Math.min(want, pages.length - 1);
+  pgApply(box, units, pages, [pg.page[key]], false);
   if (pages.length <= 1) { box.classList.remove('pg-region'); return; }
   const n = pg.page[key];
   const mini = document.createElement('div');
@@ -221,8 +266,8 @@ Object.assign(actions, {
 KID_ACTIONS.add('pg'); KID_ACTIONS.add('pg-r');
 
 // The page controls live outside the view so they sit in the same place on every screen.
-const pgCtl = document.createElement('nav');
-pgCtl.id = 'pgCtl'; pgCtl.className = 'pg-ctl'; pgCtl.hidden = true; pgCtl.setAttribute('aria-label', 'Pages');
+const pgCtl = document.createElement('div');
+pgCtl.id = 'pgCtl'; pgCtl.className = 'pg-ctl'; pgCtl.hidden = true; pgCtl.setAttribute('role', 'group'); pgCtl.setAttribute('aria-label', 'Pages');
 $('#app').appendChild(pgCtl);
 
 /* ---------- Swipe left / right to turn pages ---------- */
@@ -276,6 +321,8 @@ document.addEventListener('visibilitychange', () => {
   requestAnimationFrame(() => { viewEl.style.transform = 'translateZ(0)'; requestAnimationFrame(() => { viewEl.style.transform = ''; refit(); }); });
 });
 window.addEventListener('pageshow', (e) => { if (e.persisted) render(); });
+// The sync note comes and goes without a redraw: re-fit when it does.
+{ let was = ''; new MutationObserver(() => { const now = ['sync-offline', 'sync-error'].filter((c) => document.body.classList.contains(c)).join(); if (now !== was) { was = now; refit(); } }).observe(document.body, { attributes: true, attributeFilter: ['class'] }); }
 
 /* =========================================================
    Screen modes
@@ -293,10 +340,24 @@ function modeClasses() {
   b.classList.toggle('wide', pgWide());
 }
 const _afterRenderScreen = afterRender;
+// Something you just added lands on the page it's on: remember which items were on screen, and after a
+// redraw that follows your own tap/typing, jump to the page of the first new one.
+let pgTouched = 0;
+for (const ev of ['click', 'submit', 'keydown']) document.addEventListener(ev, () => { pgTouched = Date.now(); }, true);
+const pgIds = () => new Set([...viewEl.querySelectorAll('[data-id]')].map((e) => e.dataset.id));
+// Sync trouble (body.sync-offline / sync-error, set by sync.js) shows as a slim note on Home; CSS hides it otherwise.
+const SYNC_NOTE = `<button class="sync-note" data-action="go" data-to="settings"><span class="sn-off">☁️ Offline · changes sync when you’re back</span><span class="sn-err">⚠️ Family sync needs a look</span><b>Settings ›</b></button>`;
 afterRender = function () {
   modeClasses();
   _afterRenderScreen();
+  if (currentRoute().name === 'home' && !document.body.classList.contains('kid-mode') && !viewEl.querySelector('.sync-note')) viewEl.insertAdjacentHTML('afterbegin', SYNC_NOTE);
   paginate();
+  const ids = pgIds(), prev = pg.ids;
+  if (prev && prev.key === pg.key && prev.set.size && Date.now() - pgTouched < 2000 && pg.last) {
+    const fresh = [...ids].filter((id) => !prev.set.has(id));
+    if (fresh.length && fresh.length <= 3) pgReveal(viewEl.querySelector(`[data-id="${CSS.escape(fresh[0])}"]`));
+  }
+  pg.ids = { key: pg.key, set: ids };
   // Content that grows a moment later (images, fonts, live data) gets one more fit.
   clearTimeout(pg.late);
   pg.late = setTimeout(() => {
@@ -319,7 +380,7 @@ views.home = () => {
   const t = today(), me = actor();
   const hr = new Date().getHours();
   const greet = hr < 5 ? 'Good night' : hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening';
-  const evs = eventsOn(t).filter((e) => e.kind !== 'holiday');
+  const evs = eventsOn(t).filter((e) => e.kind !== 'holiday' && e.kind !== 'todo');
   const sumry = budgetSummary(monthKey(t));
   const left = sumry.limit ? sumry.limit - sumry.spent : null;
   const dinner = state.meals[t]?.dinner;
@@ -328,20 +389,29 @@ views.home = () => {
   const unread = state.chat.filter((m) => m.at > (seen().chat || 0) && m.who !== me).length;
   const turns = typeof myTurnGames === 'function' ? myTurnGames().length : 0;
   const listN = state.shop.list.filter((i) => !i.done).length;
-  const next = evs[0];
+  // What's still ahead today: timed events that haven't started (time >= now), then all-day ones.
+  const nowHm = `${pad(new Date().getHours())}:${pad(new Date().getMinutes())}`;
+  const ahead = [...evs.filter((e) => e.time && e.time >= nowHm), ...evs.filter((e) => !e.time)];
+  const next = ahead[0];
+  const later = !next && [...Array(7)].map((_, i) => addDays(t, i + 1)).map((d) => [d, eventsOn(d).find((e) => e.kind === 'event')]).find(([, e]) => e);
   const name = me ? member(me).name : '';
+  const dueToday = state.todos.filter((x) => !x.done && x.due && x.due <= t).length;
   const facts = [
-    next ? `📅 ${esc(next.title)}${next.time ? ` · ${fmtTime(next.time)}` : ''}` : '📅 Nothing on today',
+    next ? `📅 ${esc(next.title)}${next.time ? ` · ${fmtTime(next.time)}` : ''}${ahead.length > 1 ? ` <b>+${ahead.length - 1} more</b>` : ''}`
+      : later ? `📅 ${daysBetween(t, later[0]) === 1 ? 'Tomorrow' : fmtDate(later[0], { weekday: 'short' })}: ${esc(later[1].title)}` : '📅 Nothing else today',
+    dueToday ? `✅ ${dueToday} to-do${dueToday > 1 ? 's' : ''} due today` : '',
     left != null ? `💳 ${money(left, { maximumFractionDigits: 0 })} left` : '',
     dinner ? `🍽️ ${esc(dinner)}` : '',
   ].filter(Boolean);
   const todos = state.todos.filter((x) => !x.done).length;
+  const nights = [...Array(7)].map((_, i) => addDays(t, i)).filter((d) => state.meals[d]?.dinner).length;
+  const fresh = state.members.length < 2;
   const poll = me && state.board.find((x) => x.type === 'poll' && !x.closed && !x.votes?.[me]);
   // Today's shortcuts: each tile says what needs doing; the tabs below hold everything else
   const tiles = [
     { to: 'calendar', e: '📅', label: 'Calendar', sub: evs.length ? `${evs.length} today` : 'Nothing today', color: '#f59e0b' },
     { to: 'chores', e: '🧹', label: 'Chores', sub: choresDue ? `${choresDue} to do` : 'All done ✓', color: '#3b82f6' },
-    { to: 'meals', e: '🍽️', label: 'Meals', sub: dinner ? 'Planned' : 'Plan dinner', color: '#ef4444' },
+    { to: 'meals', e: '🍽️', label: 'Meals', sub: nights ? `${nights} of 7 nights` : 'Plan dinner', color: '#ef4444' },
     { to: 'shop', e: '🛒', label: 'Groceries', sub: listN ? `${listN} on list` : 'List', color: '#84cc16' },
     { to: 'budget', e: '🧾', label: 'Bills', sub: billsDue ? `${billsDue} due soon` : 'All paid', color: '#10b981', attrs: 'data-btab="bills"', alert: billsDue > 0 },
     { to: 'chat', e: '💬', label: 'Chat', sub: unread ? `${unread} new` : 'Family', color: '#8b5cf6', badge: unread || '' },
@@ -356,8 +426,12 @@ views.home = () => {
       <div class="hh-date">${fmtDate(t, { weekday: 'long', month: 'long', day: 'numeric' })}</div></div>
       <div class="hh-facts">${facts.map((f) => `<span>${f}</span>`).join('')}</div>
     </section>
+    <button class="magic-bar home-magic" data-action="magic-add"><span class="spark">✨</span><span class="grow">Add anything… <span class="muted">“Dentist Fri 3pm”, “$40 Target”</span></span></button>
+    ${fresh ? `<div class="card welcome-card" data-home-welcome><b>👋 Welcome! Set up your family</b><div class="small muted">Add everyone so calendars, chores and chat know who’s who.</div>
+      <div class="btn-row" style="margin:10px 0 0"><button class="btn" data-action="add-member">Set up your family</button>${typeof loadDemo === 'function' ? '<button class="btn secondary" data-action="load-demo">Try the demo</button>' : ''}</div></div>` : ''}
     ${needMe()}
     ${typeof whatsNewCard === 'function' ? whatsNewCard() : ''}
+    ${ahead.length ? `<div class="home-today" role="list" aria-label="Today">${ahead.slice(0, 3).map((e) => `<button role="listitem" data-action="go" data-to="calendar" style="--c:${e.color}"><b>${e.time ? fmtTime(e.time).replace(/:00(?=\s?[AP]M)/, '') : 'All day'}</b><span>${esc(e.title)}</span></button>`).join('')}</div>` : ''}
     <div class="launch">${tiles.map(tileHTML).join('')}</div>`;
 };
 
@@ -418,11 +492,17 @@ views.kid = () => {
   const frNew = fr ? circle().chat.filter((x) => x.at > (seen().fchat || 0) && x.from !== pkey(id)).length + friendTradeInbox(id).length : 0;
   const syncWait = typeof Sync !== 'undefined' && Sync.cfg?.kid && Sync.status !== 'synced' && Sync.status !== 'offline';
   const rsvp = typeof rsvpUpcoming === 'function' ? rsvpUpcoming(10).filter(({ ev, d }) => !ev.rsvp?.[d]?.[id]).slice(0, 1) : [];
-  const tiles = [
+  // Jobs first (chores → routine → rewards), then play (Squishvale is added by world.js at the marker), then the rest.
+  const lk = typeof lockTile === 'function' ? lockTile : (t) => t;
+  kidCheers(id);
+  const first = [
     { to: 'chores', e: '🧹', label: 'My chores', sub: todo ? `${todo} to do` : myChores.length ? 'All done! 🎉' : 'None yet', color: '#3b82f6', badge: todo || '' },
     rs.length ? { to: 'routines', e: '🌅', label: 'Routines', sub: rsLeft ? `${rsLeft} to finish` : 'Done ✓', color: '#f59e0b' } : null,
-    { to: 'squishies', e: '🧸', label: 'Squishies', sub: free ? '🎁 Free box!' : `${n} collected`, color: '#ec4899', badge: free ? '!' : '' },
-    { to: 'house', e: '🏡', label: 'Dream House', sub: h ? `${h.rooms.length} room${h.rooms.length > 1 ? 's' : ''}` : 'Move in!', color: '#8b5cf6' },
+    { to: 'chores', attrs: 'data-ctab="rewards"', e: '🏆', label: 'Rewards', sub: `⭐ ${pointsBalance(id)} stars`, color: '#eab308' },
+  ].filter(Boolean);
+  const tiles = [
+    lk({ to: 'squishies', e: '🧸', label: 'Squishies', sub: free ? '🎁 Free box!' : `${n} collected`, color: '#ec4899', badge: free ? '!' : '' }),
+    lk({ to: 'house', e: '🏡', label: 'Dream House', sub: h ? `${h.rooms.length} room${h.rooms.length > 1 ? 's' : ''}` : 'Move in!', color: '#8b5cf6' }),
     { to: 'chat', e: '💬', label: 'Chat', sub: unread ? `${unread} new` : 'Family', color: '#10b981', badge: unread || '' },
     fr ? { to: 'friends', e: '👯', label: 'Friends', sub: frNew ? `${frNew} new` : 'Trade & chat', color: '#f43f5e', badge: frNew || '' } : null,
     moneyMode(id) !== 'none' ? { to: 'piggy', e: '🐷', label: 'Piggy bank', sub: money(jarTotal(id, 'save') + jarTotal(id, 'spend') + jarTotal(id, 'give'), { maximumFractionDigits: 0 }), color: '#e85d8a' } : null,
@@ -436,13 +516,13 @@ views.kid = () => {
   return `${syncWait ? `<div class="card install-tip"><b>⏳ Almost ready!</b><div class="small" style="margin-top:4px">${Sync.status === 'unverified' ? `Ask a grown-up to tap the approval link sent to their email (${esc(Sync.cfg.kid.email)}).` : 'Connecting to your family…'}</div>${Sync.status === 'unverified' ? '<button class="btn block" style="margin-top:10px" data-action="sync-verified">A grown-up approved it</button>' : ''}</div>` : ''}
     <section class="kid-hi2" style="--c:${m.color}">
       <button class="kh-av" data-action="go" data-to="avatar" aria-label="Change my look">${typeof avatarSVG === 'function' ? avatarSVG(avatarOf(id), { head: true }) : esc(m.emoji)}</button>
-      <div class="kh-main"><div class="kh-greet">Hi, ${esc(m.name)}! 👋</div>
+      <div class="kh-main"><div class="kh-greet">Hi, ${esc(m.name)}! 👋<button class="kh-info" data-action="kid-info" aria-label="Stars, gems and money">ⓘ</button></div>
         <button class="kh-level" data-action="go" data-to="badges"><span>Level ${L.lvl}</span><i><b style="width:${L.pct * 100}%"></b></i></button>
         ${evs.length ? `<div class="kh-today">📅 ${esc(evs[0].title)}${evs[0].time ? ` · ${fmtTime(evs[0].time)}` : ''}</div>` : ''}</div>
       <button class="kh-lock" data-action="kid-exit" aria-label="Grown-ups: exit Kid Mode">🔒</button>
     </section>
     ${rsvp.map(rsvpCard).join('')}
-    <div class="launch">${tiles.map(tileHTML).join('')}</div>`;
+    <div class="launch">${first.map(tileHTML).join('')}<i class="play-at" hidden></i>${tiles.map(tileHTML).join('')}</div>`;
 };
 
 /* ---------- Kid home (little kids, Simple mode) ---------- */
@@ -458,13 +538,17 @@ function simpleLauncher(id) {
   const turns = typeof myTurnGames === 'function' ? myTurnGames().length : 0;
   const unread = state.chat.filter((x) => x.at > (seen().chat || 0) && x.who !== id).length;
   const syncWait = typeof Sync !== 'undefined' && Sync.cfg?.kid && Sync.status !== 'synced' && Sync.status !== 'offline';
-  const tiles = [
+  const lk = typeof lockTile === 'function' ? lockTile : (t) => t;
+  kidCheers(id);
+  const first = [
     { to: 'chores', e: '🧹', label: 'My jobs', sub: left ? `${left} to do` : jobs.length ? 'All done! 🎉' : 'None yet', color: '#3b82f6', badge: left || '' },
-    { to: 'routines', e: esc(now?.emoji || '🌅'), label: 'My routine', sub: now ? (routineComplete(now) ? 'Done! ⭐' : `${steps} of ${now.steps.length}`) : 'None yet', color: '#f59e0b' },
+    { to: 'routines', e: esc(now?.emoji || '🌅'), label: 'My routine', sub: now ? (routineComplete(now) ? 'Done! ✅' : `${steps} of ${now.steps.length}`) : 'None yet', color: '#f59e0b' },
     { to: 'treats', e: '🎁', label: 'Treats', sub: `⭐ ${stars}`, color: '#ec4899' },
-    { to: 'squishies', e: '🧸', label: 'Squishies', sub: free ? 'Free box!' : 'My collection', color: '#a855f7', badge: free ? '!' : '' },
-    { to: 'house', e: '🏡', label: 'My house', sub: 'Decorate', color: '#8b5cf6' },
-    { to: 'games', e: '🎮', label: 'Games', sub: turns ? 'Your turn!' : 'Play', color: '#0ea5e9' },
+  ];
+  const tiles = [
+    lk({ to: 'squishies', e: '🧸', label: 'Squishies', sub: free ? 'Free box!' : 'My collection', color: '#a855f7', badge: free ? '!' : '' }),
+    lk({ to: 'house', e: '🏡', label: 'My house', sub: 'Decorate', color: '#8b5cf6' }),
+    lk({ to: 'games', e: '🎮', label: 'Games', sub: turns ? 'Your turn!' : 'Play', color: '#0ea5e9' }),
     { to: 'checkin', e: esc(checkinOf(id)?.mood || '😊'), art: typeof moodArtId === 'function' ? moodArtId(checkinOf(id)?.mood || '😊') : '', label: 'My feeling', sub: checkinOf(id) ? 'Done ✓' : 'Tap me!', color: '#f97316' },
     { to: 'chat', e: '💬', label: 'Chat', sub: unread ? `${unread} new` : 'Say hi', color: '#10b981', badge: unread || '' },
     { act: 'kudos-new', e: '🙌', label: 'High-five', sub: 'Cheer someone', color: '#14b8a6' },
@@ -475,11 +559,11 @@ function simpleLauncher(id) {
   return `${syncWait ? `<div class="card install-tip"><b>⏳ Almost ready!</b><div class="small" style="margin-top:4px">Ask a grown-up to check their email.</div>${Sync.status === 'unverified' ? '<button class="btn block" style="margin-top:10px" data-action="sync-verified">A grown-up did it</button>' : ''}</div>` : ''}
     <section class="kid-hi2 little" style="--c:${m.color}">
       <button class="kh-av" data-action="go" data-to="avatar" aria-label="Change my look">${typeof avatarSVG === 'function' ? avatarSVG(avatarOf(id), { head: true }) : esc(m.emoji)}</button>
-      <div class="kh-main"><div class="kh-greet">Hi, ${esc(m.name)}! ${sayBtn(id, `Hi ${m.name}! You have ${stars} stars. Tap a picture to play.`)}</div>
+      <div class="kh-main"><div class="kh-greet">Hi, ${esc(m.name)}! ${sayBtn(id, `Hi ${m.name}! You have ${stars} stars. Tap a picture to play.`)}<button class="kh-info" data-action="kid-info" aria-label="Stars, gems and money">ⓘ</button></div>
         <button class="kh-stars" data-action="go" data-to="treats">⭐ <b>${stars}</b> stars</button></div>
       <button class="kh-lock" data-action="kid-exit" aria-label="Grown-ups">🔒</button>
     </section>
-    <div class="launch big">${tiles.map(tileHTML).join('')}</div>`;
+    <div class="launch big">${first.map(tileHTML).join('')}<i class="play-at" hidden></i>${tiles.map(tileHTML).join('')}</div>`;
 }
 
 /* ---------- Play: every game and every collecting thing on one screen ---------- */
@@ -506,9 +590,12 @@ views.play = () => {
     { to: 'avatar', e: '🧍', label: 'My avatar', sub: 'Dress up', color: '#f97316' },
     { to: 'town', e: '🏘️', label: 'Town', sub: 'Visit & vote', color: '#f59e0b' },
     { to: 'gems', e: GEM, label: 'Gems', sub: me ? `${gemBalance(me)} gems` : 'Wallets', color: '#7c3aed' },
-    friendsOk ? { to: 'friends', e: '👯', label: 'Friends', sub: 'Trade & chat', color: '#f43f5e' } : null,
+    // A kid can't turn on sync themselves: no dead end into Settings, just "ask a grown-up"
+    friendsOk ? ((kid || (me && typeof isKidId === 'function' && isKidId(me))) && typeof syncReady === 'function' && !syncReady() ? { act: 'friends-ask', e: '👯', label: 'Friends', sub: 'Ask a grown-up', color: '#f43f5e' } : { to: 'friends', e: '👯', label: 'Friends', sub: 'Trade & chat', color: '#f43f5e' }) : null,
     { to: 'games', e: '🏆', label: 'Scores', sub: 'Champs', color: '#eab308' },
   ].filter(Boolean);
   return `${needMe()}<div class="launch">${tiles.map(tileHTML).join('')}</div>`;
 };
 KID_ROUTES.push('play');
+actions['friends-ask'] = () => toast('👯 Friends need a grown-up to turn on Family sync first — ask them!');
+KID_ACTIONS.add('friends-ask');
