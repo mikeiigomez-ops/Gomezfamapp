@@ -836,10 +836,17 @@ views.budget = () => {
         const ring = T.limit ? `<div class="ring ring-sm"><span class="ring-label">${Math.round(used * 100)}%<small>used</small></span><svg viewBox="0 0 96 96"><circle class="track" cx="48" cy="48" r="42"/><circle class="val ${levelCls(used)}" cx="48" cy="48" r="42" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - Math.min(1, used))}" stroke-linecap="round"/></svg></div>` : '';
         const leftLine = T.limit ? (left >= 0 ? `<b style="color:var(--good)">${moneyW(left)}</b> budget left${P.cur && daysLeft ? ` · <span class="allowance">≈ <b>${moneyW(left / daysLeft)}/day</b> of everyday budget</span>` : ''}` : `<b style="color:var(--bad)">${moneyW(-left)}</b> over the everyday budget`) : '';
         const sumLine = P.cur ? `<b>${moneyW(T.spent)}</b> spent so far · should be <b>~${moneyW(T.should)}</b> by today · likely <b>~${moneyW(T.likely)}</b> by ${esc(P.endLabel)}${T.limit ? ` <span class="muted">(budget ${moneyW(T.limit)})</span>` : ''}`
-          : P.past ? `Ended at <b>${moneyW(T.spent)}</b>${T.usual !== null ? ` · usually ~${moneyW(T.usual)}` : ''}${T.limit ? ` · budget ${moneyW(T.limit)}` : ''}`
+          : P.past ? `Ended at <b>${moneyW(T.spent)}</b>${T.usual !== null ? ` · usually ~${moneyW(T.usual)}` : ''}${T.limit ? ` · budget ${moneyW(T.limit)}` : ''}${T.usual !== null && Math.abs(T.spent - T.usual) >= Math.max(50, T.usual * 0.05) ? `<div class="month-verdict ${T.spent < T.usual ? 'down' : 'up'}">${T.spent < T.usual ? '✓ Spent' : '▲ Spent'} <b>${moneyW(Math.abs(T.spent - T.usual))} ${T.spent < T.usual ? 'less' : 'more'}</b> than a usual month</div>` : ''}`
           : T.usual !== null ? `Usually ~${moneyW(T.usual)}${T.limit ? ` · budget ${moneyW(T.limit)}` : ''}` : '';
         const row = (x) => `<div class="top"><span>${esc(x.c.emoji)} ${esc(x.c.name)}</span><span>${moneyW(x.spent)}${x.lim ? ` / ${moneyW(x.lim)}${x.c.limit !== undefined && x.lim !== x.c.limit ? ' ↻' : ''}` : ''}</span></div>
-            ${paceBar(x, P)}${(() => { const l = paceLine(x, P); return l ? `<div class="pace-line ${x.level}">${esc(l)}</div>` : ''; })()}`;
+            ${paceBar(x, P)}${(() => { const l = paceLine(x, P); return l ? `<div class="pace-line ${x.level}">${esc(l)}</div>` : ''; })()}${P.past ? vsUsual(x.spent, x.usual) : ''}`;
+        // A finished month against your own usual: green below it, red above it (small differences say nothing)
+        function vsUsual(v, u) {
+          if (u === null || u === undefined) return '';
+          const d = v - u;
+          if (Math.abs(d) < Math.max(20, u * 0.1)) return '<div class="vs-usual even">≈ about your usual</div>';
+          return `<div class="vs-usual ${d < 0 ? 'down' : 'up'}">${d < 0 ? '▼' : '▲'} ${moneyW(Math.abs(d))} ${d < 0 ? 'below' : 'above'} your usual</div>`;
+        }
         const o = P.other, nSort = typeof uncategorizedMerchants === 'function' ? uncategorizedMerchants().length : 0;
         return `<div class="section-title">Categories<button data-action="add-category">+ Category</button></div>
       <div class="card">

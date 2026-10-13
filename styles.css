@@ -594,3 +594,9 @@ body:not(.paged) .budget-tabs { position: sticky; top: -6px; z-index: 6; transit
 /* Over budget: the part inside the budget stays muted, only the overage is coloured */
 .pace-bar > i.over { background: linear-gradient(90deg, color-mix(in srgb, var(--muted) 45%, transparent) 0 var(--cap), var(--bad) var(--cap)); }
 .pace-bar > i.over.warn { background: linear-gradient(90deg, color-mix(in srgb, var(--muted) 45%, transparent) 0 var(--cap), var(--warn) var(--cap)); }
+.vs-usual { display: inline-block; margin-top: 4px; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 99px; background: var(--surface-2); color: var(--muted); }
+.vs-usual.down { background: var(--good-soft, var(--surface-2)); color: var(--good); }
+.vs-usual.up { background: var(--bad-soft, var(--surface-2)); color: var(--bad); }
+.month-verdict { margin-top: 8px; padding: 8px 11px; border-radius: 10px; font-size: 14px; background: var(--surface-2); }
+.month-verdict.down { background: var(--good-soft, var(--surface-2)); color: var(--good); }
+.month-verdict.up { background: var(--bad-soft, var(--surface-2)); color: var(--bad); }
