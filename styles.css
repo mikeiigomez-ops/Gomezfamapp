@@ -619,3 +619,22 @@ body:not(.paged) .budget-tabs { position: sticky; top: -6px; z-index: 6; transit
 .np-sub input.np-time { min-width: 120px; }
 .section-title .np-note { font-size: 12px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--muted); }
 .np-diag { margin-top: 8px; }
+/* Things to do */
+.fun-lead { margin: 0 0 6px; line-height: 1.45; }
+.fun-row { display: flex; gap: 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+.fun-card .fun-row:first-of-type { border-top: 0; }
+.fun-list .fun-row { padding: 10px 14px; }
+.fun-list .fun-row:first-child { border-top: 0; }
+.fun-row .grow { flex: 1; min-width: 0; }
+.fun-row .title { font-weight: 650; }
+.fun-row .sub { font-size: 13px; color: var(--muted); }
+.fun-e { font-size: 26px; width: 40px; height: 40px; flex: none; display: grid; place-items: center; border-radius: 12px; background: var(--surface-2); }
+.fun-act { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex: none; }
+.fun-act a.mini-btn { text-decoration: none; }
+.fun-live { color: var(--good); font-weight: 650; }
+.fun-chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-bottom: 8px; }
+.fun-chips .chip { flex: none; }
+.fun-tools { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+.fun-tools .segmented { flex: 1; }
+.fun-budget .kv { display: flex; justify-content: space-between; align-items: baseline; }
+.link-inline { color: var(--accent-ink, var(--accent)); font: inherit; font-weight: 650; padding: 0; text-decoration: underline; }

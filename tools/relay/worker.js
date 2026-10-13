@@ -76,6 +76,7 @@ export default {
     list.push(now); recent.set(who.sub, list);
     let body;
     try { body = await req.json(); } catch { return reply(400, { error: 'json' }); }
+    if (body.op === 'events') return reply(200, await events(body, env));
     const subs = Array.isArray(body.subs) ? body.subs.slice(0, 12) : [];
     const payload = te.encode(JSON.stringify({ title: String(body.payload?.title || '').slice(0, 120), body: String(body.payload?.body || '').slice(0, 400), url: String(body.payload?.url || './').slice(0, 200), tag: String(body.payload?.tag || '').slice(0, 64) }));
     // Test with a delay: answer now and send a few seconds later (time to lock the phone)
@@ -104,4 +105,39 @@ async function sendAll(subs, payload, body, env) {
       } catch (e) { results.push({ endpoint: s.endpoint, status: 'error' }); }
     }
     return results;
+}
+
+/* Upcoming events near the family (Ticketmaster Discovery API, free key in TICKETMASTER_API_KEY).
+   Cached for 6 hours per area so a whole family opening the app is one lookup. */
+const SEG = { Sports: 'sports', Music: 'music', 'Arts & Theatre': 'shows', Family: 'family', Film: 'movies', Miscellaneous: 'activity' };
+export async function events(body, env, fetcher = fetch) {
+  if (!env.TICKETMASTER_API_KEY) return { events: [], reason: 'no-key' };
+  const lat = Math.round(Number(body.lat || 42.2575) * 100) / 100, lng = Math.round(Number(body.lng || -83.211) * 100) / 100;
+  const radius = Math.min(75, Math.max(5, Number(body.radius) || 35));
+  const now = new Date(), end = new Date(now.getTime() + 45 * 864e5);
+  const iso = (d) => d.toISOString().replace(/\.\d{3}Z$/, 'Z');
+  const url = `https://app.ticketmaster.com/discovery/v2/events.json?apikey=${encodeURIComponent(env.TICKETMASTER_API_KEY)}&latlong=${lat},${lng}&radius=${radius}&unit=miles&startDateTime=${iso(now)}&endDateTime=${iso(end)}&size=150&sort=date,asc&locale=*`;
+  const cacheKey = new Request(`https://cache.gomezfam/events/${lat},${lng},${radius},${now.toISOString().slice(0, 13)}`);
+  const cache = typeof caches !== 'undefined' ? caches.default : null;
+  const hit = cache && await cache.match(cacheKey).catch(() => null);
+  if (hit) return hit.json();
+  let data;
+  try { const r = await fetcher(url); if (!r.ok) return { events: [], reason: 'upstream ' + r.status }; data = await r.json(); }
+  catch { return { events: [], reason: 'upstream' }; }
+  const seen = new Set(), out = [];
+  for (const e of data?._embedded?.events || []) {
+    const name = String(e.name || '');
+    if (!name || /parking|vip package|upsell|suite|test event/i.test(name)) continue;
+    const date = e.dates?.start?.localDate, key = name.toLowerCase() + date;
+    if (!date || seen.has(key) || e.dates?.status?.code === 'cancelled') continue;
+    seen.add(key);
+    const cls = e.classifications?.[0] || {}, v = e._embedded?.venues?.[0] || {};
+    const pr = (e.priceRanges || []).find((p) => p.type === 'standard') || (e.priceRanges || [])[0];
+    out.push({ id: 'tm-' + String(e.id).slice(0, 40), name: name.slice(0, 120), date, time: (e.dates?.start?.localTime || '').slice(0, 5),
+      cat: SEG[cls.segment?.name] || 'activity', genre: String(cls.genre?.name || '').slice(0, 40), venue: String(v.name || '').slice(0, 80), city: String(v.city?.name || '').slice(0, 40),
+      min: pr ? Math.round(pr.min) : null, max: pr ? Math.round(pr.max) : null, url: String(e.url || '').slice(0, 300) });
+  }
+  const res = { events: out.slice(0, 120), at: Date.now() };
+  if (cache) await cache.put(cacheKey, new Response(JSON.stringify(res), { headers: { 'content-type': 'application/json', 'cache-control': 'max-age=21600' } })).catch(() => {});
+  return res;
 }

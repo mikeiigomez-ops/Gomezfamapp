@@ -39,10 +39,12 @@ jobs:
           VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
           VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
           FSA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          TM: ${{ secrets.TICKETMASTER_API_KEY }}
         run: |
           PID=$(node -e "process.stdout.write(JSON.parse(process.env.FSA).project_id)")
           OWNER="${GITHUB_REPOSITORY_OWNER,,}"
           npx --yes wrangler@3.80.0 deploy --var "FIREBASE_PROJECT_ID:$PID" --var "ALLOWED_ORIGIN:https://$OWNER.github.io"
           printf '%s' "$VAPID_PUBLIC_KEY" | npx --yes wrangler@3.80.0 secret put VAPID_PUBLIC_KEY
           printf '%s' "$VAPID_PRIVATE_KEY" | npx --yes wrangler@3.80.0 secret put VAPID_PRIVATE_KEY
+          if [ -n "$TM" ]; then printf '%s' "$TM" | npx --yes wrangler@3.80.0 secret put TICKETMASTER_API_KEY; fi
           echo "✅ Relay deployed. Paste the workers.dev address shown above into Settings → Notifications → Instant."
