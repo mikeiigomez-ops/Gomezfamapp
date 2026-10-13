@@ -122,7 +122,7 @@ body.game-mode .mem-stats { margin: 6px 0 2px; }
 .game-over .wd-result { width: min(100%, 360px); margin: 0; box-shadow: var(--shadow-lg); }
 .go-best { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 14px; display: grid; gap: 4px; }
 body:not(.game-mode) .game-over { position: static; background: none; padding: 0; }
-.game-stage .c4-board { width: min(100cqw, calc((100cqh - 36px) / 6 * 7 + 40px)); max-width: none; margin: 0; }
+.game-stage .c4-board { width: min(100%, calc((100vh - 300px) / 6 * 7 + 40px)); width: min(100cqw, calc((100cqh - 36px) / 6 * 7 + 40px)); max-width: none; margin: 0; } /* first width: older Safari without container units */
 .game-stage .wd-board { margin: 0; gap: 6px; }
 .game-stage .wd-row { width: min(100cqw, calc((100cqh - 30px) / 6 * var(--len) + (var(--len) - 1) * 6px), calc(var(--len) * 78px)); }
 .game-stage .wd-tile { font-size: min(calc((100cqh - 30px) / 6 * .5), calc(100cqw / var(--len) * .5), 36px); }

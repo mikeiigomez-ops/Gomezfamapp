@@ -1755,3 +1755,8 @@ html[data-theme="dark"] .gem-pill { background: linear-gradient(135deg, #1e2a44,
 /* Dark-safe fills for small solid badges and today markers (tokens at the top) */
 .cal-day.today span, .wk-day.today span, .pick:has(input:checked)::after { background: var(--accent-fill); color: var(--on-accent); }
 .bell-dot, .tab-badge, .tile-badge, .subnav .chip i { background: var(--bad-fill); color: #fff; }
+/* Connect Four cells on older iPad Safari: aspect-ratio on a stretched flex item can resolve to 0 height.
+   Give the cell an explicit width, and a padding-box fallback where aspect-ratio isn't supported. */
+.c4-col { min-width: 0; }
+.c4-cell { width: 100%; flex: none; }
+@supports not (aspect-ratio: 1) { .c4-cell { height: 0; padding-bottom: 100%; } }
