@@ -2111,6 +2111,7 @@ function billForm(b) {
         const prev = billOccurrences(b, addDays(today(), -120), today()).map((d) => [d, b.paid?.[d]]);
         if (!rest.days) delete b.days;
         if (!rest.weekend) delete b.weekend;
+        if (b.type !== 'income' && (rest.dueDay !== b.dueDay || rest.freq !== b.freq)) rest.movedOn = today(); // the leveller leaves a just-moved bill alone
         Object.assign(b, rest);
         b.paid ||= {};
         const samePeriod = (od, d) => (b.freq === 'monthly' ? monthKey(od) === monthKey(d) : Math.abs(daysBetween(od, d)) < (FREQ_STEP[b.freq] || (b.freq === 'semimonthly' ? 13 : 366)));

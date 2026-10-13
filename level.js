@@ -40,7 +40,9 @@ function levelPlan() {
   const netOf = (bv) => R.map((_, i) => inc[i] - flex[i] - bv[i]);
   const before = netOf(billV);
   // Candidates: monthly, big enough, not marked as fixed
-  const movable = bills.filter((b) => (b.freq || 'monthly') === 'monthly' && b.amount >= LV_MIN && !b.fixedDue);
+  // A bill whose date you changed in the last ~4 months isn't suggested again (you just negotiated it)
+  const recent = (b) => b.movedOn && daysBetween(b.movedOn, today()) < 120;
+  const movable = bills.filter((b) => (b.freq || 'monthly') === 'monthly' && b.amount >= LV_MIN && !b.fixedDue && !recent(b));
   const cur = billV.slice(), moves = [], used = new Set();
   for (let k = 0; k < LV_MAX_MOVES; k++) {
     const base = lvScore(netOf(cur));
@@ -120,7 +122,7 @@ Object.assign(actions, {
   'lv-moved': (el) => {
     const b = findIn(state.budget.bills, el.dataset.id); if (!b) return;
     const day = +el.dataset.day, next = billOccurrences({ ...b, dueDay: day }, today(), addDays(today(), 40))[0];
-    b.dueDay = day; if (next) b.anchor = next;
+    b.dueDay = day; if (next) b.anchor = next; b.movedOn = today();
     save(); render(); toast(`${b.name} now due on the ${ordinal(day)}`);
   },
   'lv-fixed': (el) => { const b = findIn(state.budget.bills, el.dataset.id); if (b) { b.fixedDue = true; save(); render(); toast(`${b.name} stays put`); } },
