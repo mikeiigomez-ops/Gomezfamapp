@@ -436,8 +436,12 @@ views.home = () => {
       <div class="hh-facts">${facts.map((f) => `<span>${f}</span>`).join('')}</div>
     </section>
     <button class="magic-bar home-magic" data-action="magic-add"><span class="spark">✨</span><span class="grow">Add anything… <span class="muted">“Dentist Fri 3pm”, “$40 Target”</span></span></button>
-    ${fresh ? `<div class="card welcome-card" data-home-welcome><b>👋 Welcome! Set up your family</b><div class="small muted">Add everyone so calendars, chores and chat know who’s who.</div>
-      <div class="btn-row" style="margin:10px 0 0"><button class="btn" data-action="add-member">Set up your family</button>${typeof loadDemo === 'function' ? '<button class="btn secondary" data-action="load-demo">Try the demo</button>' : ''}</div></div>` : ''}
+    ${fresh ? (typeof Sync !== 'undefined' && !Sync.cfg?.config
+      ? `<div class="card welcome-card" data-home-welcome><b>👋 Welcome to the Gomez Family Hub</b><div class="small muted">Already using it on your phone? Sign in to see your family’s budget, calendar and lists here.</div>
+        <div class="btn-row" style="margin:10px 0 0"><button class="btn" data-action="sync-join">Sign in to my family</button><button class="btn secondary" data-action="add-member">Start a new family</button></div>
+        <button class="mini-btn" style="margin-top:4px" data-action="kid-scan">🧒 This is a kid’s device</button></div>`
+      : `<div class="card welcome-card" data-home-welcome><b>👋 Welcome! Set up your family</b><div class="small muted">Add everyone so calendars, chores and chat know who’s who.</div>
+      <div class="btn-row" style="margin:10px 0 0"><button class="btn" data-action="add-member">Set up your family</button>${typeof loadDemo === 'function' ? '<button class="btn secondary" data-action="load-demo">Try the demo</button>' : ''}</div></div>`) : ''}
     ${needMe()}
     ${typeof whatsNewCard === 'function' ? whatsNewCard() : ''}
     ${ahead.length || ins ? `<div class="home-today" role="list" aria-label="Today">${ins}${ahead.slice(0, ins ? 1 : 3).map((e) => `<button role="listitem" data-action="go" data-to="calendar" style="--c:${e.color}"><b>${e.time ? fmtTime(e.time).replace(/:00(?=\s?[AP]M)/, '') : 'All day'}</b><span>${esc(e.title)}</span></button>`).join('')}</div>` : ''}

@@ -411,6 +411,8 @@ function parseFirebaseConfig(text) {
 const b64url = (s) => btoa(unescape(encodeURIComponent(s))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 const unb64url = (s) => decodeURIComponent(escape(atob(s.replace(/-/g, '+').replace(/_/g, '/'))));
 function inviteCode() { return INVITE_PREFIX + b64url(JSON.stringify({ c: Sync.cfg.config, f: Sync.cfg.familyId })); }
+// Opening this link on a computer or new phone joins the family in one tap (sign-in still required)
+function inviteLink() { return `${location.origin}${location.pathname}#join=${inviteCode()}`; }
 function parseInvite(text) {
   const m = String(text || '').match(/GFAM1\.([A-Za-z0-9_-]+)/);
   if (!m) return null;
@@ -512,6 +514,7 @@ function syncCardHTML() {
         <button class="btn" data-action="sync-add-email">+ Add person</button>
         <button class="btn secondary" data-action="sync-invite">📤 Send invite</button>
       </div>
+      <button class="btn secondary block" style="margin-top:8px" data-action="sync-device">💻 Use on another device</button>
       <div class="btn-row" style="margin:6px 0 0"><button class="mini-btn" data-action="sync-signout">Sign out</button><button class="mini-btn" style="color:var(--bad)" data-action="sync-off">Turn off sync on this phone</button></div>`;
   }
   return `<div class="section-title">Family sync</div><div class="card">${body}</div>`;
@@ -536,12 +539,12 @@ Object.assign(actions, {
     },
   }),
   'sync-join': (el, e, prefill) => openSheet({
-    title: 'Join your family',
+    title: 'Sign in to your family',
     saveLabel: 'Join',
     values: { invite: prefill || '' },
     fields: [
-      { type: 'html', html: '<p class="small muted" style="margin:0 4px 10px">Paste the whole invite message you were sent. It contains a code starting with <b>GFAM1.</b></p>' },
-      { name: 'invite', label: 'Invite', type: 'textarea', required: true },
+      { type: 'html', html: '<p class="small" style="margin:0 4px 10px"><b>On your phone:</b> ⚙️ Settings → Family sync → <b>💻 Use on another device</b>, and open that link here — or paste the link or invite message below.</p>' },
+      { name: 'invite', label: 'Family link or invite', type: 'textarea', required: true, placeholder: 'https://…#join=GFAM1.…' },
     ],
     onSave(v) {
       const inv = parseInvite(v.invite);
@@ -553,6 +556,7 @@ Object.assign(actions, {
       writeJSON(BASE_KEY, null); Sync.base = null;
       if (Sync.fb && !sameProject) { location.reload(); return; }
       setTimeout(() => (Sync.fb ? onAuth() : startSync()));
+      setTimeout(() => { if (!Sync.user && $('#sheet').hidden) authSheet('signin'); }, 2500);
     },
   }),
   'sync-signin': () => authSheet('signin'),
@@ -613,9 +617,24 @@ Object.assign(actions, {
     const { updateDoc, arrayRemove } = Sync.fb.fs;
     updateDoc(Sync.ref, { emails: arrayRemove(e) }).catch(syncError);
   },
+  'sync-device': () => openSheet({
+    title: '💻 Use on another device',
+    saveLabel: 'Copy link',
+    fields: [
+      { type: 'html', html: `<ol class="small" style="margin:0 0 10px;padding-left:20px;line-height:1.6"><li>Send yourself this link (text, email or AirDrop).</li><li>Open it on the computer or tablet and tap <b>Join</b>.</li><li>Sign in with <b>${esc(Sync.user?.email || 'your email')}</b>. Everything syncs.</li></ol>
+        <textarea readonly class="link-box" rows="3" style="width:100%;font:12px ui-monospace,monospace" onclick="this.select()">${esc(inviteLink())}</textarea>
+        <p class="small muted" style="margin:6px 0 0">The link only works for emails listed under Who has access.</p>` },
+    ],
+    onSave() {
+      const link = inviteLink();
+      if (navigator.share) navigator.share({ title: 'Gomez Family Hub', url: link }).catch(() => {});
+      else navigator.clipboard?.writeText(link).then(() => toast('Link copied'), () => toast('Select the link and copy it'));
+      return false;
+    },
+  }),
   'sync-invite': async () => {
     const url = location.origin + location.pathname;
-    const text = `Join our family app! 🏠\n\n1. Open ${url} in Safari, tap Share → Add to Home Screen.\n2. Open the app from your Home Screen → ⚙️ Settings → Family sync → Join with invite, and paste this whole message.\n3. Tap Create account and use the email I added for you.\n\nInvite code: ${inviteCode()}`;
+    const text = `Join our family app! 🏠\n\nOpen this link: ${inviteLink()}\n\nTap Join, then Create account (or Sign in) with the email I added for you. On iPhone: Share → Add to Home Screen to keep it as an app.\n\n(Or open ${url} → ⚙️ Settings → Family sync → Join with invite, and paste this whole message.)\n\nInvite code: ${inviteCode()}`;
     try {
       if (navigator.share) await navigator.share({ title: 'Join our family app', text });
       else { await navigator.clipboard.writeText(text); toast('Invite copied — paste it in a text'); }
@@ -649,4 +668,13 @@ Object.assign(actions, {
   }
   else render(); // app.js drew the first screen before this file loaded
   if (Sync.cfg?.config) startSync();
+})();
+
+// A family link (…#join=GFAM1.…) opens "Join your family", already filled in
+(function joinFromLink() {
+  const m = location.hash.match(/^#join=(GFAM1\.[A-Za-z0-9_-]+)/);
+  if (!m) return;
+  history.replaceState(null, '', location.pathname + '#home');
+  const open = () => (Sync.cfg?.familyId && Sync.user ? toast('This device is already part of a family') : actions['sync-join'](null, null, m[1]));
+  if (document.readyState === 'complete') setTimeout(open, 300); else window.addEventListener('load', () => setTimeout(open, 300));
 })();
