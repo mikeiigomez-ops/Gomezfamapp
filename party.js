@@ -232,12 +232,12 @@ views.charades = () => {
       ${best.length ? `<div class="section-title">Best rounds</div><div class="card flush">${best.map((s) => `<div class="row"><div class="avatar">${esc(playerEmoji(s.who))}</div><div class="grow"><div class="title">${esc(playerName(s.who))}</div><div class="sub">${esc(s.deck || '')}</div></div><b>${s.score}</b></div>`).join('')}</div>` : ''}`;
   }
   if (R.phase === 'ready') {
-    return `<div class="ch-full ch-ready" data-action="ch-go"><div class="ch-rot${ui.chFlip ? ' flip' : ''}"><div class="ch-hint">Put the phone on your forehead</div><div class="ch-word">${R.count ? R.count : 'Tap to start'}</div><div class="ch-hint">${esc(R.deck)}</div></div></div>
+    return `<button class="ch-x" data-action="ch-quit" aria-label="Cancel">✕</button><div class="ch-full ch-ready" data-action="ch-go"><div class="ch-rot${ui.chFlip ? ' flip' : ''}"><div class="ch-hint">Put the phone on your forehead</div><div class="ch-word">${R.count ? R.count : 'Tap to start'}</div><div class="ch-hint">${esc(R.deck)}</div></div></div>
       <div class="btn-row ch-below"><button class="btn secondary" data-action="ch-flip">🔄 Flip the text</button><button class="btn secondary" data-action="ch-quit">Cancel</button></div>`;
   }
   if (R.phase === 'play') {
     const left = Math.max(0, Math.ceil((R.end - Date.now()) / 1000)), flash = R.flash && Date.now() - R.flash.t < 700 ? R.flash.k : '';
-    return `<div class="ch-full ch-play${flash ? ' ' + flash : ''}"><button class="ch-tap left" data-action="ch-mark" data-k="pass" aria-label="Pass"></button><button class="ch-tap right" data-action="ch-mark" data-k="got" aria-label="Got it"></button>
+    return `<button class="ch-x" data-action="ch-quit" aria-label="Quit">✕</button><button class="ch-stop" data-action="ch-stop">⏹ End round</button><div class="ch-full ch-play${flash ? ' ' + flash : ''}"><button class="ch-tap left" data-action="ch-mark" data-k="pass" aria-label="Pass"></button><button class="ch-tap right" data-action="ch-mark" data-k="got" aria-label="Got it"></button>
       <div class="ch-rot${ui.chFlip ? ' flip' : ''}"><div class="ch-time">${left}</div><div class="ch-word">${flash === 'got' ? 'Correct! ✅' : flash === 'pass' ? 'Pass ⏭' : esc(R.words[R.i])}</div><div class="ch-hint">✅ ${R.got.length}</div></div></div>`;
   }
   // done
@@ -296,6 +296,7 @@ Object.assign(actions, {
     }, 800);
   },
   'ch-mark': (el) => chMark(el.dataset.k),
+  'ch-stop': () => chEnd(),
   'ch-flip': () => { ui.chFlip = !ui.chFlip; render(); },
   'ch-again': () => { const R = ui.ch; const i = state.members.findIndex((m) => m.id === R.who); ui.chWho = state.members[(i + 1) % state.members.length]?.id; ui.ch = null; render(); },
   'ch-quit': () => { clearInterval(chTick); window.removeEventListener('deviceorientation', chOrient); ui.ch = null; render(); },
@@ -366,6 +367,6 @@ actions['mp-start'] = (el) => {
   _mpStartParty(el);
 };
 KID_ROUTES.push('charades');
-for (const a of ['ch-who', 'ch-start', 'ch-go', 'ch-mark', 'ch-flip', 'ch-again', 'ch-quit', 'qz-pick', 'qz-next', 'qz-skip', 'qz-tv']) KID_ACTIONS.add(a);
+for (const a of ['ch-stop', 'ch-who', 'ch-start', 'ch-go', 'ch-mark', 'ch-flip', 'ch-again', 'ch-quit', 'qz-pick', 'qz-next', 'qz-skip', 'qz-tv']) KID_ACTIONS.add(a);
 if (typeof PG_SKIP !== 'undefined') PG_SKIP.add('charades');
 if (typeof HUB_OF !== 'undefined') HUB_OF.charades = 'play';

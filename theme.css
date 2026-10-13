@@ -1992,3 +1992,10 @@ body.ch-on .tabbar, body.ch-on .topbar, body.ch-on header, body.ch-on .subnav { 
 .ch-below { position: fixed; left: 0; right: 0; bottom: max(20px, env(safe-area-inset-bottom)); z-index: 61; justify-content: center; }
 .ch-result { text-align: center; } .ch-score { font: 900 64px/1 var(--font-display); }
 .imp-order { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 0; font-weight: 750; } .imp-order i { font-style: normal; color: var(--muted); }
+.fd-pickhint { text-align: center; margin: 2px 0 8px; padding: 10px 12px; border-radius: 14px; background: var(--accent-soft, #fdecea); font-weight: 650; }
+.fd-pick:not(.zero) { animation: fd-glow 1.6s ease-in-out infinite; }
+@keyframes fd-glow { 50% { box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 35%, transparent); } }
+.fd-last { text-align: center; margin: 0 0 6px; padding: 6px 10px; border-radius: 12px; background: var(--surface); box-shadow: var(--shadow); font-size: 14px; animation: check-pop .4s var(--spring, ease-out); }
+.ch-x, .ch-stop { position: fixed; z-index: 62; top: max(14px, env(safe-area-inset-top)); padding: 10px 16px; border-radius: 999px; background: rgba(0, 0, 0, .35); color: #fff; font-weight: 800; font-size: 16px; }
+.ch-x { left: 14px; width: 46px; height: 46px; padding: 0; font-size: 20px; }
+.ch-stop { right: 14px; }

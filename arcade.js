@@ -463,6 +463,8 @@ GX.dice = {
       if (!c || !c.rolls || cat in card || !FD_CATS.some(([k]) => k === cat)) return false;
       g.cards = { ...g.cards, [who]: { ...card, [cat]: fdScore(cat, c.dice) } };
       g.cur = null;
+      ui.fdLast = { g: g.id, who, cat, pts: fdScore(cat, c.dice), t: Date.now() };
+      setTimeout(() => { if (currentRoute().param === g.id) render(); }, 4100);
       return;
     }
     return false;
@@ -492,6 +494,8 @@ GX.dice = {
   view(g, who) {
     const t = fdTurn(g), c = g.cur && g.cur.who === t ? g.cur : null, live = !!who && who === t;
     const rolled = Date.now() - (ui.fdRolled || 0) < 600;
+    const L = ui.fdLast && ui.fdLast.g === g.id && Date.now() - ui.fdLast.t < 4000 ? ui.fdLast : null;
+    const lastNote = L ? `<div class="fd-last">${esc(playerEmoji(L.who))} ${esc(playerName(L.who))} scored <b>${L.pts}</b> in ${esc(FD_CATS.find(([k]) => k === L.cat)[1])}${L.pts ? '' : ' (scratched)'} · ${esc(playerName(t))}’s turn</div>` : '';
     const dice = (c ? c.dice : [1, 2, 3, 4, 5]).map((x, i) => {
       const held = c && c.held[i] && c.rolls;
       const can = live && c && c.rolls && c.rolls < 3;
@@ -507,8 +511,9 @@ GX.dice = {
       }).join('');
       return `${ri === 6 ? `<tr class="fd-sub"><th>Bonus <small>(63+ on top)</small></th>${g.p.map((pid) => `<td>${fdUpper(g.cards[pid] || {}) >= 63 ? 35 : `<small>${fdUpper(g.cards[pid] || {})}/63</small>`}</td>`).join('')}</tr>` : ''}<tr><th>${f ? `<span class="fd-f">${f}</span> ` : ''}${esc(label)}</th>${cells}</tr>`;
     }).join('');
-    return `<div class="fd-dice" data-noswipe>${dice}</div>
-      ${live ? `<div class="fd-roll"><button class="btn" data-action="mp-act" data-id="${g.id}" data-v="roll" ${c && c.rolls >= 3 ? 'disabled' : ''}>🎲 ${c && c.rolls ? `Roll again (${3 - c.rolls} left)` : 'Roll'}</button>${c && c.rolls === 1 && fdFilled(g) < g.p.length ? '<span class="small muted">Tap dice to keep them, or tap a box to score</span>' : ''}</div>` : ''}
+    return `${lastNote}<div class="fd-dice" data-noswipe>${dice}</div>
+      ${live ? (c && c.rolls >= 3 ? `<div class="fd-pickhint">👇 Out of rolls — tap a <b>highlighted box</b> to score your turn</div>`
+        : `<div class="fd-roll"><button class="btn" data-action="mp-act" data-id="${g.id}" data-v="roll">🎲 ${c && c.rolls ? `Roll again (${3 - c.rolls} left)` : 'Roll'}</button>${c && c.rolls ? '<span class="small muted">Tap dice to keep them · or tap a highlighted box to score now</span>' : ''}</div>`) : ''}
       <div class="game-stage fd-stage"><table class="fd-sheet${cols}"><thead><tr><th></th>${g.p.map((pid) => `<th class="${pid === t ? 'cur' : ''}" style="--c:${mpColor(g, pid)}">${esc(playerEmoji(pid))}</th>`).join('')}</tr></thead><tbody>${rows}<tr class="fd-tot"><th>Total</th>${g.p.map((pid) => `<td>${fdTotal(g.cards[pid] || {})}</td>`).join('')}</tr></tbody></table></div>`;
   },
 };
