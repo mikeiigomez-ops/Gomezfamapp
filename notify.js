@@ -190,7 +190,7 @@ async function pushOn() {
     sub ||= await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: unb64u(key) });
     const j = sub.toJSON(), cfg = notifyCfg();
     cfg.subs = (cfg.subs || []).filter((s) => s.id !== deviceId() && s.endpoint !== j.endpoint);
-    cfg.subs.push({ id: deviceId(), member: me, kid: typeof inKidMode === 'function' && inKidMode(), endpoint: j.endpoint, keys: j.keys, tz: Intl.DateTimeFormat().resolvedOptions().timeZone, device: /iPhone/.test(navigator.userAgent) ? 'iPhone' : /iPad/.test(navigator.userAgent) ? 'iPad' : /Android/.test(navigator.userAgent) ? 'Android' : 'Computer', added: today() });
+    cfg.subs.push({ id: deviceId(), key: key.slice(0, 16), member: me, kid: typeof inKidMode === 'function' && inKidMode(), endpoint: j.endpoint, keys: j.keys, tz: Intl.DateTimeFormat().resolvedOptions().timeZone, device: /iPhone/.test(navigator.userAgent) ? 'iPhone' : /iPad/.test(navigator.userAgent) ? 'iPad' : /Android/.test(navigator.userAgent) ? 'Android' : 'Computer', added: today() });
     save(); render(); toast('Notifications on for this phone ✓');
   } catch (e) { toast('Couldn’t turn on notifications: ' + (e.message || e)); }
 }
@@ -237,12 +237,14 @@ views.notify = () => {
   const setup = !cfg.vapid
     ? `<div class="card"><h3>Set up once for the family</h3><p class="small muted" style="margin-top:0">Phone notifications need a one-time setup (about 5 minutes) on a computer or phone with your GitHub account.</p><button class="btn block" data-action="np-keys">Start setup</button></div>`
     : `<div class="card"><h3>This phone</h3>${sub
-      ? `<div class="kv"><span>🔔 On for <b>${esc(who(sub.member))}</b></span><button class="mini-btn" data-action="np-off">Turn off</button></div>`
+      ? (sub.key && sub.key !== cfg.vapid.slice(0, 16)
+        ? `<p class="small" style="margin-top:0;color:var(--bad)">This phone was set up with an older key. Turn notifications on again so it gets them.</p><button class="btn block" data-action="np-on">Turn on again</button>`
+        : `<div class="kv"><span>🔔 On for <b>${esc(who(sub.member))}</b></span><button class="mini-btn" data-action="np-off">Turn off</button></div>`)
       : `<p class="small muted" style="margin-top:0">${pushSupported() ? 'Get your summaries and alerts here, even when the app is closed.' : /iPhone|iPad/.test(navigator.userAgent) ? 'On iPhone, notifications work from the Home Screen app: Share → <b>Add to Home Screen</b>, then open it from there.' : 'This browser can’t show notifications.'}</p>${pushSupported() ? '<button class="btn block" data-action="np-on">Turn on notifications</button>' : ''}`}
       ${subs.length ? `<div class="small muted" style="margin-top:8px">On for: ${subs.map((s) => `${esc(who(s.member))} (${esc(s.device || 'phone')})`).join(', ')}</div>` : ''}</div>`;
   if (!me) return setup + '<div class="card small muted">Pick who uses this phone in Settings to personalize notifications.</div>';
   const relay = cfg.vapid && !kid ? `<div class="card"><h3>Instant (chat, games, high-fives)</h3>${cfg.relay
-    ? `<div class="kv"><span>⚡ On · <span class="small muted">${esc(String(cfg.relay).replace(/^https:\/\//, ''))}</span></span><button class="mini-btn" data-action="np-relay-test">Test</button></div><button class="link-inline small" data-action="np-relay-edit">Change</button>`
+    ? `<div class="kv"><span>⚡ On · <span class="small muted">${esc(String(cfg.relay).replace(/^https:\/\//, ''))}</span></span><button class="mini-btn" data-action="np-relay-test">Test</button></div>${ui.relayKey && !String(cfg.vapid).startsWith(ui.relayKey) ? `<p class="small" style="color:var(--bad)">⚠️ The relay and the app have different push keys. Redo setup below, put both new keys in GitHub, then run “Push relay” again in GitHub Actions.</p>` : ''}<button class="link-inline small" data-action="np-relay-edit">Change</button>`
     : `<p class="small muted" style="margin-top:0">Without this, chat and game alerts come with the ~30-minute check. With the free relay they arrive instantly. After the relay is deployed (see the setup guide), paste its address:</p><div class="np-key"><input id="npRelay" type="url" placeholder="https://gomezfam-push.….workers.dev" autocapitalize="off"><button class="mini-btn" data-action="np-relay-save">Save</button></div>`}</div>` : '';
   return `${setup}${relay}
     <div class="section-title">Summaries <span class="np-note">bills, paydays and plans ride along</span></div>
@@ -393,3 +395,13 @@ if (typeof push === 'function') {
     try { relaySend(familyEvents(before, local, me)); } catch (e) { if (typeof noteError === 'function') noteError('relay', e); }
   };
 }
+
+// Check the relay's key against the app's once per visit to the screen (a mismatch means setup ran twice)
+const _afterRenderRelayKey = afterRender;
+afterRender = function () {
+  _afterRenderRelayKey();
+  const url = state.notify?.relay;
+  if (currentRoute().name !== 'notify' || !url || ui.relayKeyFor === url) return;
+  ui.relayKeyFor = url;
+  fetch(url).then((r) => r.json()).then((j) => { const k = String(j.key || '').replace(/…$/, ''); if (k && k !== ui.relayKey) { ui.relayKey = k; render(); } }).catch(() => {});
+};
