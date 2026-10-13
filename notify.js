@@ -186,7 +186,8 @@ async function pushOn() {
   try {
     const reg = await navigator.serviceWorker.ready;
     let sub = await reg.pushManager.getSubscription();
-    if (sub && b64u(sub.options?.applicationServerKey || new ArrayBuffer(0)) !== key) { await sub.unsubscribe(); sub = null; }
+    // Always start fresh: an old subscription may have been made with a previous key
+    if (sub) { await sub.unsubscribe().catch(() => {}); sub = null; }
     sub ||= await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: unb64u(key) });
     const j = sub.toJSON(), cfg = notifyCfg();
     cfg.subs = (cfg.subs || []).filter((s) => s.id !== deviceId() && s.endpoint !== j.endpoint);
@@ -237,11 +238,11 @@ views.notify = () => {
   const setup = !cfg.vapid
     ? `<div class="card"><h3>Set up once for the family</h3><p class="small muted" style="margin-top:0">Phone notifications need a one-time setup (about 5 minutes) on a computer or phone with your GitHub account.</p><button class="btn block" data-action="np-keys">Start setup</button></div>`
     : `<div class="card"><h3>This phone</h3>${sub
-      ? (sub.key && sub.key !== cfg.vapid.slice(0, 16)
+      ? (sub.stale || !sub.key || sub.key !== cfg.vapid.slice(0, 16)
         ? `<p class="small" style="margin-top:0;color:var(--bad)">This phone was set up with an older key. Turn notifications on again so it gets them.</p><button class="btn block" data-action="np-on">Turn on again</button>`
         : `<div class="kv"><span>🔔 On for <b>${esc(who(sub.member))}</b></span><button class="mini-btn" data-action="np-off">Turn off</button></div>`)
       : `<p class="small muted" style="margin-top:0">${pushSupported() ? 'Get your summaries and alerts here, even when the app is closed.' : /iPhone|iPad/.test(navigator.userAgent) ? 'On iPhone, notifications work from the Home Screen app: Share → <b>Add to Home Screen</b>, then open it from there.' : 'This browser can’t show notifications.'}</p>${pushSupported() ? '<button class="btn block" data-action="np-on">Turn on notifications</button>' : ''}`}
-      ${subs.length ? `<div class="small muted" style="margin-top:8px">On for: ${subs.map((s) => `${esc(who(s.member))} (${esc(s.device || 'phone')})`).join(', ')}</div>` : ''}</div>`;
+      ${subs.length ? `<div class="small muted" style="margin-top:8px">On for: ${subs.map((s) => `${esc(who(s.member))} (${esc(s.device || 'phone')})${s.stale || !s.key || s.key !== String(cfg.vapid).slice(0, 16) ? ' ⚠️ needs “Turn on again”' : ''}`).join(', ')}</div>` : ''}</div>`;
   if (!me) return setup + '<div class="card small muted">Pick who uses this phone in Settings to personalize notifications.</div>';
   const relay = cfg.vapid && !kid ? `<div class="card"><h3>Instant (chat, games, high-fives)</h3>${cfg.relay
     ? `<div class="kv"><span>⚡ On · <span class="small muted">${esc(String(cfg.relay).replace(/^https:\/\//, ''))}</span></span><button class="mini-btn" data-action="np-relay-test">Test</button></div>${ui.relayKey && !String(cfg.vapid).startsWith(ui.relayKey) ? `<p class="small" style="color:var(--bad)">⚠️ The relay and the app have different push keys. Redo setup below, put both new keys in GitHub, then run “Push relay” again in GitHub Actions.</p>` : ''}<button class="link-inline small" data-action="np-relay-edit">Change</button>`
@@ -293,6 +294,9 @@ Object.assign(actions, {
     try {
       const res = await fetch(url, { method: 'POST', headers: { authorization: 'Bearer ' + await Sync.user.getIdToken(), 'content-type': 'application/json' }, body: JSON.stringify({ subs: subs.map((s) => ({ endpoint: s.endpoint, keys: s.keys })), payload: { title: '⚡ Instant notifications work!', body: 'Chat, games and high-fives will arrive like this.', url: '#notify', tag: 'test' }, urgent: true }) });
       const j = await res.json().catch(() => ({}));
+      const rs = j.results || [], bad = rs.filter((r) => [401, 403, 404, 410].includes(r.status));
+      if (bad.length) { const ends = new Set(bad.map((r) => r.endpoint)); for (const s of state.notify.subs) if (ends.has(s.endpoint)) s.stale = true; save(); render(); }
+      if (res.ok && bad.length && bad.length === rs.length) { toast('Not delivered: the push key changed since these devices turned notifications on. Tap “Turn on again” on each device.'); return; }
       toast(res.ok ? `Sent to ${(j.results || []).filter((r) => r.status >= 200 && r.status < 300).length} of ${subs.length} device(s)` : `Relay said: ${j.error || res.status}`);
     } catch (e) { toast('Couldn’t reach the relay: ' + e.message); }
   },
@@ -380,7 +384,8 @@ async function relaySend(events) {
         body: JSON.stringify({ subs: subs.map((s) => ({ endpoint: s.endpoint, keys: s.keys })), payload: { title: e.title, body: e.body, url: e.url, tag: e.tag }, urgent: true }) });
       const j = await res.json().catch(() => ({}));
       const dead = new Set((j.results || []).filter((r) => r.status === 404 || r.status === 410).map((r) => r.endpoint));
-      if (dead.size) { state.notify.subs = state.notify.subs.filter((s) => !dead.has(s.endpoint)); save(); }
+      const stale = new Set((j.results || []).filter((r) => r.status === 401 || r.status === 403).map((r) => r.endpoint)); // signed with a key the device didn't subscribe with
+      if (dead.size || stale.size) { state.notify.subs = state.notify.subs.filter((s) => !dead.has(s.endpoint)); for (const s of state.notify.subs) if (stale.has(s.endpoint)) s.stale = true; save(); }
     } catch { /* offline: it shows up in the app anyway */ }
   }
 }
