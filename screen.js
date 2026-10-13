@@ -643,3 +643,9 @@ function budgetTabGo(d) {
     budgetTabGo(dx < 0 ? 1 : -1);
   }, { passive: true });
 })();
+// The pinned Budget tabs get a shadow and the month name once the page has scrolled under them
+viewEl.addEventListener('scroll', () => {
+  const tabs = viewEl.querySelector('.budget-tabs'); if (!tabs) return;
+  const stuck = viewEl.scrollTop > 4 && tabs.getBoundingClientRect().top <= viewEl.getBoundingClientRect().top + 2;
+  if (stuck !== tabs.classList.contains('stuck')) tabs.classList.toggle('stuck', stuck);
+}, { passive: true });

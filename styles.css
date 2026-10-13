@@ -508,3 +508,16 @@ button.wk-day:active span { background: var(--accent-soft, var(--line)); }
 .sq-big { font-size: 40px; margin-bottom: 6px; }
 .idle-cats { line-height: 1.7; }
 .idle-cats .link { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; cursor: pointer; }
+/* Everyday summary with a small ring (replaces the separate ring card) */
+.pace-head { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; }
+.ring.ring-sm { position: relative; width: 64px; height: 64px; flex: 0 0 64px; }
+.ring.ring-sm svg { width: 64px; height: 64px; }
+.ring.ring-sm .ring-label { font-size: 15px; }
+.ring.ring-sm .ring-label small { font-size: 9.5px; }
+.pace-left { font-size: 16px; margin-top: 2px; }
+.pace-left .allowance { background: none; padding: 0; color: var(--muted); font-size: 14px; }
+/* Budget tabs pin to the top while the Money screens scroll */
+body:not(.paged) .budget-tabs { position: sticky; top: -6px; z-index: 6; transition: box-shadow .2s; }
+.budget-tabs .seg-month { display: none; align-self: center; padding: 0 8px 0 6px; font-size: 13px; font-weight: 750; color: var(--text); }
+.budget-tabs.stuck { box-shadow: 0 6px 16px rgba(0, 0, 0, .12); background: var(--surface-2); border-radius: 0 0 14px 14px; }
+.budget-tabs.stuck .seg-month { display: block; }

@@ -817,20 +817,14 @@ views.budget = () => {
         <div class="kv"><span class="muted">Everyday spending budget</span><b>−${moneyW(flexB)}</b></div>
         <div class="kv" style="border-top:1px solid var(--line);margin-top:6px;padding-top:8px"><span>Left if you stick to the plan</span><b style="color:${leftover < 0 ? 'var(--bad)' : 'var(--good)'}">${moneyW(leftover)}</b></div>
       </div>` : ''}
-      <div class="card">
-        <div class="ring-wrap">
-          <div class="ring"><span class="ring-label">${s.limit ? Math.round((s.spent / s.limit) * 100) : 0}%<small>used</small></span><svg viewBox="0 0 96 96"><circle class="track" cx="48" cy="48" r="42"/><circle class="val ${levelCls(s.limit ? s.spent / s.limit : 0)}" cx="48" cy="48" r="42" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - frac)}" stroke-linecap="round"/></svg></div>
-          <div class="grow" style="flex:1">
-            <div class="kv"><span class="muted">Budget</span><b>${moneyW(s.limit)}</b></div>
-            <div class="kv"><span class="muted">Everyday spent</span><b>${moneyW(s.spent)}</b></div>
-            <div class="kv"><span class="muted">Budget left</span><b style="color:${s.left < 0 ? 'var(--bad)' : 'var(--good)'}">${moneyW(s.left)}</b></div>
-            ${ym === monthKey(today()) && s.limit && s.left > 0 ? `<div class="allowance">≈ <b>${money(s.left / (new Date(+ym.slice(0, 4), +ym.slice(5), 0).getDate() - parse(today()).getDate() + 1), { maximumFractionDigits: 0 })}/day</b> for the rest of the month</div>` : ''}
-          </div>
-        </div>
-      </div>
       ${(() => {
         const P = catPace(ym), T = P.total;
         const mName = parse(ym + '-01').toLocaleDateString(undefined, { month: 'long' });
+        // One summary for everyday spending: a small ring for the budget used, then left / per day / pace
+        const used = T.limit ? T.spent / T.limit : 0, left = T.limit - T.spent;
+        const daysLeft = P.cur ? P.dim - P.day + 1 : 0;
+        const ring = T.limit ? `<div class="ring ring-sm"><span class="ring-label">${Math.round(used * 100)}%<small>used</small></span><svg viewBox="0 0 96 96"><circle class="track" cx="48" cy="48" r="42"/><circle class="val ${levelCls(used)}" cx="48" cy="48" r="42" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - Math.min(1, used))}" stroke-linecap="round"/></svg></div>` : '';
+        const leftLine = T.limit ? (left >= 0 ? `<b style="color:var(--good)">${moneyW(left)}</b> budget left${P.cur && daysLeft ? ` · <span class="allowance">≈ <b>${moneyW(left / daysLeft)}/day</b> of everyday budget</span>` : ''}` : `<b style="color:var(--bad)">${moneyW(-left)}</b> over the everyday budget`) : '';
         const sumLine = P.cur ? `<b>${moneyW(T.spent)}</b> spent so far · should be <b>~${moneyW(T.should)}</b> by today · likely <b>~${moneyW(T.likely)}</b> by ${esc(P.endLabel)}${T.limit ? ` <span class="muted">(budget ${moneyW(T.limit)})</span>` : ''}`
           : P.past ? `Ended at <b>${moneyW(T.spent)}</b>${T.usual !== null ? ` · usually ~${moneyW(T.usual)}` : ''}${T.limit ? ` · budget ${moneyW(T.limit)}` : ''}`
           : T.usual !== null ? `Usually ~${moneyW(T.usual)}${T.limit ? ` · budget ${moneyW(T.limit)}` : ''}` : '';
@@ -839,7 +833,7 @@ views.budget = () => {
         const o = P.other, nSort = typeof uncategorizedMerchants === 'function' ? uncategorizedMerchants().length : 0;
         return `<div class="section-title">Categories<button data-action="add-category">+ Category</button></div>
       <div class="card">
-        ${sumLine ? `<div class="pace-sum"><span class="muted">Everyday · ${esc(mName)}</span><br>${sumLine}${P.cur ? `<div class="small muted">All amounts are for ${esc(mName)}. Top bar: spent so far, with a tick where you’d be today if you spread the budget evenly. Thin bar: forecast by ${esc(P.endLabel)}.</div>` : ''}</div>` : ''}
+        ${sumLine ? `<div class="pace-sum"><div class="pace-head">${ring}<div><span class="muted">Everyday · ${esc(mName)}</span>${leftLine ? `<div class="pace-left">${leftLine}</div>` : ''}</div></div>${sumLine}${P.cur ? `<div class="small muted">All amounts are for ${esc(mName)}. Top bar: spent so far, with a tick where you’d be today if you spread the budget evenly. Thin bar: forecast by ${esc(P.endLabel)}.</div>` : ''}</div>` : ''}
         ${(() => {
           // Categories with no budget, no spending and no history just take space: one line names them
           const live = P.cats.filter((x) => x.lim || x.spent || x.usual).sort((a, b) => b.likely - a.likely || b.spent - a.spent || (b.lim || 0) - (a.lim || 0)), idle = P.cats.filter((x) => !(x.lim || x.spent || x.usual));
@@ -878,7 +872,7 @@ views.budget = () => {
       <h2>${fmtMonth(ym)}</h2>
       <button class="icon-btn" data-action="budget-month" data-n="1" aria-label="Next month" >${ICON.right}</button>
     </div>`}
-    <div class="segmented">
+    <div class="segmented budget-tabs">${tab === 'bills' ? '' : `<span class="seg-month" aria-hidden="true">${esc(parse(ym + '-01').toLocaleDateString(undefined, { month: 'short' }))}</span>`}
       ${[['overview', 'Overview'], ['activity', 'Activity'], ['trends', 'Trends'], ['bills', 'Recurring']].map(([k, l]) => `<button class="${tab === k ? 'active' : ''}" data-action="budget-tab" data-tab="${k}">${l}</button>`).join('')}
     </div>
     ${body}
