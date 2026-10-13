@@ -1184,7 +1184,12 @@ function trendsView(ym) {
       const pct = Math.round((Math.abs(diff) / lastSame) * 100);
       pace = `<div class="card"><div class="stat-label">Pace vs. last month</div>
         <div style="font-size:17px;font-weight:650;margin-top:2px">${diff > 0 ? '▲' : '▼'} ${money(Math.abs(diff), { maximumFractionDigits: 0 })} ${diff > 0 ? 'more' : 'less'} <span class="muted" style="font-weight:500">(${pct}%)</span></div>
-        <div class="small muted">than by day ${day} of ${parse(prev + '-01').toLocaleDateString(undefined, { month: 'long' })} — ${diff > 0 ? 'spending is running ahead' : 'nice, you\'re spending less'}</div>
+        <div class="small muted">than by day ${day} of ${parse(prev + '-01').toLocaleDateString(undefined, { month: 'long' })} — ${(() => {
+          // Bill timing can flip the story: say what's left once it's taken out
+          const tm = typeof paceDrivers === 'function' ? paceDrivers(sel, prev, day).timing : 0, adj = diff - tm;
+          if (Math.abs(tm) >= 50 && Math.abs(tm) >= Math.abs(diff) * 0.5) return adj > 20 ? 'partly bill timing, but still running ahead' : adj < -20 ? 'mostly bill timing; you\'re actually spending less' : 'mostly bill timing; otherwise about even';
+          return diff > 0 ? 'spending is running ahead' : 'nice, you\'re spending less';
+        })()}</div>
         ${typeof paceDriversHtml === 'function' ? paceDriversHtml(sel, prev, day, diff) : ''}</div>`;
     }
   }
