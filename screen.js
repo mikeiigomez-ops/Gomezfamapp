@@ -10,6 +10,8 @@
    Pager: split whatever doesn't fit into screens
    ========================================================= */
 // Screens that manage their own space (they never get the page controls).
+// Money screens are long reports you read top to bottom: they scroll instead of paging.
+const PG_SCROLL = new Set(['budget', 'goals', 'goal', 'debts', 'subs']);
 const PG_SKIP = new Set(['chat', 'fchat', 'room', 'word', 'memory', 'c4', 'trivia', 'wrapped', 'avatar']);
 // Wide screens show two pages side by side, except these, which have their own wide layout.
 const PG_NO_SPREAD = new Set(['home', 'kid', 'more', 'house', 'fhouse', 'town', 'squishy']);
@@ -141,7 +143,7 @@ function paginate() {
   if (!pgOn()) return;
   const regions = [...viewEl.querySelectorAll('[data-pages]')];
   regions.forEach(paginateRegion);
-  if (PG_SKIP.has(r) || document.body.classList.contains('game-mode') || document.body.classList.contains('house-editing')) return;
+  if (PG_SKIP.has(r) || PG_SCROLL.has(r) || document.body.classList.contains('game-mode') || document.body.classList.contains('house-editing')) return;
   if (viewEl.scrollHeight <= viewEl.clientHeight + 2) return;
   document.body.classList.add('paged');
   const spread = pgWide() && !PG_NO_SPREAD.has(r);
@@ -612,3 +614,32 @@ views.play = () => {
 KID_ROUTES.push('play');
 actions['friends-ask'] = () => toast('👯 Friends need a grown-up to turn on Family sync first — ask them!');
 KID_ACTIONS.add('friends-ask');
+
+/* ---------- Budget: swipe left/right to change tab (it scrolls up and down, so sideways is free) ---------- */
+const BUDGET_TABS = ['overview', 'activity', 'trends', 'bills'];
+function budgetTabGo(d) {
+  const i = BUDGET_TABS.indexOf(ui.budgetTab || 'overview'), j = i + d;
+  if (j < 0 || j >= BUDGET_TABS.length) { viewEl.classList.remove('pg-bump-r', 'pg-bump-l'); void viewEl.offsetWidth; viewEl.classList.add(d > 0 ? 'pg-bump-r' : 'pg-bump-l'); setTimeout(() => viewEl.classList.remove('pg-bump-r', 'pg-bump-l'), 350); return; }
+  ui.budgetTab = BUDGET_TABS[j];
+  render();
+  viewEl.scrollTop = 0;
+  viewEl.classList.remove('pg-in-r', 'pg-in-l'); void viewEl.offsetWidth; viewEl.classList.add(d > 0 ? 'pg-in-r' : 'pg-in-l');
+  setTimeout(() => viewEl.classList.remove('pg-in-r', 'pg-in-l'), 350);
+}
+(() => {
+  let t = null;
+  const sideways = (el) => { for (; el && el !== viewEl; el = el.parentElement) if (el.scrollWidth > el.clientWidth + 2 && /auto|scroll/.test(getComputedStyle(el).overflowX)) return true; return false; };
+  viewEl.addEventListener('touchstart', (e) => {
+    t = null;
+    if (currentRoute().name !== 'budget' || e.touches.length !== 1 || !$('#sheet').hidden || document.body.classList.contains('paged')) return;
+    const target = e.target;
+    if (target.closest('input, textarea, select, [data-nd], [data-noswipe], .chart') || sideways(target)) return;
+    t = { x: e.touches[0].clientX, y: e.touches[0].clientY, at: Date.now() };
+  }, { passive: true });
+  viewEl.addEventListener('touchend', (e) => {
+    if (!t) return;
+    const c = e.changedTouches[0], dx = c.clientX - t.x, dy = c.clientY - t.y, s = t; t = null;
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.7 || Date.now() - s.at > 700) return;
+    budgetTabGo(dx < 0 ? 1 : -1);
+  }, { passive: true });
+})();

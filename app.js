@@ -2709,7 +2709,7 @@ const actions = {
 
   // Budget
   'budget-month': (el) => { ui.budgetMonth = addMonths(ui.budgetMonth, +el.dataset.n); render(); },
-  'budget-tab': (el) => { ui.budgetTab = el.dataset.tab; render(); },
+  'budget-tab': (el) => { ui.budgetTab = el.dataset.tab; render(); viewEl.scrollTop = 0; },
   'export-csv': (el) => {
     const ym = ui.budgetMonth, all = !!el?.dataset?.all;
     const cell = (v) => { const s = String(v ?? ''); return `"${(/^[=+\-@\t\r]/.test(s) ? "'" + s : s).replace(/"/g, '""')}"`; }; // no spreadsheet formula injection

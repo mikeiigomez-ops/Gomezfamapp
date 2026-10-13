@@ -241,7 +241,7 @@ function outsideEverydayCard(ym) {
     return `<div class="section-title"><span>${esc(label)}</span><span class="small" style="text-transform:none">${moneyW(sum(cs, (x) => x.v))}</span></div>
       <div class="card">${cs.map((x) => row(x.c.emoji, x.c.name, x.v, x.loose ? 'data-action="budget-tab" data-tab="bills"' : `data-action="edit-category" data-id="${x.c.id}"`)).join('')}</div>`;
   }).join('');
-  return `<div class="section-title" style="margin-top:22px"><span>Bills & payments</span><span class="small" style="text-transform:none">${moneyW(total)} this month · not everyday</span></div>${cards}`;
+  return `<div class="section-title" style="margin-top:22px"><span>Bills & payments</span><span class="small" style="text-transform:none">${moneyW(total)} · not everyday</span></div>${cards}`;
 }
 
 if (typeof module !== 'undefined') module.exports = { merchantKey, merchantRule };
