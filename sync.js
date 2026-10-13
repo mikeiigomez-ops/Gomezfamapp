@@ -446,6 +446,7 @@ function authSheet(mode) {
       { name: 'email', label: 'Email', type: 'email', required: true, placeholder: 'you@example.com' },
       { name: 'password', label: mode === 'signup' ? 'Choose a password (6+ characters)' : 'Password', type: 'password', required: true },
       ...(mode === 'signup' ? [{ type: 'html', html: '<p class="small muted" style="margin:0 4px">Use the email that was given access. We\'ll send a link to confirm it\'s you.</p>' }] : []),
+      { type: 'html', html: `<button type="button" class="btn block" style="margin-top:6px" data-action="sheet-save">${mode === 'signup' ? 'Create account' : 'Sign in'}</button>${mode === 'signup' ? '' : '<button type="button" class="mini-btn" style="margin-top:6px" data-action="sync-forgot">Forgot password?</button>'}` },
     ],
     onSave(v) {
       const { au, auth } = Sync.fb;
@@ -545,6 +546,7 @@ Object.assign(actions, {
     fields: [
       { type: 'html', html: '<p class="small" style="margin:0 4px 10px"><b>On your phone:</b> ⚙️ Settings → Family sync → <b>💻 Use on another device</b>, and open that link here — or paste the link or invite message below.</p>' },
       { name: 'invite', label: 'Family link or invite', type: 'textarea', required: true, placeholder: 'https://…#join=GFAM1.…' },
+      { type: 'html', html: '<button type="button" class="btn block" style="margin-top:4px" data-action="sheet-save">Join my family</button><p class="small muted" style="margin:8px 4px 0">No link yet? On your phone, update the app (tap Reload when it asks), then Settings → Family sync → 💻 Use on another device.</p>' },
     ],
     onSave(v) {
       const inv = parseInvite(v.invite);
