@@ -566,3 +566,15 @@ body:not(.paged) .budget-tabs { position: sticky; top: -6px; z-index: 6; transit
 .per-off:last-child { border-bottom: 0; }
 .per-off .muted { font-size: 12.5px; }
 .per-chart .per-off { fill: url(#perStripe); }
+/* Level your paychecks */
+.lv-chart .lv-before, .lg-sw.lv-before { fill: var(--muted); background: var(--muted); opacity: .55; }
+.lv-chart .lv-after, .lg-sw.lv-after { fill: var(--ser-bill); background: var(--ser-bill); }
+.lv-chart .neg { fill: var(--bad); }
+.lv-range { font-size: 14px; margin-bottom: 2px; }
+.lv-move { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.lv-move:last-of-type { border-bottom: 0; }
+.lv-move .title { font-size: 15px; line-height: 1.35; }
+.lv-move .sub { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.lv-n { flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); font-weight: 800; font-size: 13px; }
+.lv-tip { margin-top: 6px; padding: 9px 11px; border-radius: 10px; background: var(--surface-2); font-size: 13.5px; line-height: 1.45; }
+.lv-tip.bad { background: var(--bad-soft, var(--surface-2)); }

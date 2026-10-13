@@ -61,7 +61,7 @@ function periodData(unit, sched) {
     const amt = Number(x.amount) || 0;
     if (x.type === 'income') { const i = idx(x.date); if (i >= 0) P[i].inc += amt; continue; }
     if (!isBillOnly(x)) { const i = idx(x.date); if (i >= 0) P[i].every += amt; continue; }
-    const d = billDue(x), off = d && Math.abs(daysBetween(d.due, x.date)) >= OFF_DAYS;
+    const d = billDue(x), off = d && amt >= 50 && Math.abs(daysBetween(d.due, x.date)) >= OFF_DAYS; // small bills aren't worth flagging
     const iPaid = idx(x.date), iDue = d ? idx(d.due) : iPaid;
     const i = sched && d ? iDue : iPaid;
     if (off) {
