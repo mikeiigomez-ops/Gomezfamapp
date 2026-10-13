@@ -815,10 +815,19 @@ function paycheckPlanCard() {
       <div class="bar" style="margin:2px 0 8px"><i class="${levelCls(p.amount ? p.out / p.amount : 1)}" style="width:${Math.min(100, p.amount ? (p.out / p.amount) * 100 : 100)}%"></i></div>`).join('')}
     <div class="small muted">${plan.some((p) => p.left < 0) ? '⚠️ A paycheck doesn’t cover the bills due before the next one — move a due date or hold money back from the paycheck before it.' : 'Each paycheck covers the bills due before the next one.'}</div></div>`;
 }
-// Safe to spend. 'month' (default) budgets the whole month across every paycheck in it:
-//   balance + paychecks still coming this month − overdue/unpaid bills due this month − everyday budget left.
-// 'pay' looks only until the next payday. In month mode we still check that first stretch: if the bills due before
-// the next paycheck need more than you have, `tight` says how much to hold back until then.
+// Safe to spend. Default ('month' setting, shown as "2 paychecks") plans two pay periods: from today until the day before
+// the second upcoming payday, so a paycheck also covers the bills it really pays — including the ones due early next
+// month (mortgage, car…) before the paycheck after it arrives:
+//   balance + paychecks in the window − overdue/unpaid bills in the window − everyday budget for the window.
+// 'pay' looks only until the next payday. In the 2-paycheck view we still check that first stretch: if the bills due
+// before the next paycheck need more than you have, `tight` says how much to hold back until then.
+function planEnd(t = today()) {
+  const days = [...new Set(recurringBetween(addDays(t, 1), addDays(t, 75), 'income').map((x) => x.date))].sort();
+  // Two pay periods ≈ a month for weekly/biweekly/semi-monthly pay; monthly pay keeps one period
+  if (days[1] && daysBetween(t, days[1]) <= 35) return addDays(days[1], -1);
+  if (days[0]) return addDays(days[0], -1);
+  return dayInMonth(31, monthKey(t));
+}
 function safeToSpend(mode = state.settings.stsMode || 'month') {
   const bal = balanceNow(), t = today();
   const pay = recurringBetween(t, addDays(t, 60), 'income').find((x) => !isPaid(x.b, x.date));
@@ -835,7 +844,7 @@ function safeToSpend(mode = state.settings.stsMode || 'month') {
     const p = period(); if (!p) return null;
     return { ...base, ...p, mode, inc: 0, incs: [], perDay: p.safe / Math.max(1, daysBetween(t, pay.date)) };
   }
-  const end = dayInMonth(31, monthKey(t));
+  const end = planEnd(t);
   const incs = recurringBetween(t, end, 'income').filter((x) => !isPaid(x.b, x.date));
   const inc = Math.round(sum(incs, (x) => x.amount) * 100) / 100;
   const bills = [...overdue, ...recurringBetween(t, end, 'bill').filter((x) => !isPaid(x.b, x.date))];
@@ -849,21 +858,21 @@ function safeToSpend(mode = state.settings.stsMode || 'month') {
 function safeHero() {
   const s = safeToSpend(), t = today(), month = (state.settings.stsMode || 'month') === 'month';
   if (!s) {
-    return `<div class="card sts-hero"><div class="stat-label">Safe to spend</div><p class="small muted" style="margin:4px 0 10px">Enter your checking balance to see what’s safe to spend ${month ? 'for the rest of the month, counting every paycheck' : 'until payday'}.</p><button class="btn secondary block" data-action="edit-balance">Enter checking balance</button></div>`;
+    return `<div class="card sts-hero"><div class="stat-label">Safe to spend</div><p class="small muted" style="margin:4px 0 10px">Enter your checking balance to see what’s safe to spend ${month ? 'across your next two paychecks' : 'until payday'}.</p><button class="btn secondary block" data-action="edit-balance">Enter checking balance</button></div>`;
   }
   const when = s.mode === 'month' ? `through ${fmtDate(s.end, { month: 'short', day: 'numeric' })}` : `until payday ${fmtDate(s.pay.date, { weekday: 'short', month: 'short', day: 'numeric' })}`;
   const mode = (m, l) => `<button class="mini-btn${(state.settings.stsMode || 'month') === m ? ' on' : ''}" data-action="sts-mode" data-m="${m}" aria-pressed="${(state.settings.stsMode || 'month') === m}">${l}</button>`;
   return `<details class="card sts-hero"${ui.stsOpen ? ' open' : ''}>
-    <summary data-action="sts-toggle"><div class="stat-label">Safe to spend${s.mode === 'month' ? ' this month' : ''}</div>
+    <summary data-action="sts-toggle"><div class="stat-label">Safe to spend${s.mode === 'month' ? ` · next ${s.incs.length > 1 ? s.incs.length : 2} paychecks` : ''}</div>
       <div class="stat" style="color:${s.safe < 0 ? 'var(--bad)' : 'var(--good)'}">${moneyW(s.safe)}</div>
       <div class="small muted">${esc(when)}${s.safe > 0 ? ` · about ${moneyW(s.perDay)}/day` : ''} · <span class="sts-more">${ui.stsOpen ? 'hide' : 'how?'}</span></div>
       ${s.tight ? `<div class="small" style="color:var(--bad);font-weight:650;margin-top:4px">⚠️ Tight until payday ${esc(fmtDate(s.tight.until, { weekday: 'short' }))}: bills due first need ${moneyW(s.tight.by)} more than you have</div>` : ''}</summary>
     <div class="kv"><span class="muted">Checking balance${(state.settings.balanceDate || t) < t ? ' (est. today)' : ''}</span><b>${moneyW(s.bal)}</b></div>
-    ${s.mode === 'month' ? `<div class="kv"><span class="muted">Paychecks still coming (${s.incs.length})</span><b style="color:var(--good)">+${moneyW(s.inc)}</b></div>` : ''}
-    <div class="kv"><span class="muted">Bills ${s.mode === 'month' ? 'still due this month' : 'before payday'} (${s.bills.length}${s.overdue ? `, ${s.overdue} overdue` : ''})</span><b>−${moneyW(s.owed)}</b></div>
+    ${s.mode === 'month' ? `<div class="kv"><span class="muted">Paychecks by ${esc(fmtDate(s.end, { month: 'short', day: 'numeric' }))} (${s.incs.length})</span><b style="color:var(--good)">+${moneyW(s.inc)}</b></div>` : ''}
+    <div class="kv"><span class="muted">Bills ${s.mode === 'month' ? `due by ${esc(fmtDate(s.end, { month: 'short', day: 'numeric' }))}` : 'before payday'} (${s.bills.length}${s.overdue ? `, ${s.overdue} overdue` : ''})</span><b>−${moneyW(s.owed)}</b></div>
     <div class="kv"><span class="muted">Planned everyday spending</span><b>−${moneyW(s.flex)}</b></div>
     <div class="kv" style="border-top:1px solid var(--line);margin-top:6px;padding-top:8px"><span>Safe to spend</span><b>${moneyW(s.safe)}</b></div>
-    <div class="btn-row" style="margin:8px 0 0;flex-wrap:wrap"><span class="small muted" style="align-self:center">Plan by</span>${mode('month', 'Whole month')}${mode('pay', 'Next paycheck')}</div>
+    <div class="btn-row" style="margin:8px 0 0;flex-wrap:wrap"><span class="small muted" style="align-self:center">Plan by</span>${mode('month', '2 paychecks')}${mode('pay', 'Next paycheck')}</div>
     <div class="btn-row" style="margin:6px 0 0"><button class="mini-btn" data-action="edit-balance">Update balance</button><span class="small muted" style="align-self:center">Updated ${relDays(-s.stale).toLowerCase()}</span></div>
   </details>`;
 }
