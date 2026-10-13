@@ -47,7 +47,7 @@ function onLocalSave() {
   actSnap = now;
   const out = [];
   const add = (icon, text, to = '') => out.push({ icon, text, to });
-  for (const t of state.budget.transactions) if (!prev.tx.has(t.id) && !String(t.id).startsWith('auto-')) {
+  for (const t of state.budget.transactions) if (!prev.tx.has(t.id) && !String(t.id).startsWith('auto-') && !t.bankId && !t.imported) {
     add(t.type === 'income' ? '💰' : '💸', `${t.type === 'income' ? 'logged income' : 'spent'} ${money(t.amount)}${t.note ? ` · ${t.note}` : ''}`, 'budget');
   }
   const added = state.shop.list.filter((i) => !prev.list.has(i.id));

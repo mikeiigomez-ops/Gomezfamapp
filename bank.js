@@ -58,6 +58,7 @@ const tidyMerchant = (raw) => {
   if (!x) return 'Bank transaction';
   // SHOUTY BANK TEXT → Title Case (keeps short all-caps brands like VW, BP)
   x = x.replace(/\b[A-Z][A-Z'&-]{2,}\b/g, (w) => w[0] + w.slice(1).toLowerCase()); // SHOUTY BANK TEXT → Title Case (VW, BP stay)
+  x = x.replace(/(?!^)\b(OF|THE|AND|AT|IN|ON|FOR|TO|BY)\b/gi, (w) => w.toLowerCase()).replace(/\b(\w{3,})( \1\b)+/gi, '$1'); // "Archdiocese of Detroit", not "…OF Detroit Detroit"
   return x.slice(0, 40);
 };
 const sfNote = (t) => tidyMerchant(t.payee || t.description || t.memo || 'Bank transaction');
@@ -168,6 +169,7 @@ async function bankSync({ quiet = false } = {}) {
     const errs = [...(data.errors || []), ...(data.errlist || []).map((e) => e?.msg || e?.message || e)].map(String).filter(Boolean);
     bank.err = errs.join(' ').slice(0, 200);
     bank.empty = !res.accounts;
+    if (typeof activityResync === 'function') activityResync(); // bank rows aren't family activity
     if (!res.accounts && !bank.err) bank.err = 'Waiting for your bank — SimpleFIN is still loading it (the first load can take a few hours).';
     save(); render();
     if (!res.accounts) { if (!quiet) toast('🏦 Connected — your bank’s accounts aren’t ready at SimpleFIN yet. The app will keep checking.'); return res; }
@@ -284,6 +286,7 @@ function chaseCsvSheet(rows, fileName) {
     onSave() {
       if (!(p.added + (p.oldBills || 0) + p.bills + p.linked)) return;
       const r = bankImport(c.data, { csv: true });
+      if (typeof activityResync === 'function') activityResync();
       ui.budgetTab = 'activity'; ui.budgetMonth = monthKey(c.to);
       toast(`🏦 Imported ${r.added}${r.bills ? ` · ${r.bills} bills paid` : ''}${r.oldBills ? ` · ${r.oldBills} past bills` : ''}`);
     },
@@ -320,3 +323,17 @@ setTimeout(bankAuto, 5000);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') setTimeout(bankAuto, 2000); });
 
 window.BankDebug = { bankImport, sfClaim, sfCfg, sfStore, bankSync, sfBusy, chaseCsvData, tidyMerchant };
+
+// Earlier imports filled the family feed with "Someone spent …" rows: drop those once (no person, money text)
+(function tidyBankActivity() {
+  try {
+    if (state.settings.bankFeedTidy) return;
+    const isMem = (id) => state.members.some((m) => m.id === id);
+    const before = (state.activity || []).length;
+    state.activity = (state.activity || []).filter((a) => isMem(a.who) || !/^(spent|logged income|paid|received) /.test(a.text || ''));
+    // …and re-tidy bank names imported before the name clean-up improved
+    for (const x of state.budget.transactions) if (x.bankId && !x.fromBill && /(?!^)\b(OF|THE|AND|AT)\b|\b(\w{3,}) \2\b/i.test(x.note || '')) x.note = tidyMerchant(x.note);
+    state.settings.bankFeedTidy = 1;
+    void before; save();
+  } catch { /* never block startup */ }
+})();

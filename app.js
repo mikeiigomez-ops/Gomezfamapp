@@ -961,7 +961,7 @@ function recurringView() {
         <div class="kv"><span class="muted">Checking balance${(state.settings.balanceDate || t) < t ? ' (est. today)' : ''}</span><b>${moneyW(bal)}</b></div>
         <div class="kv"><span class="muted">Planned everyday spending</span><b>${moneyW(sts.flex)}</b></div>
         <div style="border-top:1px solid var(--line);margin-top:8px;padding-top:10px;display:flex;justify-content:space-between;align-items:end">
-          <div><div class="stat-label">Safe to spend</div><div class="stat" style="color:${safe < 0 ? 'var(--bad)' : 'var(--good)'}">${moneyW(safe)}</div></div>
+          <div><div class="stat-label">Safe until payday</div><div class="stat" style="color:${safe < 0 ? 'var(--bad)' : 'var(--good)'}">${moneyW(safe)}</div>${(() => { const m = (state.settings.stsMode || 'month') === 'month' ? safeToSpend('month') : null; return m ? `<div class="small muted">Across 2 paychecks (to ${esc(fmtDate(m.end, { month: 'short', day: 'numeric' }))}): <b>${moneyW(m.safe)}</b></div>` : ''; })()}</div>
           <button class="mini-btn" data-action="edit-balance">Update balance</button>
         </div>
         <div class="small muted">Balance updated ${relDays(-daysBetween(state.settings.balanceDate || t, t)).toLowerCase()}</div>`
@@ -1100,7 +1100,17 @@ function trendsView(ym) {
       <h3>${fmtMonth(sel)}</h3>
       <div class="kv"><span class="muted">Money in</span><b>${moneyW(income)}</b></div>
       <div class="kv"><span class="muted">Money out</span><b>${moneyW(totals[selIdx])}</b></div>
-      <div class="kv" style="border-top:1px solid var(--line);margin-top:6px;padding-top:8px"><span>${income >= totals[selIdx] ? 'Saved' : 'Overspent'}</span><b>${moneyW(Math.abs(income - totals[selIdx]))} <span class="muted small" style="font-weight:500">(${Math.round((Math.abs(income - totals[selIdx]) / income) * 100)}% of income)</span></b></div>
+      ${(() => {
+        // The current month isn't over: count the pay still coming and the projected spending, not just today's totals
+        const cur = sel === monthKey(t), coming = cur ? sum(recurringBetween(t, dayInMonth(31, sel), 'income').filter((x) => !isPaid(x.b, x.date)), (x) => x.amount) : 0;
+        if (cur && coming > 0) {
+          const net = income + coming - Math.max(proj, totals[selIdx]);
+          return `<div class="kv"><span class="muted">Pay still coming</span><b style="color:var(--good)">+${moneyW(coming)}</b></div>
+            <div class="kv" style="border-top:1px solid var(--line);margin-top:6px;padding-top:8px"><span>${net >= 0 ? 'On track to save' : 'On track to overspend'}</span><b style="color:${net >= 0 ? 'var(--good)' : 'var(--bad)'}">${moneyW(Math.abs(net))}</b></div>
+            <div class="small muted">By month end, at this month’s pace</div>`;
+        }
+        return `<div class="kv" style="border-top:1px solid var(--line);margin-top:6px;padding-top:8px"><span>${income >= totals[selIdx] ? 'Saved' : 'Overspent'}</span><b>${moneyW(Math.abs(income - totals[selIdx]))} <span class="muted small" style="font-weight:500">(${Math.round((Math.abs(income - totals[selIdx]) / income) * 100)}% of income)</span></b></div>`;
+      })()}
     </div>` : ''}
     <div class="section-title">Where it went · ${parse(sel + '-01').toLocaleDateString(undefined, { month: 'long' })}</div>
     <div class="card">${where || '<div class="empty small">No spending this month.</div>'}</div>
