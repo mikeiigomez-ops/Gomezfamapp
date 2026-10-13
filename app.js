@@ -1184,7 +1184,8 @@ function trendsView(ym) {
       const pct = Math.round((Math.abs(diff) / lastSame) * 100);
       pace = `<div class="card"><div class="stat-label">Pace vs. last month</div>
         <div style="font-size:17px;font-weight:650;margin-top:2px">${diff > 0 ? '▲' : '▼'} ${money(Math.abs(diff), { maximumFractionDigits: 0 })} ${diff > 0 ? 'more' : 'less'} <span class="muted" style="font-weight:500">(${pct}%)</span></div>
-        <div class="small muted">than by day ${day} of ${parse(prev + '-01').toLocaleDateString(undefined, { month: 'long' })} — ${diff > 0 ? 'spending is running ahead' : 'nice, you\'re spending less'}</div></div>`;
+        <div class="small muted">than by day ${day} of ${parse(prev + '-01').toLocaleDateString(undefined, { month: 'long' })} — ${diff > 0 ? 'spending is running ahead' : 'nice, you\'re spending less'}</div>
+        ${typeof paceDriversHtml === 'function' ? paceDriversHtml(sel, prev, day, diff) : ''}</div>`;
     }
   }
 

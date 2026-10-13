@@ -36,7 +36,8 @@ function periodRanges(unit) {
 // or a shared name word ("Newrez-Shellpoint Web Pmts" $1,184.75 is the $1,185 mortgage)
 const nameWords = (s) => new Set(norm(s).split(/[^a-z]+/).filter((w) => w.length > 3));
 function billFor(t) {
-  if (t.billId) return state.budget.bills.find((x) => x.id === t.billId) || null;
+  const own = t.billId && state.budget.bills.find((x) => x.id === t.billId);
+  if (own) return own; // a payment whose bill was deleted falls through to matching
   const a = Number(t.amount) || 0, w = nameWords(t.note);
   return state.budget.bills.find((b) => b.type !== 'income' && Math.abs(b.amount - a) <= Math.max(2, b.amount * 0.03)
     && (((b.categoryId || (typeof billCatKey === 'function' && catByKey(billCatKey(b))?.id)) === t.categoryId && t.categoryId) || [...nameWords(b.name)].some((x) => w.has(x)))) || null;
@@ -176,3 +177,59 @@ actions['add-income'] = () => {
   $('#sheetTitle').textContent = 'Pay schedule';
   billFormShow(f);
 };
+
+/* Pace vs. last month, explained: what changed between this month's first N days and last month's,
+   biggest first. A bill counts as "timing" when the difference is only about when it was paid (last
+   month's was paid early in the month before, or later in the month), not about spending more. */
+function paceDrivers(cur, prev, day) {
+  const inWin = (d, m) => d.startsWith(m) && +d.slice(8, 10) <= day;
+  const tx = state.budget.transactions.filter((x) => x.type !== 'income' && (inWin(x.date, cur) || inWin(x.date, prev)));
+  const items = new Map(), add = (key, label, emoji, side, amt) => {
+    const it = items.get(key) || { key, label, emoji, now: 0, before: 0 };
+    it[side] += amt; items.set(key, it);
+  };
+  for (const x of tx) {
+    const side = x.date.startsWith(cur) ? 'now' : 'before', amt = Number(x.amount) || 0, b = billFor(x);
+    if (b) add('b:' + b.id, b.name, '🧾', side, amt);
+    else { const c = catOf(x.categoryId); add('c:' + (c ? c.id : ''), c ? c.name : 'Uncategorized', c ? c.emoji : '📦', side, amt); }
+  }
+  const mon = (m) => parse(m + '-01').toLocaleDateString(undefined, { month: 'short' });
+  const out = [];
+  for (const it of items.values()) {
+    it.d = Math.round((it.now - it.before) * 100) / 100;
+    if (Math.abs(it.d) < 20) continue;
+    if (it.key.startsWith('b:')) {
+      const b = state.budget.bills.find((x) => x.id === it.key.slice(2));
+      // Where each month's payment for this bill actually landed
+      const paidFor = (m) => state.budget.transactions.filter((x) => x.type !== 'income' && billFor(x) === b).map((x) => ({ x, d: billDue(x) })).filter((p) => p.d && p.d.due.startsWith(m)).map((p) => p.x.date);
+      const pPrev = paidFor(prev), pCur = paidFor(cur);
+      if (it.d > 0 && !it.before && pPrev.length) {
+        const pd = pPrev[0];
+        it.note = pd < prev + '-01' ? `${mon(prev)}'s was paid early, on ${shortD(pd)}` : `${mon(prev)}'s was paid later, on ${shortD(pd)}`;
+        it.timing = true;
+      } else if (it.d < 0 && !it.now) {
+        const pd = pCur[0];
+        it.note = pd ? (pd < cur + '-01' ? `${mon(cur)}'s was paid early, on ${shortD(pd)}` : `paid ${shortD(pd)}`) : `${mon(cur)}'s isn't paid yet`;
+        it.timing = true;
+      } else if (['biweekly', 'weekly'].includes(b.freq) && it.before && it.now) {
+        // Every-2-weeks bills land 2 or 3 times a month: a different count is timing, not a price change
+        const n = (m) => tx.filter((x) => x.date.startsWith(m) && billFor(x) === b).length, a = n(prev), c = n(cur);
+        if (a !== c) { it.note = `${c} payment${c > 1 ? 's' : ''} so far vs ${a} (${b.freq === 'weekly' ? 'weekly' : 'every 2 weeks'})`; it.timing = true; }
+        else it.note = `${moneyW(it.before)} → ${moneyW(it.now)}`;
+      } else it.note = it.before && it.now ? `${moneyW(it.before)} → ${moneyW(it.now)}` : '';
+    } else it.note = `${moneyW(it.before)} → ${moneyW(it.now)}`;
+    out.push(it);
+  }
+  out.sort((a, b) => Math.abs(b.d) - Math.abs(a.d));
+  const timing = sum(out.filter((x) => x.timing), (x) => x.d);
+  return { items: out, timing, real: sum(out.filter((x) => !x.timing), (x) => x.d) };
+}
+function paceDriversHtml(cur, prev, day, diff) {
+  const D = paceDrivers(cur, prev, day);
+  if (!D.items.length) return '';
+  const top = D.items.slice(0, 5), rest = D.items.length - top.length;
+  const sgn = (v) => `${v > 0 ? '▲' : '▼'} ${moneyW(Math.abs(v))}`;
+  const lead = Math.abs(D.timing) >= 50
+    ? `<div class="pd-lead"><b>${moneyW(Math.abs(D.timing))}</b> of it is bill timing (paid in a different month), not ${D.timing > 0 ? 'extra' : 'less'} spending.${Math.abs(diff - D.timing) >= 20 ? ` Without it, you're ${sgn(diff - D.timing)} ${diff - D.timing > 0 ? 'ahead' : 'behind'}.` : ' Without it, you’re about even.'}</div>` : '';
+  return `${lead}<div class="pd-list">${top.map((x) => `<div class="pd-row"><span class="pd-name">${esc(x.emoji)} ${esc(x.label)}${x.timing ? ' <span class="pd-tag">timing</span>' : ''}${x.note ? `<small>${esc(x.note)}</small>` : ''}</span><b class="${x.d > 0 ? 'up' : 'down'}">${sgn(x.d)}</b></div>`).join('')}${rest ? `<div class="small muted">+ ${rest} smaller change${rest > 1 ? 's' : ''}</div>` : ''}</div>`;
+}
