@@ -429,7 +429,16 @@ button.wk-day:active span { background: var(--accent-soft, var(--line)); }
   body[data-route="home"] .launch .tile-e { width: 42px; height: 42px; font-size: 26px; border-radius: 14px; }
   body[data-route="home"] .launch .tile b, body[data-route="home"] .launch .tile small { line-height: 1.15; }
 }
-@media (max-height: 640px) { body[data-route="home"] .home-today { display: none; } }
+@media (max-height: 640px) {
+  body[data-route="home"] .home-today { display: none; }
+  body[data-route="home"] .hh-greet { font-size: 19px; }
+  body[data-route="home"] .hh-facts span:nth-child(n+2) { display: none; }
+  body[data-route="home"] .home-magic { padding: 6px 10px; }
+  body[data-route="home"] .launch .tile { aspect-ratio: auto; }
+  body[data-route="home"] .launch .tile-e { width: 32px; height: 32px; font-size: 20px; border-radius: 10px; }
+  body[data-route="home"] .launch .tile b { font-size: 12.5px; }
+  body[data-route="home"] .launch .tile small { font-size: 11px; }
+}
 /* iPad landscape keeps greeting | tiles side by side; Magic Add and today's row run across the top */
 @media (min-width: 1000px) { body[data-route="home"]:not(.kid-mode) main#view > .home-magic, body[data-route="home"]:not(.kid-mode) main#view > .home-today, body[data-route="home"]:not(.kid-mode) main#view > .welcome-card { order: -1; } }
 .welcome-card { display: grid; gap: 4px; }
