@@ -540,3 +540,29 @@ body:not(.paged) .budget-tabs { position: sticky; top: -6px; z-index: 6; transit
 .chart-legend .lg-line { width: 16px; height: 0; border-top: 1.5px solid var(--text); opacity: .55; }
 .chart-legend .lg-line.inc { border-top: 2px dashed var(--good); opacity: .8; }
 .ghost-key { border-color: var(--muted); }
+/* Trends: pay-period view (fixed, validated series colours so any accent theme works) */
+:root { --ser-bill: #2a78d6; --ser-every: #eb6834; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --ser-bill: #3987e5; --ser-every: #d95926; } }
+:root[data-theme="dark"] { --ser-bill: #3987e5; --ser-every: #d95926; }
+.per-chart .per-bill, .lg-sw.per-bill { fill: var(--ser-bill); background: var(--ser-bill); }
+.per-chart .per-bill-bg { fill: var(--ser-bill); }
+.per-chart .per-stripe { stroke: var(--surface); stroke-width: 2.2; }
+.per-chart .per-every, .lg-sw.per-every { fill: var(--ser-every); background: var(--ser-every); }
+.per-chart .per-due { fill: transparent; stroke: var(--muted); stroke-width: 1.3; stroke-dasharray: 3 2; }
+.per-chart .per-net { font-size: 10.5px; font-weight: 750; fill: var(--muted); }
+.per-chart .per-net.pos { fill: var(--good); }
+.per-chart .per-net.neg { fill: var(--bad); }
+.per-chart .per-flag { font-size: 11px; font-weight: 800; fill: var(--text); }
+.lg-sw { display: inline-block; width: 11px; height: 11px; border-radius: 3px; vertical-align: -1px; margin-right: 5px; }
+.lg-sw.per-bill.striped { background: repeating-linear-gradient(45deg, var(--ser-bill) 0 3px, var(--surface) 3px 5px); }
+.lg-sw.per-due { background: transparent; border: 1.3px dashed var(--muted); }
+.per-ctl { display: grid; gap: 6px; margin: 2px 0 6px; }
+.segmented.mini { margin: 0; }
+.segmented.mini button { padding: 6px 0; font-size: 13px; }
+.per-detail { margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--line); }
+.per-range { font-weight: 700; margin-bottom: 4px; }
+.per-why { margin-top: 8px; padding: 9px 11px; border-radius: 10px; background: var(--surface-2); font-size: 13.5px; line-height: 1.45; }
+.per-off { display: flex; flex-direction: column; gap: 1px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.per-off:last-child { border-bottom: 0; }
+.per-off .muted { font-size: 12.5px; }
+.per-chart .per-off { fill: url(#perStripe); }

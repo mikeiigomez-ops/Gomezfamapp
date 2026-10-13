@@ -1215,6 +1215,7 @@ function trendsView(ym) {
       ${legend}
       <div class="small muted" style="text-align:center">${proj > (totals[curI] || 0) ? `<span class="ghost-key"></span> ${esc(parse(months[curI] + '-01').toLocaleDateString(undefined, { month: 'short' }))} likely ${esc(moneyW(proj))} by month end · ` : ''}Tap a month for details</div>
     </div>
+    ${typeof periodCard === 'function' ? periodCard() : ''}
     ${pace}
     ${income ? `<div class="card">
       <h3>${fmtMonth(sel)}</h3>
