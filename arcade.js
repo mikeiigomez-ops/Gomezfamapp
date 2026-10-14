@@ -630,12 +630,12 @@ Object.assign(actions, {
   'mp-start': (el) => {
     const t = el.dataset.t, X = GX[t], s = [...(ui.mpSel || [])];
     const humans = s.filter(mpHuman);
-    if (!X.bot && humans.length < 1) { toast('Pick at least one more player'); return; }
+    if (!X.bot && !X.solo && humans.length < 1) { toast('Pick at least one more player'); return; }
     if (X.min && s.length + 1 < X.min) { toast(`${X.name} needs at least ${X.min} players`); return; }
-    if (!s.length && t !== 'dice') { toast('Pick who’s playing'); return; }
+    if (!s.length && t !== 'dice' && !X.solo) { toast('Pick who’s playing'); return; }
     closeSheet();
     ui.mpSel = null;
-    setTimeout(() => mpNew(t, [actor() || state.members[0]?.id, ...s], humans.length ? (el.dataset.mode === 'remote' ? 'remote' : 'local') : 'bot'));
+    setTimeout(() => mpNew(t, [actor() || state.members[0]?.id, ...s], humans.length ? (el.dataset.mode === 'remote' ? 'remote' : 'local') : X.solo ? 'local' : 'bot'));
   },
   'mp-act': (el) => { const g = findIn(state.games, el.dataset.id); const who = g && mpActor(g); if (who) mpDo(g, who, el.dataset.v); },
   'mp-ready': (el) => { (ui.mpPass ||= {})[el.dataset.id] = el.dataset.who; render(); },
@@ -679,7 +679,7 @@ const _modeArcade = modeClasses;
 modeClasses = function () {
   _modeArcade();
   const { name, param } = currentRoute();
-  if (name === 'mp') { const g = state.games.find((x) => x.id === param); document.body.classList.toggle('game-mode', !!g && !!GX[g.type] && !(g.type === 'doodle' && mpStatus(g).over)); } // stays full-screen after the end, like Connect Four (the doodle gallery scrolls)
+  if (name === 'mp') { const g = state.games.find((x) => x.id === param); document.body.classList.toggle('game-mode', !!g && !!GX[g.type] && !(['doodle', 'runway'].includes(g.type) && mpStatus(g).over)); } // stays full-screen after the end, like Connect Four (the doodle gallery scrolls)
 };
 const _afterRenderArcade = afterRender;
 afterRender = function () {

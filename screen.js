@@ -600,7 +600,7 @@ views.play = () => {
   const groups = [
     ['🎉 Party games', 'Everyone plays at once', [
       mp('quiz', 'Buzz in from every phone'), mp('imposter', '3+ players · find the faker'),
-      { to: 'charades', art: 'g_charades', e: '🤳', label: 'Forehead Charades', sub: 'Tilt the phone, act it out', g1: '#f59e0b', g2: '#ef4444' }, mp('doodle', 'Draw it, guess it'),
+      { to: 'charades', art: 'g_charades', e: '🤳', label: 'Forehead Charades', sub: 'Tilt the phone, act it out', g1: '#f59e0b', g2: '#ef4444' }, mp('doodle', 'Draw it, guess it'), mp('runway', 'Dress to the theme · vote'),
     ]],
     ['⚔️ Head to head', 'Challenge someone, robot, or pass the phone', [
       { act: 'c4-new', e: '🔴', label: 'Connect Four', sub: liveC4 ? `${liveC4} going · new game` : 'Challenge someone', g1: '#dc2626', g2: '#f59e0b' },
