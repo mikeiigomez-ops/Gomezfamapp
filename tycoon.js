@@ -137,6 +137,27 @@ function tyGoldSpawn(pid) {
   ui.tyGold = { until: Date.now() + 10000 };
 }
 
+/* ---------- Factory floor: the line squishies walk the belt carrying coins ---------- */
+function tyFloor(me) {
+  const T = tyState(me), open = tyLines().filter((L) => tyLv(T, L));
+  if (!open.length) return `<div class="ty-floor empty"><span>Buy your first line and your squishies get to work! 🏭</span></div>`;
+  const walkers = [];
+  for (const L of open) { const n = Math.min(3, 1 + Math.floor(Math.log10(tyLv(T, L)))); for (let i = 0; i < n; i++) walkers.push(L); }
+  const list = walkers.slice(-14), fast = !!tyFrenzy();
+  return `<div class="ty-floor${fast ? ' fast' : ''}" aria-hidden="true"><div class="ty-belt"></div>${list.map((L, i) => {
+    const dur = 9 + ((i * 7) % 6) + L.k * 0.4, delay = -((i * 2.3) % dur);
+    return `<span class="ty-walker" style="--d:${dur}s;--dl:${delay.toFixed(1)}s;--s:${0.75 + (L.k / 11) * 0.35}">${typeof squishySVG === 'function' ? squishySVG(L.sid) : '🧸'}<i>${COIN}</i></span>`;
+  }).join('')}<div class="ty-machine">🏭</div></div>`;
+}
+// The open line with the lowest level, and how far your coins take it toward its next milestone
+function tySlowest(me) {
+  const T = tyState(me), open = tyLines().filter((L) => tyUnlocked(T, L));
+  if (!open.length) return null;
+  const L = open.reduce((a, b) => (tyLv(T, b) < tyLv(T, a) ? b : a), open[0]), lv = tyLv(T, L), target = tyNextMs(lv) || lv + 10;
+  const n = Math.min(target - lv, tyMaxN(L, lv, tyMoney(me)));
+  return { L, lv, target, n, cost: tyCostN(L, lv, Math.max(1, n)) };
+}
+
 /* ---------- Screen ---------- */
 Object.assign(TITLES, { tycoon: 'Squish Tycoon' });
 views.tycoon = () => {
@@ -152,6 +173,7 @@ views.tycoon = () => {
     ${coinDaily(me) ? `<button class="ty-daily" data-action="coin-daily">🎁 Collect your daily ${COIN} ${COIN_DAILY}</button>` : ''}
     ${away ? `<div class="ty-away">💤 You were away ${away.h}h — your factory made <b>${COIN} ${fmtCoin(away.n)}</b>!</div>` : ''}
     <div class="ty-tapzone"><div class="ty-frz"></div><button class="ty-tap" data-action="ty-tap" aria-label="Squish!">${hero && typeof squishySVG === 'function' ? squishySVG(hero.sid) : '🧸'}</button><div class="ty-floats"></div><div class="ty-combo"></div><small>Tap fast for a combo! +${fmtRate(tyTapBase(me))} a tap</small></div>
+    ${tyFloor(me)}
     <div class="segmented ty-tabs">${[['lines', '🏭 Lines'], ['ups', `⬆️ Upgrades${ups ? ` <i>${ups}</i>` : ''}`], ['goals', `🎯 Goals${goalsReady ? ` <i>${goalsReady}</i>` : ''}`], ['gold', '🌟 Golden']].map(([k, l]) => `<button class="${tab === k ? 'active' : ''}" data-action="ty-tab" data-k="${k}">${l}</button>`).join('')}</div>
     ${tab === 'lines' ? tyLinesView(me) : tab === 'ups' ? tyUpsView(me) : tab === 'goals' ? tyGoalsView(me) : tyGoldView(me)}`;
 };
@@ -173,7 +195,9 @@ function tyLinesView(me) {
       <button class="ty-buybtn${money < cost ? ' cant' : ''}" data-action="ty-buy" data-sid="${L.sid}" data-cost="${Math.ceil(cost)}"><b>+${n}</b><small>${COIN} ${fmtCoin(cost)}</small><small class="ty-gain">+${fmtRate(gain)}/s</small></button>
     </div>`;
   }).join('');
-  return `<div class="ty-amt">Buy ${[1, 10, 25, 'max'].map((a) => `<button class="${amt === a ? 'on' : ''}" data-action="ty-amt" data-a="${a}">${a === 'max' ? 'Max' : '×' + a}</button>`).join('')}</div>
+  const slow = tySlowest(me);
+  return `${slow ? `<button class="ty-slow${slow.n ? '' : ' cant'}" data-action="ty-slow" data-cost="${Math.ceil(slow.cost)}"><span>🐢</span><span class="grow"><b>Boost the slowest line</b><small>${esc(slow.L.name)} Lv ${slow.lv} → ${slow.lv + Math.max(1, slow.n)}${slow.lv + slow.n >= slow.target ? ` · hits ×2 at ${slow.target}!` : ''}</small></span><em>${COIN} ${fmtCoin(slow.cost)}</em></button>` : ''}
+    <div class="ty-amt">Buy ${[1, 10, 25, 'max'].map((a) => `<button class="${amt === a ? 'on' : ''}" data-action="ty-amt" data-a="${a}">${a === 'max' ? 'Max' : '×' + a}</button>`).join('')}</div>
     ${nextAll ? `<p class="small muted ty-allnote">⭐ Get <b>every</b> line to level ${nextAll} and they all make ×2!</p>` : ''}
     <div class="ty-lines">${rows}</div>
     <div class="ty-glovecard">${(() => { const c = tyGloveCost(T.glove || 0); return `<span>🧤</span><div class="grow"><b>Super gloves · lv ${T.glove || 0}</b><small>Doubles every tap</small></div><button class="ty-buybtn" data-action="ty-glove" data-cost="${c}"><b>Upgrade</b><small>${COIN} ${fmtCoin(c)}</small></button>`; })()}</div>`;
@@ -227,6 +251,15 @@ Object.assign(actions, {
     if (!lv) toast(`🏭 ${L.name} line is open!`);
     render();
   },
+  'ty-slow': () => {
+    const me = actor(); tyFlush(); const S = tySlowest(me);
+    if (!S || !S.n) { toast(`Not enough coins yet ${COIN}`); return; }
+    if (!spendCoins(me, Math.ceil(S.cost))) return;
+    const T = tyState(me), before = tyMsCount(S.lv);
+    T.lv[S.L.sid] = S.lv + S.n; gBuzz();
+    toast(tyMsCount(S.lv + S.n) > before ? `⭐ ${S.L.name} hit level ${S.lv + S.n} — ×2!` : `🐢 ${S.L.name} +${S.n} levels`);
+    render();
+  },
   'ty-glove': () => { const me = actor(); tyFlush(); const T = tyState(me), c = tyGloveCost(T.glove || 0); if (!spendCoins(me, c)) return; T.glove = (T.glove || 0) + 1; gBuzz(); render(); },
   'ty-up': (el) => {
     const me = actor(); tyFlush(); const u = tyUpgrades(me).find((x) => x.id === el.dataset.id); if (!u || !u.need) return;
@@ -259,7 +292,7 @@ Object.assign(actions, {
   },
 });
 KID_ROUTES.push('tycoon');
-for (const a of ['ty-tab', 'ty-amt', 'ty-tap', 'ty-buy', 'ty-glove', 'ty-up', 'ty-claim', 'ty-gold', 'ty-golden']) KID_ACTIONS.add(a);
+for (const a of ['ty-slow', 'ty-tab', 'ty-amt', 'ty-tap', 'ty-buy', 'ty-glove', 'ty-up', 'ty-claim', 'ty-gold', 'ty-golden']) KID_ACTIONS.add(a);
 if (typeof HUB_OF !== 'undefined') HUB_OF.tycoon = 'play';
 if (typeof PG_SCROLL !== 'undefined') PG_SCROLL.add('tycoon');
 const _afterRenderTy = afterRender;

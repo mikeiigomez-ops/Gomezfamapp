@@ -2102,3 +2102,21 @@ body.game-mode .game-stage .cp-canvas { width: min(100%, calc(100vh - 330px) * 1
 .ty-goldsq .sq-svg { width: 100%; height: 100%; filter: drop-shadow(0 0 10px #facc15); }
 @keyframes ty-goldin { from { transform: scale(0) rotate(-40deg); } }
 @keyframes ty-goldbob { 50% { transform: translateY(-10px) rotate(6deg); } }
+/* Tycoon factory floor */
+.ty-floor { position: relative; height: 92px; margin: 12px 0 2px; border-radius: 22px; overflow: hidden; background: linear-gradient(#fff7ed 0 58%, #e7e5e4 58%); box-shadow: var(--shadow), inset 0 -2px 0 rgba(0, 0, 0, .05); }
+.ty-floor.empty { display: grid; place-items: center; height: 60px; font-weight: 700; color: var(--muted); font-size: 13.5px; text-align: center; padding: 0 12px; }
+.ty-belt { position: absolute; left: 0; right: 0; bottom: 10px; height: 16px; background: repeating-linear-gradient(90deg, #57534e 0 14px, #78716c 14px 28px); border-top: 3px solid #44403c; animation: ty-belt 1.2s linear infinite; }
+@keyframes ty-belt { to { background-position: 28px 0; } }
+.ty-walker { position: absolute; left: 0; bottom: 22px; width: 46px; height: 46px; transform-origin: bottom center; animation: ty-walk var(--d) linear var(--dl) infinite; }
+.ty-walker .sq-svg { width: 100%; height: 100%; transform: scale(var(--s)); transform-origin: bottom center; animation: ty-hop .45s ease-in-out infinite alternate; }
+.ty-walker i { position: absolute; right: -4px; top: 2px; font-style: normal; font-size: 14px; animation: ty-hop .45s ease-in-out infinite alternate-reverse; }
+@keyframes ty-walk { from { transform: translateX(-60px); } to { transform: translateX(calc(100cqw + 60px)); } }
+@keyframes ty-hop { to { translate: 0 -5px; } }
+.ty-floor { container-type: inline-size; }
+.ty-floor.fast .ty-walker { animation-duration: calc(var(--d) / 3); } .ty-floor.fast .ty-belt { animation-duration: .4s; }
+.ty-machine { position: absolute; right: 6px; bottom: 22px; font-size: 40px; filter: drop-shadow(0 4px 6px rgba(0, 0, 0, .2)); }
+@media (prefers-reduced-motion: reduce) { .ty-walker, .ty-belt, .ty-walker .sq-svg, .ty-walker i { animation: none !important; } .ty-walker { transform: translateX(calc(var(--dl) * -8px)); } }
+.ty-slow { display: flex; align-items: center; gap: 10px; width: 100%; margin-bottom: 10px; padding: 10px 14px; border-radius: 18px; text-align: left; color: #fff; background: linear-gradient(120deg, #16a34a, #65a30d); box-shadow: 0 4px 0 #15803d; }
+.ty-slow > span:first-child { font-size: 28px; } .ty-slow .grow { flex: 1; display: flex; flex-direction: column; } .ty-slow small { opacity: .95; font-size: 12.5px; } .ty-slow em { font-style: normal; font-weight: 900; white-space: nowrap; }
+.ty-slow.cant { background: var(--surface-2, #e5e7eb); color: var(--muted); box-shadow: none; }
+.ty-slow:active:not(.cant) { transform: translateY(3px); box-shadow: 0 1px 0 #15803d; }
