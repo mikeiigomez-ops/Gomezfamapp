@@ -17,12 +17,16 @@ const RW_FX = {
 const RW_AURA = { sparkle: '✨', hearts: '💖', snow: '❄️', stars: '⭐', bubbles: '🫧', leaves: '🍂', notes: '🎵', confetti: '🎉' };
 // Signature poses, struck at the end of the runway
 const RW_POSES = { strut: ['😎', 'Power pose'], twirl: ['💫', 'Twirl'], hop: ['🐰', 'Bunny hop'], wave: ['👋', 'Wave'], peace: ['✌️', 'Peace out'], kiss: ['😘', 'Blow a kiss'], bow: ['🙇', 'Take a bow'] };
-const RW_CATS = [
-  ['top', '👚', 'Top'], ['topC', '🌈', 'Top color'], ['graphic', '💖', 'Print'], ['bottom', '👖', 'Bottom'], ['bottomC', '🎨', 'Bottom color'],
-  ['shoes', '👟', 'Shoes'], ['shoesC', '🎨', 'Shoe color'], ['hair', '💇', 'Hair'], ['hairC', '🎨', 'Hair color'], ['head', '🎩', 'Hats'], ['acc', '🎀', 'Accessory'],
-  ['back', '🧚', 'Wings'], ['neck', '📿', 'Neck'], ['hand', '👜', 'In hand'], ['aura', '✨', 'Aura'], ['face', '😊', 'Face'], ['pose', '💃', 'Pose'], ['book', '📖', 'Lookbook'],
+// The dressing room goes in 4 stages; each has at most 4 tabs, and colours sit right under the item they colour
+const RW_STAGES = [
+  ['👗', 'Outfit', [['top', 'Top'], ['bottom', 'Bottom'], ['shoes', 'Shoes'], ['graphic', 'Print']]],
+  ['💇', 'Hair', [['hair', 'Style'], ['head', 'Hats'], ['acc', 'Accessories']]],
+  ['✨', 'Extras', [['back', 'Wings'], ['neck', 'Neck'], ['hand', 'In hand'], ['aura', 'Aura']]],
+  ['💃', 'Pose', [['pose', 'Pose'], ['eyes', 'Eyes'], ['mouth', 'Mouth'], ['book', 'Lookbook']]],
 ];
-const RW_HEADSHOT = new Set(['hair', 'hairC', 'head', 'acc', 'face']); // these preview as a close-up
+const RW_COLOR_OF = { top: 'topC', bottom: 'bottomC', shoes: 'shoesC', hair: 'hairC' };
+const rwStageOf = (cat) => Math.max(0, RW_STAGES.findIndex((st) => st[2].some(([k]) => k === cat)));
+const RW_HEADSHOT = new Set(['hair', 'hairC', 'head', 'acc', 'eyes', 'mouth']); // these preview as a close-up
 const rwOpts = (cat) => {
   const lab = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, Array.isArray(v) ? v[0] : v]));
   if (cat === 'hair') return lab(AV_HAIR); if (cat === 'top') return lab(AV_TOP); if (cat === 'graphic') return lab(AV_GRAPHIC);
@@ -228,13 +232,13 @@ function rwDraft(g, who) {
     let saved = null;
     try { saved = JSON.parse(localStorage.getItem(rwStoreKey(key)) || 'null'); } catch { /* private mode */ }
     const base = JSON.parse(JSON.stringify(typeof avatarOf === 'function' ? avatarOf(who) : {}));
-    ui.rw = saved && saved.look ? { key, gid: g.id, who, cat: 'top', look: rwClean(saved.look), start: saved.start, hist: [] }
+    ui.rw = saved && saved.look ? { key, gid: g.id, who, cat: RW_STAGES.some((st) => st[2].some(([k]) => k === saved.cat)) ? saved.cat : 'top', look: rwClean(saved.look), start: saved.start, hist: [] }
       : { key, gid: g.id, who, cat: 'top', look: rwClean({ ...base, fx: {}, pose: 'strut' }), start: Date.now() + RW_REVEAL_MS, hist: [] };
   }
   return ui.rw;
 }
 // The outfit survives an app reload mid-round
-const rwKeep = (D) => { try { localStorage.setItem(rwStoreKey(D.key), JSON.stringify({ look: D.look, start: D.start })); } catch { /* full or private */ } };
+const rwKeep = (D) => { try { localStorage.setItem(rwStoreKey(D.key), JSON.stringify({ look: D.look, start: D.start, cat: D.cat })); } catch { /* full or private */ } };
 const rwDrop = (key) => { try { localStorage.removeItem(rwStoreKey(key)); } catch { /* ignore */ } };
 const rwChange = (D, fn) => { D.hist = [...(D.hist || []).slice(-29), JSON.stringify(D.look)]; fn(D.look); D.posing = false; rwKeep(D); gBuzz(); render(); };
 const rwEnd = (g, D) => (g.mode === 'remote' ? Math.max(g.until || 0, D.start + 60000) : D.start + RW_DRESS_MS);
@@ -243,32 +247,38 @@ const rwSwatch = (c) => (c === 'rainbow' ? 'conic-gradient(red,orange,yellow,gre
 function rwTile(L, cat, k, v, label, on) {
   const look = k === 'fx' ? { ...L, fx: { ...L.fx, [cat]: v } } : { ...L, [k]: v };
   const art = cat === 'aura' ? `<span class="rw-big">${RW_AURA[v] || '🚫'}</span>` : `<div class="rw-thumb${RW_HEADSHOT.has(cat) ? ' headshot' : ''}">${rwModel(look, 'tile')}</div>`;
-  return `<button class="rw-opt${on ? ' on' : ''}" data-action="rw-set" data-k="${k === 'fx' ? cat : k}" data-v="${esc(String(v))}">${art}<span>${esc(label)}</span></button>`;
+  return `<button class="rw-opt${on ? ' on' : ''}" data-action="rw-set" data-k="${k === 'fx' ? cat : k}" data-v="${esc(String(v))}">${art}<span>${esc(String(label).replace(/^[^A-Za-z0-9]+/, '') || label)}</span></button>`;
 }
 function rwDressing(g, who) {
   const th = rwTheme(g), D = rwDraft(g, who), L = D.look, cat = D.cat;
   if (Date.now() < D.start) return rwReveal(g, D);
   const left = Math.max(0, Math.ceil((rwEnd(g, D) - Date.now()) / 1000));
-  const opts = rwOpts(cat);
+  const stage = rwStageOf(cat), last = stage === RW_STAGES.length - 1;
   let grid;
-  if (cat === 'hairC') grid = Object.entries(AV_HAIRC).map(([k, [c]]) => `<button class="rw-sw${L.hairC === k ? ' on' : ''}" data-action="rw-set" data-k="hairC" data-v="${k}" style="--c:${rwSwatch(c)}" aria-label="${k} hair"></button>`).join('');
-  else if (/C$/.test(cat)) grid = AV_CLOTH.map((c, i) => `<button class="rw-sw${Number(L[cat]) === i ? ' on' : ''}" data-action="rw-set" data-k="${cat}" data-v="${i}" style="--c:${c}" aria-label="Colour ${i + 1}"></button>`).join('');
-  else if (cat === 'face') grid = [['eyes', AV_EYES], ['mouth', AV_MOUTH]].map(([k, o]) => Object.entries(o).map(([v, x]) => rwTile(L, 'face', k, v, Array.isArray(x) ? x[0] : x, L[k] === v)).join('')).join('') + rwTile(L, 'face', 'blush', L.blush ? '' : '1', L.blush ? 'No blush' : 'Blush', false);
+  if (cat === 'eyes') grid = Object.entries(AV_EYES).map(([v, x]) => rwTile(L, 'eyes', 'eyes', v, x[0], L.eyes === v)).join('');
+  else if (cat === 'mouth') grid = Object.entries(AV_MOUTH).map(([v, x]) => rwTile(L, 'mouth', 'mouth', v, x, L.mouth === v)).join('') + rwTile(L, 'mouth', 'blush', L.blush ? '' : '1', L.blush ? 'No blush' : 'Blush', false);
   else if (cat === 'pose') grid = Object.entries(RW_POSES).map(([v, [e, l]]) => `<button class="rw-opt${L.pose === v ? ' on' : ''}" data-action="rw-set" data-k="pose" data-v="${v}"><span class="rw-big">${e}</span><span>${esc(l)}</span></button>`).join('');
   else if (cat === 'book') {
     const book = rwBook(who);
     grid = `<button class="rw-opt" data-action="rw-book" data-i="-1"><div class="rw-thumb">${rwModel(rwClean({ ...avatarOf(who), fx: {} }), 'tile')}</div><span>My avatar</span></button>`
       + book.map((b, i) => `<button class="rw-opt" data-action="rw-book" data-i="${i}"><div class="rw-thumb">${rwModel(rwClean(b.look), 'tile')}</div><span>${esc(RW_THEMES.find((t) => t[0] === b.theme)?.[1] || '👗')} ⭐${Number(b.avg || 0).toFixed(1)}</span></button>`).join('')
       + (book.length ? '' : '<p class="rw-empty">Save looks you love from the results — they show up here.</p>');
-  } else grid = Object.entries(opts).map(([v, label]) => rwTile(L, cat, RW_FX[cat] ? 'fx' : cat, v, label, (RW_FX[cat] ? L.fx[cat] || '' : L[cat]) === v)).join('');
+  } else grid = Object.entries(rwOpts(cat)).map(([v, label]) => rwTile(L, cat, RW_FX[cat] ? 'fx' : cat, v, label, (RW_FX[cat] ? L.fx[cat] || '' : L[cat]) === v)).join('');
+  const ck = RW_COLOR_OF[cat];
+  const colors = !ck ? '' : `<div class="rw-swrow" role="group" aria-label="Colour">${ck === 'hairC'
+    ? Object.entries(AV_HAIRC).map(([k, [c]]) => `<button class="rw-sw${L.hairC === k ? ' on' : ''}" data-action="rw-set" data-k="hairC" data-v="${k}" style="--c:${rwSwatch(c)}" aria-label="${k} hair"></button>`).join('')
+    : AV_CLOTH.map((c, i) => `<button class="rw-sw${Number(L[ck]) === i ? ' on' : ''}" data-action="rw-set" data-k="${ck}" data-v="${i}" style="--c:${c}" aria-label="Colour ${i + 1}"></button>`).join('')}</div>`;
   const ideas = Object.entries(th[3]).filter(([k]) => k !== 'colors' && k !== 'rainbow').slice(0, 4).map(([k, vs]) => rwItemName(k, vs[0])).filter(Boolean);
   const fit = rwFit(L, th), hearts = Math.round(fit / 2);
-  return `<div class="rw-theme"><span>${th[1]}</span><b>${esc(th[2])}</b><i class="rw-timer${left <= 30 ? ' low' : ''}" data-rwend="${rwEnd(g, D)}">${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}</i>${ui.rwIdeas ? `<div class="rw-ideas">💡 ${esc(ideas.join(' · '))}</div>` : ''}</div>
+  return `<div class="rw-theme"><span>${th[1]}</span><b>${esc(th[2])}${g.mode !== 'remote' && g.p.length > 1 ? `<small>${esc(playerEmoji(who))} ${esc(playerName(who))} is dressing</small>` : ''}</b><i class="rw-timer${left <= 30 ? ' low' : ''}" data-rwend="${rwEnd(g, D)}">${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}</i>${ui.rwIdeas ? `<div class="rw-ideas">💡 ${esc(ideas.join(' · '))}</div>` : ''}</div>
     <div class="game-stage rw-stage"><div class="rw-room">${D.posing ? rwPosed(L, 'dressing') : rwModel(L, 'dressing')}
       <div class="rw-meter" aria-label="Theme vibe ${hearts} of 5"><span>${'💗'.repeat(hearts)}${'🤍'.repeat(5 - hearts)}</span><b>${rwVibe(fit)}</b></div></div></div>
-    <div class="rw-cats" data-noswipe>${RW_CATS.map(([k, e, l]) => `<button class="${cat === k ? 'on' : ''}" data-action="rw-cat" data-k="${k}"><span>${e}</span>${l}</button>`).join('')}</div>
-    <div class="rw-grid${/C$/.test(cat) ? ' swatches' : ''}" data-noswipe>${grid}</div>
-    <div class="rw-actions"><button class="btn secondary" data-action="rw-ideas" aria-label="Ideas">💡</button><button class="btn secondary" data-action="rw-undo" aria-label="Undo"${D.hist?.length ? '' : ' disabled'}>↩️</button><button class="btn secondary" data-action="rw-random" aria-label="Surprise me">🎲</button><button class="btn" data-action="rw-done" data-id="${g.id}">✨ Walk the runway</button></div>`;
+    <div class="rw-steps" data-noswipe>${RW_STAGES.map(([e, l], i) => `<button class="${i === stage ? 'on' : i < stage ? 'done' : ''}" data-action="rw-stage" data-s="${i}" aria-label="Step ${i + 1}: ${l}"><span>${i < stage ? '✓' : e}</span><b>${l}</b></button>`).join('')}</div>
+    <div class="rw-subs" data-noswipe>${RW_STAGES[stage][2].map(([k, l]) => `<button class="${cat === k ? 'on' : ''}" data-action="rw-cat" data-k="${k}">${l}</button>`).join('')}</div>
+    <div class="rw-pick" data-noswipe>${colors}<div class="rw-grid">${grid}</div></div>
+    <div class="rw-actions"><button class="btn secondary" data-action="rw-ideas" aria-label="Ideas">💡</button><button class="btn secondary" data-action="rw-undo" aria-label="Undo"${D.hist?.length ? '' : ' disabled'}>↩️</button><button class="btn secondary" data-action="rw-random" aria-label="Surprise me">🎲</button>${last
+      ? `<button class="btn" data-action="rw-done" data-id="${g.id}">✨ Walk the runway</button>`
+      : `<button class="btn" data-action="rw-stage" data-s="${stage + 1}">Next: ${RW_STAGES[stage + 1][0]} ${RW_STAGES[stage + 1][1]} ›</button>`}</div>`;
 }
 // The theme spins in like a slot machine before the clock starts
 function rwReveal(g, D) {
@@ -328,7 +338,8 @@ function rwPodium(g) {
 
 /* ---------- Actions ---------- */
 Object.assign(actions, {
-  'rw-cat': (el) => { if (ui.rw) { ui.rw.cat = el.dataset.k; ui.rw.posing = false; render(); } },
+  'rw-cat': (el) => { if (ui.rw) { ui.rw.cat = el.dataset.k; ui.rw.posing = false; rwKeep(ui.rw); render(); } },
+  'rw-stage': (el) => { const D = ui.rw, st = RW_STAGES[Number(el.dataset.s)]; if (D && st) { D.cat = st[2][0][0]; D.posing = false; rwKeep(D); render(); } },
   'rw-set': (el) => {
     const D = ui.rw; if (!D) return;
     const k = el.dataset.k, v = el.dataset.v;
@@ -385,7 +396,7 @@ Object.assign(actions, {
     g.lastAt = Date.now(); mpFinish(g); save(); render();
   },
 });
-for (const a of ['rw-cat', 'rw-set', 'rw-undo', 'rw-book', 'rw-go', 'rw-ideas', 'rw-random', 'rw-done', 'rw-star', 'rw-next', 'rw-back', 'rw-send', 'rw-save', 'rw-skip']) KID_ACTIONS.add(a);
+for (const a of ['rw-cat', 'rw-stage', 'rw-set', 'rw-undo', 'rw-book', 'rw-go', 'rw-ideas', 'rw-random', 'rw-done', 'rw-star', 'rw-next', 'rw-back', 'rw-send', 'rw-save', 'rw-skip']) KID_ACTIONS.add(a);
 if (typeof ARCADE !== 'undefined' && !ARCADE.includes('runway')) ARCADE.push('runway');
 
 // Family records: runway champ + best look ever
