@@ -679,7 +679,7 @@ const _modeArcade = modeClasses;
 modeClasses = function () {
   _modeArcade();
   const { name, param } = currentRoute();
-  if (name === 'mp') { const g = state.games.find((x) => x.id === param); document.body.classList.toggle('game-mode', !!g && GX[g.type] && !mpStatus(g).over); }
+  if (name === 'mp') { const g = state.games.find((x) => x.id === param); document.body.classList.toggle('game-mode', !!g && !!GX[g.type] && !(g.type === 'doodle' && mpStatus(g).over)); } // stays full-screen after the end, like Connect Four (the doodle gallery scrolls)
 };
 const _afterRenderArcade = afterRender;
 afterRender = function () {

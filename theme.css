@@ -1782,8 +1782,8 @@ html[data-theme="dark"] .gem-pill { background: linear-gradient(135deg, #1e2a44,
 .mp-pass .btn { margin-top: 18px; }
 /* Dots & Boxes */
 .db-board { --s: min(100%, 420px); width: var(--s); height: auto; aspect-ratio: 1; display: block; margin: 0 auto; touch-action: manipulation; }
-.game-stage .db-board { --s: min(358px, calc(100vh - 290px)); height: var(--s); }
-@supports (width: 1cqh) { .game-stage .db-board { --s: min(100cqw, 100cqh); } }
+body.game-mode .game-stage .db-board { --s: min(358px, calc(100vh - 290px)); height: var(--s); }
+@supports (width: 1cqh) { body.game-mode .game-stage .db-board { --s: min(100cqw, 100cqh); } }
 .db-dot { fill: var(--text); }
 .db-free { stroke: color-mix(in oklab, var(--text) 22%, transparent); }
 .db-hit { stroke: transparent; cursor: pointer; pointer-events: stroke; }
@@ -1794,8 +1794,8 @@ html[data-theme="dark"] .gem-pill { background: linear-gradient(135deg, #1e2a44,
 .sh-stage { position: relative; }
 .sh-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 3px; padding: 6px; border-radius: 16px; background: linear-gradient(160deg, #0ea5e9, #1e40af); aspect-ratio: 1; }
 .sh-grid.big { width: min(100%, 400px); margin: 0 auto; }
-.game-stage .sh-grid.big { width: min(100%, calc(100vh - 380px)); }
-@supports (width: 1cqh) { .game-stage .sh-grid.big { width: min(100cqw, 100cqh); } }
+body.game-mode .game-stage .sh-grid.big { width: min(100%, calc(100vh - 380px)); }
+@supports (width: 1cqh) { body.game-mode .game-stage .sh-grid.big { width: min(100cqw, 100cqh); } }
 .sh-grid.mini { width: 120px; flex: none; gap: 1px; padding: 3px; border-radius: 10px; }
 .sh-c { display: grid; place-items: center; border-radius: 5px; background: rgba(255, 255, 255, .16); font-size: min(4.2vw, 20px); line-height: 1; color: #fff; min-width: 0; aspect-ratio: 1; padding: 0; }
 .sh-grid.mini .sh-c { border-radius: 2px; font-size: 7px; }
@@ -1811,8 +1811,8 @@ button.sh-c:active { background: rgba(255, 255, 255, .5); }
 .dg-round { text-align: center; margin-bottom: 4px; }
 .dg-word { text-align: center; font-size: 17px; margin-bottom: 4px; }
 .dg-canvas { display: block; width: min(100%, 420px); aspect-ratio: 1; margin: 0 auto; border-radius: 18px; background: #fff; box-shadow: var(--shadow); touch-action: none; }
-.game-stage .dg-canvas { width: min(100%, calc(100vh - 360px)); }
-@supports (width: 1cqh) { .game-stage .dg-canvas { width: min(100cqw, 100cqh); } }
+body.game-mode .game-stage .dg-canvas { width: min(100%, calc(100vh - 360px)); }
+@supports (width: 1cqh) { body.game-mode .game-stage .dg-canvas { width: min(100cqw, 100cqh); } }
 .dg-picks { display: grid; gap: 10px; }
 .dg-pick { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-radius: 20px; background: var(--surface); box-shadow: var(--shadow); font: 800 19px/1.2 var(--font-display); color: var(--text); text-transform: capitalize; }
 .dg-pick span { font-size: 30px; }
@@ -1857,9 +1857,9 @@ button.sh-c:active { background: rgba(255, 255, 255, .5); }
 .fd-pick { width: 100%; padding: 0 4px; line-height: 1.2; border-radius: 8px; background: var(--accent-soft, #fdecea); color: var(--accent-ink, var(--accent)); font-weight: 850; }
 .fd-pick.zero { background: var(--surface-2, #f1f3f5); color: var(--muted); }
 /* Checkers */
-.ck-board { display: grid; grid-template-columns: repeat(8, 1fr); width: min(100%, 420px); aspect-ratio: 1; margin: 0 auto; border-radius: 12px; overflow: hidden; box-shadow: 0 0 0 6px #78350f, var(--shadow); }
-.game-stage .ck-board { width: min(100% - 12px, calc(100vh - 300px)); }
-@supports (width: 1cqh) { .game-stage .ck-board { width: min(100cqw - 12px, 100cqh - 12px); } }
+.ck-board { display: grid; grid-template-columns: repeat(8, 1fr); width: min(100% - 12px, 420px); aspect-ratio: 1; margin: 0 auto; border-radius: 12px; overflow: hidden; box-shadow: 0 0 0 6px #78350f, var(--shadow); }
+body.game-mode .game-stage .ck-board { width: min(100% - 12px, calc(100vh - 300px)); }
+@supports (width: 1cqh) { body.game-mode .game-stage .ck-board { width: min(100cqw - 12px, 100cqh - 12px); } }
 .ck-sq { display: grid; place-items: center; background: #fde7c4; padding: 0; min-width: 0; aspect-ratio: 1; }
 .ck-sq.dark { background: #a16207; }
 .ck-sq.last { background: #ca8a04; }
