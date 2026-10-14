@@ -172,7 +172,7 @@ async function bankSync({ quiet = false } = {}) {
     bank.err = errs.join(' ').slice(0, 200);
     bank.empty = !res.accounts;
     if (typeof activityResync === 'function') activityResync(); // bank rows aren't family activity
-    if (!res.accounts && !bank.err) bank.err = 'Waiting for your bank — SimpleFIN pulls from the bank about once a day, so the first load can take a day or two. The app checks every couple of hours.';
+    if (!res.accounts && !bank.err) bank.err = 'Waiting for your bank — SimpleFIN is still loading it. It pulls from the bank about once a day, so the first load can take a day or two; the app checks every couple of hours.';
     save(); render();
     if (!res.accounts) { if (!quiet) toast('🏦 Connected — your bank’s accounts aren’t ready at SimpleFIN yet. The app will keep checking.'); return res; }
     if (!quiet || res.added || res.bills) toast(`🏦 Bank synced · ${res.added} new${res.bills ? ` · ${res.bills} bill${res.bills > 1 ? 's' : ''} marked paid` : ''}${res.linked ? ` · ${res.linked} matched` : ''}`);
