@@ -172,7 +172,7 @@ async function bankSync({ quiet = false } = {}) {
     bank.err = errs.join(' ').slice(0, 200);
     bank.empty = !res.accounts;
     if (typeof activityResync === 'function') activityResync(); // bank rows aren't family activity
-    if (!res.accounts && !bank.err) bank.err = 'Waiting for your bank — SimpleFIN is still loading it (the first load can take a few hours).';
+    if (!res.accounts && !bank.err) bank.err = 'Waiting for your bank — SimpleFIN pulls from the bank about once a day, so the first load can take a day or two. The app checks every couple of hours.';
     save(); render();
     if (!res.accounts) { if (!quiet) toast('🏦 Connected — your bank’s accounts aren’t ready at SimpleFIN yet. The app will keep checking.'); return res; }
     if (!quiet || res.added || res.bills) toast(`🏦 Bank synced · ${res.added} new${res.bills ? ` · ${res.bills} bill${res.bills > 1 ? 's' : ''} marked paid` : ''}${res.linked ? ` · ${res.linked} matched` : ''}`);
@@ -319,7 +319,7 @@ views.budget = (p) => {
 // Auto sync when the app opens (and comes back), at most every few hours, only on the phone holding the key
 function bankAuto() {
   const c = sfCfg(), bank = state.budget.bank;
-  if (c && navigator.onLine !== false && !navigator.webdriver && Date.now() - (bank?.last || 0) > (bank?.empty ? 20 * 60e3 : SF_EVERY)) bankSync({ quiet: true });
+  if (c && navigator.onLine !== false && !navigator.webdriver && Date.now() - (bank?.last || 0) > (bank?.empty ? 2 * 3600e3 : SF_EVERY)) bankSync({ quiet: true }); // while SimpleFIN is still loading the bank, every 2 hours (it allows about 24 requests a day)
 }
 setTimeout(bankAuto, 5000);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') setTimeout(bankAuto, 2000); });
