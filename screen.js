@@ -602,6 +602,7 @@ views.play = () => {
       mp('quiz', 'Buzz in from every phone'), mp('imposter', '3+ players · find the faker'),
       { to: 'charades', art: 'g_charades', e: '🤳', label: 'Forehead Charades', sub: 'Tilt the phone, act it out', g1: '#f59e0b', g2: '#ef4444' }, mp('doodle', 'Draw it, guess it'),
     ]],
+    me && typeof luckyTiles === 'function' ? ['🪙 Coin Arcade', `${fmtCoin(coinsOf(me))} play coins · just for fun`, luckyTiles(me)] : null,
     ['⚔️ Head to head', 'Challenge someone, robot, or pass the phone', [
       { act: 'c4-new', e: '🔴', label: 'Connect Four', sub: liveC4 ? `${liveC4} going · new game` : 'Challenge someone', g1: '#dc2626', g2: '#f59e0b' },
       mp('checkers', 'The classic'), mp('sea', 'Find the hidden boats'), mp('dots', '2–4 players'), mp('dice', 'Roll, keep, score'),
@@ -626,7 +627,7 @@ views.play = () => {
   ];
   const card = (t) => `<button class="game-tile" data-action="${t.act || 'go'}" ${t.to ? `data-to="${t.to}"` : ''} ${t.attrs || ''} style="--g1:${t.g1 || t.color};--g2:${t.g2 || t.color}">${t.badge ? `<span class="tile-badge">${t.badge}</span>` : ''}<span class="gt-e art-slot"${t.art ? ` data-art-id="${t.art}"` : ''}>${t.e}</span><b>${esc(t.label)}</b><small>${t.sub}</small></button>`;
   const sec = ([title, sub, list]) => { const ts = list.filter(Boolean); return ts.length ? `<div class="play-sec2"><b>${title}</b><small>${esc(sub)}</small></div><div class="game-grid play-grid">${ts.map(card).join('')}</div>` : ''; };
-  return `${needMe()}<i class="play-hero-at" hidden></i>${playResume(me)}${groups.map(sec).join('')}`;
+  return `${needMe()}<i class="play-hero-at" hidden></i>${playResume(me)}${groups.filter(Boolean).map(sec).join('')}`;
 };
 // Every game you have going: on your phones, on this phone, against the robot
 function gamesGoing(me) {
