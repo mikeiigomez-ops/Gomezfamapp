@@ -672,7 +672,7 @@ Object.assign(actions, {
 KID_ROUTES.push('mp');
 for (const a of ['mp-new', 'mp-quick', 'mp-sel', 'mp-start', 'mp-act', 'mp-ready', 'mp-rematch', 'mp-del', 'dg-word', 'dg-ink', 'dg-size', 'dg-undo', 'dg-send', 'ck-tap']) KID_ACTIONS.add(a);
 if (typeof PG_SKIP !== 'undefined') PG_SKIP.add('mp');
-if (typeof HUB_OF !== 'undefined') HUB_OF.mp = 'play';
+if (typeof HUB_OF !== 'undefined') { HUB_OF.mp = 'play'; HUB_OF.mygames = 'play'; }
 
 // Full-screen game mode while a game is on; the robot and drawings come alive after each render
 const _modeArcade = modeClasses;
