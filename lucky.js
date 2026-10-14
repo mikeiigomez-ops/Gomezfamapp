@@ -13,14 +13,15 @@ function coinSaveSoon(now) { clearTimeout(coinSaveT); if (now) { save(); return;
 function fmtCoin(n) {
   n = Math.floor(n);
   if (n < 10000) return n.toLocaleString();
-  const u = [[1e12, 'T'], [1e9, 'B'], [1e6, 'M'], [1e3, 'K']].find(([v]) => n >= v);
+  const u = [[1e21, 'Sx'], [1e18, 'Qi'], [1e15, 'Qa'], [1e12, 'T'], [1e9, 'B'], [1e6, 'M'], [1e3, 'K']].find(([v]) => n >= v);
   return (n / u[0]).toFixed(n / u[0] < 100 ? 1 : 0).replace(/\.0$/, '') + u[1];
 }
 const fmtRate = (n) => (n < 10 ? (Math.round(n * 10) / 10).toString() : fmtCoin(n));
 const coinDaily = (pid) => (state.coinDay || {})[pid] !== today();
-const coinChip = (pid) => `<button class="coin-chip" data-action="go" data-to="lucky"><span>${COIN}</span><b data-coins="${pid}">${fmtCoin(coinsOf(pid) + (ui.ty?.pid === pid ? Math.floor(ui.ty.pend) : 0))}</b></button>`;
+const coinChip = (pid) => `<button class="coin-chip" data-action="go" data-to="${typeof LUCKY_HIDDEN !== 'undefined' && LUCKY_HIDDEN.has('lucky') ? 'tycoon' : 'lucky'}"><span>${COIN}</span><b data-coins="${pid}">${fmtCoin(coinsOf(pid) + (ui.ty?.pid === pid ? Math.floor(ui.ty.pend) : 0))}</b></button>`;
 
 /* ---------- Hub ---------- */
+const LUCKY_HIDDEN = new Set(['lucky', 'pusher', 'slots', 'chests']); // parked for now; their screens open Squish Tycoon
 const LUCKY_GAMES = [
   ['tycoon', '🏭', 'Squish Tycoon', 'Tap, build, get rich', '#f59e0b', '#ef4444'],
   ['pusher', '🪙', 'Coin Pusher', 'Push coins over the edge', '#0ea5e9', '#6366f1'],
@@ -39,79 +40,11 @@ views.lucky = () => {
     <p class="small muted" style="text-align:center">Coins can’t be bought and never turn into Gems or allowance.</p>`;
 };
 function luckyTiles(me) {
-  return LUCKY_GAMES.map(([to, e, label, sub, g1, g2]) => ({ to, e, label, sub: to === 'tycoon' && me && tyState(me).b && tyCps(me) ? `${fmtRate(tyCps(me))} coins/sec` : sub, g1, g2 }));
+  return LUCKY_GAMES.filter(([to]) => !LUCKY_HIDDEN.has(to)).map(([to, e, label, sub, g1, g2]) => ({ to, e, label, sub: to === 'tycoon' && me && tyCps(me) ? `${fmtRate(tyCps(me))} coins/sec` : sub, g1, g2 }));
 }
+for (const r of ['lucky', 'pusher', 'slots', 'chests']) { const v = views[r]; views[r] = (p) => (LUCKY_HIDDEN.has(r) ? views.tycoon(p) : v(p)); }
 
-/* =========================================================
-   Squish Tycoon
-   ========================================================= */
-const TY_BUILD = [
-  ['helper', '👐', 'Helper', 'Squeezes squishies for you', 15, 0.1],
-  ['stitch', '🧵', 'Stitch station', 'Sews fresh squishies', 100, 1],
-  ['press', '🏭', 'Squish press', 'Stamps them out fast', 1100, 8],
-  ['truck', '🚚', 'Delivery truck', 'Ships squishies everywhere', 12000, 47],
-  ['castle', '🏰', 'Squish castle', 'A whole kingdom of squish', 130000, 260],
-  ['moon', '🚀', 'Moon factory', 'Low-gravity mega squish', 1.4e6, 1400],
-  ['portal', '🌀', 'Squish portal', 'Squishies from other worlds', 2e7, 7800],
-];
-const TY_OFFLINE_H = 8;
-const tyState = (pid) => ((state.tycoon ||= {})[pid] ||= { b: {}, glove: 0, earned: 0, pres: 0, at: Date.now() });
-const tyCost = (base, n) => Math.ceil(base * Math.pow(1.15, n));
-const tyMult = (pid) => { const T = tyState(pid); return (1 + 0.1 * (T.pres || 0)) * ((T.boost || 0) > Date.now() ? 2 : 1); };
-const tyCps = (pid) => { const T = tyState(pid); return TY_BUILD.reduce((a, [id, , , , , r]) => a + (T.b[id] || 0) * r, 0) * tyMult(pid); };
-const tyTap = (pid) => Math.pow(2, tyState(pid).glove || 0) * tyMult(pid) + tyCps(pid) * 0.02;
-const tyGloveCost = (n) => Math.ceil(100 * Math.pow(6, n));
-const tyGolden = (pid) => Math.floor(Math.sqrt((tyState(pid).earned || 0) / 1e6));
-// Keep the live counter in memory; write coins to the family file every few seconds
-function tyStart(pid) {
-  if (ui.ty && ui.ty.pid === pid) return;
-  tyFlush();
-  const T = tyState(pid), away = Math.min(TY_OFFLINE_H * 3600, Math.max(0, (Date.now() - (T.at || Date.now())) / 1000));
-  const off = Math.floor(tyCps(pid) * away);
-  ui.ty = { pid, pend: 0, last: Date.now(), floats: [] };
-  if (off > 0) { addCoins(pid, off); T.earned = (T.earned || 0) + off; ui.tyAway = { pid, n: off, t: Date.now() }; }
-  T.at = Date.now();
-}
-function tyFlush(force) {
-  const Y = ui.ty; if (!Y) return;
-  const n = Math.floor(Y.pend);
-  if (n > 0) { Y.pend -= n; addCoins(Y.pid, n); const T = tyState(Y.pid); T.earned = (T.earned || 0) + n; }
-  tyState(Y.pid).at = Date.now();
-  if (force) coinSaveSoon(true);
-}
-let tyTick = 0;
-function tyLoop() {
-  clearInterval(tyTick);
-  tyTick = setInterval(() => {
-    const Y = ui.ty; if (!Y) { clearInterval(tyTick); return; }
-    const now = Date.now(); Y.pend += tyCps(Y.pid) * (now - Y.last) / 1000; Y.last = now;
-    if (Y.pend >= 1 && now - (Y.flushAt || 0) > 10000) { Y.flushAt = now; tyFlush(); }
-    const total = coinsOf(Y.pid) + Math.floor(Y.pend);
-    document.querySelectorAll(`[data-coins="${Y.pid}"]`).forEach((el) => { el.textContent = fmtCoin(total); });
-    document.querySelectorAll('[data-ty-buy]').forEach((el) => { el.classList.toggle('cant', total < Number(el.dataset.cost)); });
-  }, 200);
-}
-views.tycoon = () => {
-  const me = actor(); if (!me) return needMe();
-  tyStart(me);
-  const T = tyState(me), cps = tyCps(me), total = coinsOf(me) + Math.floor(ui.ty.pend), gold = tyGolden(me);
-  const away = ui.tyAway && ui.tyAway.pid === me && Date.now() - ui.tyAway.t < 6000 ? ui.tyAway.n : 0;
-  const boost = (T.boost || 0) > Date.now() ? Math.ceil((T.boost - Date.now()) / 60000) : 0;
-  const nextGolden = Math.pow(tyGolden(me) + 1, 2) * 1e6;
-  return `<div class="ty-top">${coinChip(me)}<span class="ty-cps">⚡ ${fmtRate(cps)}/sec${T.pres ? ` · 🌟 +${T.pres * 10}%` : ''}${boost ? ` · 🔥 2× ${boost}m` : ''}</span></div>
-    ${away ? `<div class="ty-away">💤 While you were away your factory made <b>${COIN} ${fmtCoin(away)}</b>!</div>` : ''}
-    <div class="ty-tapzone"><button class="ty-tap" data-action="ty-tap" aria-label="Squish!">${typeof squishySVG === 'function' && typeof SQUISHIES !== 'undefined' ? squishySVG((SQUISHIES.find((s) => s.r === 'L') || SQUISHIES[0]).id) : '🧸'}</button><div class="ty-floats"></div><small>Tap the squishy! +${fmtRate(tyTap(me))} each</small></div>
-    <div class="section-title">Build your empire</div>
-    <div class="card flush ty-list">
-      ${(() => { const c = tyGloveCost(T.glove || 0); return `<button class="row ty-buy" data-action="ty-glove" data-ty-buy="1" data-cost="${c}"><div class="avatar">🧤</div><div class="grow"><div class="title">Super gloves <small>lv ${T.glove || 0}</small></div><div class="sub">Doubles every tap</div></div><b class="ty-price">${COIN} ${fmtCoin(c)}</b></button>`; })()}
-      ${TY_BUILD.map(([id, e, name, desc, base, rate], k) => {
-        const n = T.b[id] || 0, c = tyCost(base, n), hidden = k > 0 && !(T.b[TY_BUILD[k - 1][0]] > 0) && !n;
-        return hidden ? `<div class="row ty-locked"><div class="avatar">❔</div><div class="grow"><div class="title">???</div><div class="sub">Buy a ${esc(TY_BUILD[k - 1][2])} to unlock</div></div></div>`
-          : `<button class="row ty-buy${total < c ? ' cant' : ''}" data-action="ty-buy" data-id="${id}" data-ty-buy="1" data-cost="${c}"><div class="avatar">${e}</div><div class="grow"><div class="title">${esc(name)} <small>× ${n}</small></div><div class="sub">${esc(desc)} · +${fmtRate(rate * tyMult(me))}/sec each</div></div><b class="ty-price">${COIN} ${fmtCoin(c)}</b></button>`;
-      }).join('')}
-    </div>
-    <div class="card ty-gold"><b>🌟 Golden Squish</b><div class="small">${gold > (T.pres || 0) ? `Start your factory over and earn <b>${gold - (T.pres || 0)} Golden Squish</b> — each one makes everything +10% forever. Your coins stay!` : `Make ${COIN} ${fmtCoin(nextGolden)} in total to earn your next Golden Squish (so far ${fmtCoin(T.earned || 0)}).`}</div>${gold > (T.pres || 0) ? `<button class="btn" data-action="ty-golden" style="margin-top:8px">🌟 Restart for +${(gold - (T.pres || 0)) * 10}%</button>` : ''}</div>`;
-};
+// Squish Tycoon lives in tycoon.js
 
 /* =========================================================
    Coin Pusher
@@ -263,25 +196,6 @@ views.chests = () => {
 /* ---------- Actions + wiring ---------- */
 Object.assign(actions, {
   'coin-daily': () => { const me = actor(); if (!me || !coinDaily(me)) return; (state.coinDay ||= {})[me] = today(); addCoins(me, COIN_DAILY); coinSaveSoon(true); confetti(); toast(`+${COIN_DAILY} coins! ${COIN}`); render(); },
-  'ty-tap': (el) => {
-    const Y = ui.ty; if (!Y) return;
-    const v = tyTap(Y.pid); Y.pend += v; gBuzz();
-    const box = document.querySelector('.ty-floats');
-    if (box) { const f = document.createElement('span'); f.textContent = '+' + fmtCoin(v); f.style.left = (30 + Math.random() * 40) + '%'; box.appendChild(f); setTimeout(() => f.remove(), 900); }
-    el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
-    document.querySelectorAll(`[data-coins="${Y.pid}"]`).forEach((x) => { x.textContent = fmtCoin(coinsOf(Y.pid) + Math.floor(Y.pend)); });
-  },
-  'ty-buy': (el) => {
-    const me = actor(); tyFlush(); const T = tyState(me), b = TY_BUILD.find((x) => x[0] === el.dataset.id), c = tyCost(b[4], T.b[b[0]] || 0);
-    if (!spendCoins(me, c)) return; T.b[b[0]] = (T.b[b[0]] || 0) + 1; gBuzz(); render();
-  },
-  'ty-glove': () => { const me = actor(); tyFlush(); const T = tyState(me), c = tyGloveCost(T.glove || 0); if (!spendCoins(me, c)) return; T.glove = (T.glove || 0) + 1; gBuzz(); render(); },
-  'ty-golden': () => {
-    const me = actor(), T = tyState(me), g = tyGolden(me);
-    if (g <= (T.pres || 0)) return;
-    if (!confirm(`Restart your factory for ${g - (T.pres || 0)} Golden Squish (+${(g - (T.pres || 0)) * 10}% forever)? Your coins stay.`)) return;
-    tyFlush(); T.pres = g; T.b = {}; T.glove = 0; coinSaveSoon(true); confetti(); render();
-  },
   'sl-bet': (el) => { if (ui.sl.spinning) return; ui.sl.bet = Number(el.dataset.b); render(); },
   'sl-spin': () => {
     const me = actor(), S = ui.sl; if (!me || S.spinning) return;
@@ -308,18 +222,17 @@ Object.assign(actions, {
   'chest-again': () => { ui.chest = null; render(); },
 });
 for (const r of ['lucky', 'tycoon', 'pusher', 'slots', 'chests']) { KID_ROUTES.push(r); if (typeof HUB_OF !== 'undefined') HUB_OF[r] = 'play'; }
-for (const a of ['coin-daily', 'ty-tap', 'ty-buy', 'ty-glove', 'ty-golden', 'sl-bet', 'sl-spin', 'chest-open', 'chest-again']) KID_ACTIONS.add(a);
-if (typeof PG_SCROLL !== 'undefined') { PG_SCROLL.add('lucky'); PG_SCROLL.add('tycoon'); PG_SCROLL.add('chests'); PG_SCROLL.add('slots'); }
+for (const a of ['coin-daily', 'sl-bet', 'sl-spin', 'chest-open', 'chest-again']) KID_ACTIONS.add(a);
+if (typeof PG_SCROLL !== 'undefined') { PG_SCROLL.add('lucky'); PG_SCROLL.add('chests'); PG_SCROLL.add('slots'); }
 if (typeof PG_SKIP !== 'undefined') PG_SKIP.add('pusher');
 const _afterRenderLucky = afterRender;
 afterRender = function () {
   _afterRenderLucky();
   const name = currentRoute().name;
-  if (name === 'tycoon') tyLoop(); else if (ui.ty) { tyFlush(true); ui.ty = null; clearInterval(tyTick); }
   if (name === 'pusher') cpRun(); else if (ui.cp) { cpSave(); ui.cp = null; cancelAnimationFrame(cpRAF); }
   if (name !== 'chests' && ui.chest?.phase === 'loot') ui.chest = null;
 };
 const _modeLucky = modeClasses;
 modeClasses = function () { _modeLucky(); if (currentRoute().name === 'pusher') document.body.classList.add('game-mode'); };
 // Leaving the app: save the live counters
-document.addEventListener('visibilitychange', () => { if (document.hidden) { if (ui.ty) tyFlush(true); if (ui.cp) cpSave(); } });
+document.addEventListener('visibilitychange', () => { if (document.hidden && ui.cp) cpSave(); });

@@ -602,12 +602,12 @@ views.play = () => {
       mp('quiz', 'Buzz in from every phone'), mp('imposter', '3+ players · find the faker'),
       { to: 'charades', art: 'g_charades', e: '🤳', label: 'Forehead Charades', sub: 'Tilt the phone, act it out', g1: '#f59e0b', g2: '#ef4444' }, mp('doodle', 'Draw it, guess it'),
     ]],
-    me && typeof luckyTiles === 'function' ? ['🪙 Coin Arcade', `${fmtCoin(coinsOf(me))} play coins · just for fun`, luckyTiles(me)] : null,
     ['⚔️ Head to head', 'Challenge someone, robot, or pass the phone', [
       { act: 'c4-new', e: '🔴', label: 'Connect Four', sub: liveC4 ? `${liveC4} going · new game` : 'Challenge someone', g1: '#dc2626', g2: '#f59e0b' },
       mp('checkers', 'The classic'), mp('sea', 'Find the hidden boats'), mp('dots', '2–4 players'), mp('dice', 'Roll, keep, score'),
     ]],
-    ['☀️ Daily & solo', 'A little something every day', [
+    ['☀️ Solo & daily', 'Just you — build, solve, collect', [
+      ...(me && typeof luckyTiles === 'function' ? luckyTiles(me) : []),
       { to: 'word', e: '🔤', label: 'Family Word', sub: wrec?.done ? (wrec.won ? `Solved in ${wrec.g.length} ✓` : 'Done today') : 'Today’s puzzle', g1: '#16a34a', g2: '#65a30d' },
       { to: 'memory', e: '🃏', label: 'Memory Match', sub: 'Find the pairs', g1: '#7c3aed', g2: '#db2777' },
       { act: 'trivia-open', e: '🧠', label: 'Family Trivia', sub: triv ? `${triv} new questions!` : 'How well do you know us?', g1: '#0284c7', g2: '#06b6d4', badge: triv || '' },

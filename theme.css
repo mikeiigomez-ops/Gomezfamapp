@@ -2063,3 +2063,42 @@ body.game-mode .game-stage .cp-canvas { width: min(100%, calc(100vh - 330px) * 1
 .cl-item:nth-child(3) { animation-delay: .15s; } .cl-item:nth-child(4) { animation-delay: .3s; }
 .cl-item > span { font-size: 32px; } .cl-item b { font-size: 17px; } .cl-item small { width: 100%; color: var(--muted); }
 .cl-sq { width: 70px; height: 70px; } .cl-sq .sq-svg { width: 100%; height: 100%; }
+
+/* ---------- Squish Tycoon v2 ---------- */
+.ty-daily { width: 100%; margin-bottom: 10px; padding: 12px; border-radius: 16px; background: linear-gradient(135deg, #fde68a, #f59e0b); color: #78350f; font-weight: 850; font-size: 15px; animation: tc-pulse 1.8s ease-in-out infinite; }
+.ty-frz, .ty-combo { min-height: 0; font: 900 15px/1 var(--font-display); text-align: center; opacity: 0; transition: opacity .2s; }
+.ty-frz.on { opacity: 1; color: #ea580c; margin-bottom: 6px; } .ty-combo.on { opacity: 1; color: #db2777; margin-top: 6px; }
+.ty-tabs { margin: 14px 0 10px; } .ty-tabs button { font-size: 13px; padding: 8px 0; } .ty-tabs i { font-style: normal; display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: #ef4444; color: #fff; font-size: 11px; margin-left: 2px; }
+.ty-amt { display: flex; align-items: center; gap: 6px; font-weight: 800; font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+.ty-amt button { padding: 6px 12px; border-radius: 999px; background: var(--surface); box-shadow: var(--shadow); font-weight: 850; color: var(--text); font-size: 13px; }
+.ty-amt button.on { background: #f59e0b; color: #fff; }
+.ty-allnote { margin: 0 2px 8px; }
+.ty-tier { margin: 12px 4px 6px; font-size: 12px; font-weight: 850; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.ty-lines { display: grid; gap: 8px; }
+.ty-line { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 20px; background: var(--surface); box-shadow: var(--shadow); }
+.ty-line.locked { opacity: .55; }
+.ty-line.rar-b-R { box-shadow: var(--shadow), inset 0 0 0 2px rgba(59, 130, 246, .35); } .ty-line.rar-b-E { box-shadow: var(--shadow), inset 0 0 0 2px rgba(168, 85, 247, .4); }
+.ty-line.rar-b-L { box-shadow: var(--shadow), inset 0 0 0 2px rgba(245, 158, 11, .5); background: linear-gradient(135deg, #fffbeb, var(--surface)); } .ty-line.rar-b-M { box-shadow: var(--shadow), inset 0 0 0 2px rgba(236, 72, 153, .5); background: linear-gradient(135deg, #fdf2f8, var(--surface)); }
+.ty-sq { position: relative; width: 58px; height: 58px; flex: none; display: grid; place-items: center; font-size: 30px; }
+.ty-sq .sq-svg { width: 100%; height: 100%; }
+.ty-sq i { position: absolute; bottom: -4px; left: 50%; transform: translateX(-50%); padding: 1px 7px; border-radius: 999px; background: #1f2937; color: #fff; font: 800 10.5px/1.5 var(--font-display); font-style: normal; white-space: nowrap; }
+.ty-line .grow { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ty-line .grow b { font-size: 15px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; } .ty-line .grow b .rar { font-size: 10px; }
+.ty-line .grow small { color: var(--muted); font-size: 12px; }
+.ty-ms { position: relative; display: block; height: 16px; border-radius: 99px; background: var(--surface-2, #eee); overflow: hidden; margin-top: 2px; }
+.ty-ms i { position: absolute; inset: 0 auto 0 0; background: linear-gradient(90deg, #fcd34d, #f59e0b); border-radius: 99px; }
+.ty-ms em { position: relative; display: block; text-align: center; font-style: normal; font-size: 10.5px; font-weight: 800; line-height: 16px; color: #1f2937; }
+.ty-ms.max i { width: 100%; }
+.ty-buybtn { flex: none; display: flex; flex-direction: column; align-items: center; width: 98px; padding: 7px 8px; border-radius: 14px; background: linear-gradient(135deg, #f59e0b, #ea580c); color: #fff; box-shadow: 0 4px 0 #c2410c; }
+.ty-buybtn b { font-size: 15px; } .ty-buybtn small { font-size: 11px; font-weight: 750; opacity: .95; white-space: nowrap; } .ty-buybtn .ty-gain { opacity: .8; font-size: 10px; }
+.ty-buybtn.cant { background: var(--surface-2, #e5e7eb); color: var(--muted); box-shadow: none; }
+.ty-buybtn:active:not(.cant) { transform: translateY(3px); box-shadow: 0 1px 0 #c2410c; }
+.ty-glovecard { display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 10px 12px; border-radius: 20px; background: var(--surface); box-shadow: var(--shadow); }
+.ty-glovecard > span { font-size: 34px; } .ty-glovecard .grow { display: flex; flex-direction: column; } .ty-glovecard small { color: var(--muted); font-size: 12px; }
+.ty-up.locked { opacity: .55; } .ty-upsq { display: block; width: 40px; height: 40px; } .ty-upsq .sq-svg { width: 100%; height: 100%; } .ty-lock { font-size: 20px; padding: 0 8px; }
+.ty-goal.ready { background: #fef9c3; } .ty-goal .grow { min-width: 0; } .ty-claim { padding: 8px 14px; min-height: 0; animation: tc-pulse 1.6s ease-in-out infinite; }
+.ty-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; font-size: 13px; color: var(--muted); } .ty-stats b { display: block; font-size: 17px; color: var(--text); }
+.ty-goldsq { position: fixed; z-index: 70; width: 78px; height: 78px; padding: 0; border-radius: 50%; background: radial-gradient(circle, rgba(253, 224, 71, .9), rgba(253, 224, 71, 0) 70%); animation: ty-goldin .5s var(--spring, ease-out), ty-goldbob 1.4s ease-in-out .5s infinite; }
+.ty-goldsq .sq-svg { width: 100%; height: 100%; filter: drop-shadow(0 0 10px #facc15); }
+@keyframes ty-goldin { from { transform: scale(0) rotate(-40deg); } }
+@keyframes ty-goldbob { 50% { transform: translateY(-10px) rotate(6deg); } }
