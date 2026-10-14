@@ -595,25 +595,42 @@ views.play = () => {
   const free = me && (state.squish.free[me] !== today() || sqBankOf(me) > 0);
   const kid = kidModeId();
   const friendsOk = typeof views.friends === 'function' && (!kid || (typeof kidRule === 'function' && kidRule(kid).on));
-  const tiles = [
+  const games = [
     { to: 'word', e: '🔤', label: 'Family Word', sub: wrec?.done ? (wrec.won ? `Solved in ${wrec.g.length} ✓` : 'Done today') : 'Today’s puzzle', color: '#16a34a' },
-    liveC4 ? { to: 'games', e: '🔴', label: 'Connect Four', sub: turns ? 'Your turn!' : `${liveC4} game${liveC4 > 1 ? 's' : ''} going`, color: '#dc2626', badge: turns || '' }
-      : { act: 'c4-new', e: '🔴', label: 'Connect Four', sub: 'Challenge', color: '#dc2626' },
-    { to: 'memory', e: '🃏', label: 'Memory', sub: 'Find the pairs', color: '#7c3aed' },
+    liveC4 ? { to: 'games', e: '🔴', label: 'Connect 4', sub: turns ? 'Your turn!' : `${liveC4} going`, color: '#dc2626', badge: turns || '' }
+      : { act: 'c4-new', e: '🔴', label: 'Connect 4', sub: 'Challenge', color: '#dc2626' },
+    ...(typeof arcadeLaunch === 'function' ? arcadeLaunch() : []),
+    { to: 'memory', e: '🃏', label: 'Memory', sub: 'Find pairs', color: '#7c3aed' },
     { act: 'trivia-open', e: '🧠', label: 'Trivia', sub: triv ? `${triv} new!` : 'Family quiz', color: '#0284c7', badge: triv || '' },
+  ];
+  const collect = [
     { to: 'squishies', e: '🧸', label: 'Squishies', sub: free ? '🎁 Free box!' : `${n} collected`, color: '#ec4899', badge: free ? '!' : '' },
     me && isKidMember(me) && typeof petTile === 'function' ? petTile(me) : typeof petsTile === 'function' ? petsTile() : null,
     { to: 'house', e: '🏡', label: 'Dream House', sub: h ? `${h.rooms.length} room${h.rooms.length > 1 ? 's' : ''}` : 'Move in!', color: '#8b5cf6' },
     { to: 'avatar', e: '🧍', label: 'My avatar', sub: 'Dress up', color: '#f97316' },
+  ];
+  const social = [
     { to: 'town', e: '🏘️', label: 'Town', sub: 'Visit & vote', color: '#f59e0b' },
-    { to: 'gems', e: GEM, label: 'Gems', sub: me ? `${gemBalance(me)} gems` : 'Wallets', color: '#7c3aed' },
     // A kid can't turn on sync themselves: no dead end into Settings, just "ask a grown-up"
     friendsOk ? ((kid || (me && typeof isKidId === 'function' && isKidId(me))) && typeof syncReady === 'function' && !syncReady() ? { act: 'friends-ask', e: '👯', label: 'Friends', sub: 'Ask a grown-up', color: '#f43f5e' } : { to: 'friends', e: '👯', label: 'Friends', sub: 'Trade & chat', color: '#f43f5e' }) : null,
-    ...(typeof arcadeLaunch === 'function' ? arcadeLaunch() : []),
+    { to: 'gems', e: GEM, label: 'Gems', sub: me ? `${gemBalance(me)} gems` : 'Wallets', color: '#7c3aed' },
     { to: 'games', e: '🏆', label: 'Scores', sub: 'Champs', color: '#eab308' },
-  ].filter(Boolean);
-  return `${needMe()}<div class="launch">${tiles.map(tileHTML).join('')}</div>`;
+  ];
+  const sec = (title, list) => { const ts = list.filter(Boolean); return ts.length ? `<div class="section-title play-sec">${title}</div><div class="launch mini">${ts.map(tileHTML).join('')}</div>` : ''; };
+  return `${needMe()}<i class="play-hero-at" hidden></i>${playTurns(me)}${sec('🎮 Games', games)}${sec('🧸 Collect &amp; create', collect)}${sec('⭐ Friends &amp; rewards', social)}`;
 };
+// "Your turn": the games waiting on you, one tap away
+function playTurns(me) {
+  if (!me || typeof myTurnGames !== 'function') return '';
+  const gs = myTurnGames();
+  if (!gs.length) return '';
+  const card = (g) => {
+    const c4 = g.type === 'c4', X = !c4 && typeof GX !== 'undefined' ? GX[g.type] : null;
+    const others = c4 ? [g.a === me ? g.b : g.a] : (g.p || []).filter((x) => x !== me);
+    return `<button class="turn-card" data-action="go" data-to="${c4 ? 'c4' : 'mp'}/${g.id}"><span class="tile-e" data-art-id="${c4 ? '' : 'g_' + g.type}">${c4 ? '🔴' : X?.e || '🎮'}</span><span class="tc-txt"><b>${esc(c4 ? 'Connect 4' : X?.short || X?.name || 'Game')}</b><small>vs ${esc(others.map((x) => playerName(x)).join(', '))}</small></span><i class="tc-dot"></i></button>`;
+  };
+  return `<div class="section-title play-sec">👉 Your turn <span class="tc-n">${gs.length}</span></div><div class="turn-strip">${gs.slice(0, 4).map(card).join('')}</div>`;
+}
 KID_ROUTES.push('play');
 actions['friends-ask'] = () => toast('👯 Friends need a grown-up to turn on Family sync first — ask them!');
 KID_ACTIONS.add('friends-ask');

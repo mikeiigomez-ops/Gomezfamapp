@@ -2059,7 +2059,7 @@ afterRender = function () {
 };
 // Entry tiles: Play screen and kid homes
 const _playView = views.play;
-views.play = () => _playView().replace('<div class="launch">', playHero(actor()) + '<div class="launch">');
+views.play = () => { const h = _playView(); return h.includes('<i class="play-hero-at" hidden></i>') ? h.replace('<i class="play-hero-at" hidden></i>', playHero(actor())) : h.replace('<div class="launch">', playHero(actor()) + '<div class="launch">'); };
 // Play launcher hero: where you are in Squishvale, plus a free box / your turn when there is one
 function playHero(id) {
   const q = id && state.world?.[id], ch = q?.ch || 0, done = Array.isArray(q?.done) ? q.done.length : 0;
@@ -2067,7 +2067,8 @@ function playHero(id) {
   const pct = Math.round(Math.min(1, (done + (ch && ch <= 8 && STORY[ch] ? (q.step || 0) / STORY[ch].length : 0)) / 8) * 100);
   const free = id && typeof sqBankOf === 'function' && (state.squish.free[id] !== today() || sqBankOf(id) > 0);
   const turns = id && typeof myTurnGames === 'function' ? myTurnGames().length : 0;
-  const chips = (free ? '<button class="ph-chip" data-action="go" data-to="squishies">🎁 Free box!</button>' : '') + (turns ? `<button class="ph-chip hot" data-action="go" data-to="games">🔴 Your turn${turns > 1 ? ` (${turns})` : ''}</button>` : '');
+  const onPlay = currentRoute().name === 'play'; // Play shows these on its own tiles
+  const chips = (free && !onPlay ? '<button class="ph-chip" data-action="go" data-to="squishies">🎁 Free box!</button>' : '') + (turns && currentRoute().name !== 'play' ? `<button class="ph-chip hot" data-action="go" data-to="games">🔴 Your turn${turns > 1 ? ` (${turns})` : ''}</button>` : '');
   return `<section class="play-hero"><button class="ph-main" data-action="go" data-to="world"><span class="ph-e">🗺️</span><span class="ph-txt"><b>Squishvale <small>${ch ? (ch > 8 ? '⭐ 8/8' : `⭐ ${done}/8 · Ch. ${ch}`) : 'New!'}</small></b><span class="ph-goal">${esc(goal)}</span><i class="ph-bar"><b style="width:${pct}%"></b></i></span><span class="ph-go">▶</span></button>${chips ? `<div class="ph-chips">${chips}</div>` : ''}</section>`;
 }
 // Where a squishy lives in the wild (first region whose grass has it), for the collection book

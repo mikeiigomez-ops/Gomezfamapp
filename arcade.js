@@ -167,7 +167,7 @@ function dbPlay(g) {
   return { drawn, owner, ti };
 }
 GX.dots = {
-  name: 'Dots & Boxes', e: '🟦', g1: '#2563eb', g2: '#7c3aed', tag: '2–4 players', max: 4, bot: true, botNote: 'Grabs boxes, avoids giving them away',
+  short: 'Dots & Boxes', sub: '2–4 players', name: 'Dots & Boxes', e: '🟦', g1: '#2563eb', g2: '#7c3aed', tag: '2–4 players', max: 4, bot: true, botNote: 'Grabs boxes, avoids giving them away',
   how: 'Take turns drawing a line between two dots. Close a box to claim it and go again. Most boxes wins!',
   init: () => ({ moves: [] }),
   need: (g) => [g.p[dbPlay(g).ti]],
@@ -232,7 +232,7 @@ function shFleet() {
 const shShotsBy = (g, k) => g.shots.filter((_, i) => i % 2 === k);
 function shSunk(ships, shots) { const s = new Set(shots); return ships.filter((cells) => cells.every((i) => s.has(i))); }
 GX.sea = {
-  name: 'Sea Hunt', e: '🚢', g1: '#0369a1', g2: '#0891b2', tag: 'Find the hidden boats', max: 2, bot: true, hidden: true, botNote: 'Hunts like a pro',
+  short: 'Sea Hunt', sub: 'Find the boats', name: 'Sea Hunt', e: '🚢', g1: '#0369a1', g2: '#0891b2', tag: 'Find the hidden boats', max: 2, bot: true, hidden: true, botNote: 'Hunts like a pro',
   how: `Hide your ${SH_SHIPS.length} boats, then take turns calling a square in each other’s sea. Sink every boat to win!`,
   init: (p) => ({ fleet: Object.fromEntries(p.map((x) => [x, shFleet()])), ready: Object.fromEntries(p.filter((x) => x === BOT).map((x) => [x, true])), shots: [] }),
   need(g) { const notReady = g.p.filter((x) => !g.ready[x]); return notReady.length ? notReady : [g.p[g.shots.length % 2]]; },
@@ -310,7 +310,7 @@ const dgDone = (R, pid) => { const gs = R.guesses[pid] || []; return gs.includes
 const dgRoundOver = (g, R) => !!R.word && dgGuessers(g, R).every((x) => dgDone(R, x));
 const dgCur = (g) => g.rounds.find((R) => !dgRoundOver(g, R));
 GX.doodle = {
-  name: 'Doodle Guess', e: '🎨', g1: '#db2777', g2: '#f97316', tag: 'Draw it, guess it', max: 6, min: 2, bot: false, hidden: true,
+  short: 'Doodle', sub: 'Draw & guess', name: 'Doodle Guess', e: '🎨', g1: '#db2777', g2: '#f97316', tag: 'Draw it, guess it', max: 6, min: 2, bot: false, hidden: true,
   how: 'Take turns drawing a secret word. Everyone else gets two guesses. Right on the first try = 2 points, second = 1, and the artist gets a point for each person who got it.',
   init: (p) => ({ rounds: [...Array(p.length < 3 ? 4 : p.length)].map((_, k) => dgRound(p[k % p.length])) }),
   need(g) { const R = dgCur(g); return !R ? [] : !R.word ? [R.by] : dgGuessers(g, R).filter((x) => !dgDone(R, x)); },
@@ -437,7 +437,7 @@ const fdTotal = (card) => Object.values(card).reduce((a, b) => a + b, 0) + (fdUp
 const fdFilled = (g) => g.p.reduce((a, x) => a + Object.keys(g.cards[x] || {}).length, 0);
 const fdTurn = (g) => g.p[fdFilled(g) % g.p.length];
 GX.dice = {
-  name: 'Five Dice', e: '🎲', g1: '#16a34a', g2: '#0d9488', tag: '1–6 players', max: 6, bot: true, botDelay: 650, botNote: 'Plays the odds',
+  short: 'Five Dice', sub: 'Roll & score', name: 'Five Dice', e: '🎲', g1: '#16a34a', g2: '#0d9488', tag: '1–6 players', max: 6, bot: true, botDelay: 650, botNote: 'Plays the odds',
   how: 'On your turn roll five dice up to three times — tap dice to keep them between rolls — then score them in one empty box. Top section 63+ earns a 35 bonus. Highest total wins!',
   init: (p) => ({ cards: Object.fromEntries(p.map((x) => [x, {}])), cur: null }),
   need: (g) => [fdTurn(g)],
@@ -568,7 +568,7 @@ function ckApply(b, path) {
 }
 function ckBoard(g) { let b = ckStart(), quiet = 0; for (const m of g.moves) { const r = ckApply(b, m); b = r.b; quiet = r.caps ? 0 : quiet + 1; } return { b, quiet }; }
 GX.checkers = {
-  name: 'Checkers', e: '⚫', g1: '#7f1d1d', g2: '#b45309', tag: 'The classic', max: 2, bot: true, botNote: 'Likes a good jump',
+  short: 'Checkers', sub: 'The classic', name: 'Checkers', e: '⚫', g1: '#7f1d1d', g2: '#b45309', tag: 'The classic', max: 2, bot: true, botNote: 'Likes a good jump',
   how: 'Move diagonally forward one square. Jump over a piece to capture it — if you can jump, you must. Reach the far side to become a king 👑 that moves both ways.',
   init: () => ({ moves: [] }),
   need: (g) => [g.p[g.moves.length % 2]],
@@ -721,6 +721,6 @@ function arcadeLaunch() {
   const me = actor();
   return ARCADE.map((t) => {
     const X = GX[t], turn = me ? mpGames().filter((g) => g.type === t && g.mode === 'remote' && mpNeed(g).includes(me)).length : 0;
-    return { act: 'mp-new', attrs: `data-t="${t}"`, e: X.e, label: X.name, sub: turn ? 'Your turn!' : esc(X.tag), color: X.g1, badge: turn || '' };
+    return { act: 'mp-new', attrs: `data-t="${t}"`, e: X.e, art: 'g_' + t, label: X.short || X.name, sub: turn ? 'Your turn!' : esc(X.sub || X.tag), color: X.g1, badge: turn || '' };
   });
 }

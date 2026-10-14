@@ -65,7 +65,7 @@ const qzQ = (g, i) => { const Q = QUIZ[g.qs[i]]; return { q: Q[0], cat: Q[5], ch
 const qzPts = (a, right) => (a && a[0] === right ? 500 + Math.round(500 * Math.max(0, 1 - a[1] / QZ_MS)) : 0);
 const QZ_SHAPES = [['▲', '#e11d48'], ['◆', '#2563eb'], ['●', '#d97706'], ['■', '#16a34a']];
 GX.quiz = {
-  name: 'Quiz Show', e: '🎤', g1: '#7c3aed', g2: '#e11d48', tag: 'Buzz in from every phone', max: 6, bot: true, hidden: true, botDelay: 2500, botNote: 'Knows a lot, not everything',
+  short: 'Quiz Show', sub: 'Buzz in!', name: 'Quiz Show', e: '🎤', g1: '#7c3aed', g2: '#e11d48', tag: 'Buzz in from every phone', max: 6, bot: true, hidden: true, botDelay: 2500, botNote: 'Knows a lot, not everything',
   how: `${QZ_N} questions. Everyone answers on their own phone at the same time — right answers score up to 1,000, more the faster you are. Any spare screen (iPad, laptop) can show the questions like a TV.`,
   init: () => { const qs = shuffle([...QUIZ.keys()]).slice(0, QZ_N); return { qs, ord: qs.map(() => shuffle([0, 1, 2, 3])), ans: {}, skip: {}, qAt: {} }; },
   need(g) { const i = qzCur(g); return i < 0 ? [] : g.p.filter((x) => !(g.ans[x] && i in g.ans[x])); },
@@ -142,7 +142,7 @@ const impCaught = (g) => { const t = impTally(g), top = Math.max(0, ...Object.va
 const impCrewWins = (g) => impCaught(g) && g.guess !== g.word;
 const impNextClue = (g) => g.order[Object.values(g.clues).reduce((a, c) => a + c.length, 0) % g.order.length];
 GX.imposter = {
-  name: 'Who’s the Imposter?', e: '🕵️', g1: '#0f172a', g2: '#7c3aed', tag: '3+ players · party game', max: 8, min: 3, bot: false, hidden: true,
+  short: 'Imposter', sub: '3+ players', name: 'Who’s the Imposter?', e: '🕵️', g1: '#0f172a', g2: '#7c3aed', tag: '3+ players · party game', max: 8, min: 3, bot: false, hidden: true,
   how: 'Everyone gets the same secret word — except the imposter, who only knows the category. Take turns giving a one-word clue (twice around), then vote. Catch the imposter… unless they can guess the word!',
   init(p, opts = {}) {
     const cat = mpPick(Object.keys(IMP_WORDS));
@@ -349,7 +349,7 @@ GX.quiz.view = function (g, who, st) { return _quizView.call(this, g, who, st) +
 ARCADE.push('quiz', 'imposter');
 const _arcadeTilesParty = arcadeTiles, _arcadeLaunchParty = arcadeLaunch;
 arcadeTiles = function () { return _arcadeTilesParty() + `<button class="game-tile" data-action="go" data-to="charades" style="--g1:#f59e0b;--g2:#ef4444"><span class="gt-e">🤳</span><b>Forehead Charades</b><small>Tilt the phone, act it out</small></button>`; };
-arcadeLaunch = function () { return [..._arcadeLaunchParty(), { to: 'charades', e: '🤳', label: 'Charades', sub: 'Act it out', color: '#f59e0b' }]; };
+arcadeLaunch = function () { return [..._arcadeLaunchParty(), { to: 'charades', e: '🤳', art: 'g_charades', label: 'Charades', sub: 'Act it out', color: '#f59e0b' }]; };
 // Imposter played around one phone: say the clues out loud
 const _mpStartParty = actions['mp-start'];
 actions['mp-start'] = (el) => {
