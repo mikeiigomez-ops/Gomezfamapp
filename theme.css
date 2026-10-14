@@ -2120,3 +2120,29 @@ body.game-mode .game-stage .cp-canvas { width: min(100%, calc(100vh - 330px) * 1
 .ty-slow > span:first-child { font-size: 28px; } .ty-slow .grow { flex: 1; display: flex; flex-direction: column; } .ty-slow small { opacity: .95; font-size: 12.5px; } .ty-slow em { font-style: normal; font-weight: 900; white-space: nowrap; }
 .ty-slow.cant { background: var(--surface-2, #e5e7eb); color: var(--muted); box-shadow: none; }
 .ty-slow:active:not(.cant) { transform: translateY(3px); box-shadow: 0 1px 0 #15803d; }
+/* Squish Tycoon v3: rank, wings, Star Lab, daily orders, rainbow squishy */
+.ty-rank { width: 100%; display: flex; align-items: center; gap: 10px; margin-bottom: 10px; padding: 8px 12px; border-radius: 18px; background: var(--surface); box-shadow: var(--shadow); color: var(--text); text-align: left; }
+.ty-rank .ty-rk { flex: none; padding: 4px 10px; border-radius: 999px; background: linear-gradient(135deg, #fcd34d, #f59e0b); color: #78350f; font-weight: 900; font-size: 14px; }
+.ty-rank .grow { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; } .ty-rank .grow b { font-size: 14px; }
+.ty-stars { flex: none; font-weight: 900; font-size: 15px; color: #b45309; }
+.ty-tabs button { font-size: 12px; }
+.ty-wings { display: flex; gap: 6px; overflow-x: auto; margin: 0 0 8px; padding: 2px; scrollbar-width: none; }
+.ty-wings::-webkit-scrollbar { display: none; }
+.ty-wings button { flex: none; display: flex; align-items: center; gap: 5px; padding: 7px 12px; border-radius: 999px; background: var(--surface); box-shadow: var(--shadow); color: var(--text); font-weight: 800; font-size: 13px; }
+.ty-wings button.on { background: linear-gradient(135deg, #fb923c, #f59e0b); color: #fff; }
+.ty-wings button.locked { opacity: .6; } .ty-wings small { font-size: 10.5px; color: var(--muted); }
+.ty-nextwing { display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 12px; border-radius: 20px; border: 2px dashed color-mix(in srgb, #f59e0b 50%, transparent); color: var(--text); }
+.ty-nextwing > span { font-size: 30px; } .ty-nextwing .grow { display: flex; flex-direction: column; gap: 2px; } .ty-nextwing small { color: var(--muted); font-size: 12px; }
+.ty-orders { padding: 10px 0 0; border-radius: 20px; background: var(--surface); box-shadow: var(--shadow); overflow: hidden; }
+.ty-oh { padding: 0 14px 6px; display: flex; flex-direction: column; } .ty-oh small { color: var(--muted); font-size: 12px; font-weight: 700; }
+.ty-goal.got { opacity: .6; }
+.ty-allbtn { display: block; width: calc(100% - 20px); margin: 6px 10px 10px; }
+.ty-alldone { padding: 10px 14px; font-weight: 800; color: #15803d; }
+.ty-labhead { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; } .ty-labhead > span { font-size: 34px; } .ty-labhead .grow { display: flex; flex-direction: column; gap: 3px; } .ty-labhead small { color: var(--muted); font-size: 12px; }
+.ty-lab .title small { color: var(--muted); font-weight: 750; font-size: 12px; }
+.ty-pips { display: flex; gap: 3px; margin-top: 5px; flex-wrap: wrap; } .ty-pips i { width: 10px; height: 6px; border-radius: 3px; background: var(--surface-2); } .ty-pips i.on { background: #f59e0b; }
+.ty-goldsq.rainbow { background: radial-gradient(circle, rgba(244, 114, 182, .8), rgba(129, 140, 248, .5) 50%, transparent 72%); }
+.ty-goldsq.rainbow .sq-svg { filter: drop-shadow(0 0 8px #f472b6) hue-rotate(0deg); animation: ty-rainbow 1.2s linear infinite; }
+@keyframes ty-rainbow { to { filter: drop-shadow(0 0 8px #818cf8) hue-rotate(360deg); } }
+.ty-tabs button { white-space: nowrap; font-size: 11.5px; } .ty-tabs i { font-size: 10px; }
+.ty-labbar { height: 7px; margin-top: 6px; }

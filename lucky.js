@@ -13,7 +13,8 @@ function coinSaveSoon(now) { clearTimeout(coinSaveT); if (now) { save(); return;
 function fmtCoin(n) {
   n = Math.floor(n);
   if (n < 10000) return n.toLocaleString();
-  const u = [[1e21, 'Sx'], [1e18, 'Qi'], [1e15, 'Qa'], [1e12, 'T'], [1e9, 'B'], [1e6, 'M'], [1e3, 'K']].find(([v]) => n >= v);
+  if (n >= 1e36) { const e3 = Math.floor(Math.log10(n) / 3 + 1e-9), k = e3 - 12, v = n / Math.pow(1000, e3); return (v < 100 ? v.toFixed(1) : Math.floor(v)).toString().replace(/\.0$/, '') + String.fromCharCode(97 + Math.floor(k / 26) % 26, 97 + (k % 26)); } // then aa, ab, ac…
+  const u = [[1e33, 'Dc'], [1e30, 'No'], [1e27, 'Oc'], [1e24, 'Sp'], [1e21, 'Sx'], [1e18, 'Qi'], [1e15, 'Qa'], [1e12, 'T'], [1e9, 'B'], [1e6, 'M'], [1e3, 'K']].find(([v]) => n >= v);
   return (n / u[0]).toFixed(n / u[0] < 100 ? 1 : 0).replace(/\.0$/, '') + u[1];
 }
 const fmtRate = (n) => (n < 10 ? (Math.round(n * 10) / 10).toString() : fmtCoin(n));
