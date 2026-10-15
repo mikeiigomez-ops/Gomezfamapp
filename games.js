@@ -440,6 +440,7 @@ Object.assign(actions, {
     if (!c4CanMove(g) || c4Grid(g.moves)[c].length >= C4_ROWS) return;
     g.moves = [...g.moves, c]; gBuzz();
     c4Finish(g);
+    if (g.mode === 'remote' && typeof syncSoon === 'function') syncSoon();
     save(); render();
     if (g.mode === 'bot' && !c4Status(g).over) {
       setTimeout(() => {

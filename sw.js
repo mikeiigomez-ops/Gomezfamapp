@@ -1,7 +1,7 @@
 // Network-first service worker: always tries for the latest version, falls back to the cached copy when offline.
 // Each version's cache is filled in one go at install and never mixed with another version's files. A new version
 // waits until the app says "Reload" (or every window is closed), so one session never runs old and new scripts together.
-const CACHE = 'gomezfam-v124';
+const CACHE = 'gomezfam-v125';
 const SHELL = ['./', './index.html', './styles.css', './theme.css', './screen.css', './ui.js', './art.js', './art-icons.js', './art-house.js', './art-rewards.js', './art-games.js', './app.js', './extras.js', './plus.js', './kids.js', './little.js', './family.js', './together.js', './games.js', './gems.js', './squish.js', './collect.js', './friends.js', './avatar.js', './house.js', './polish.js', './screen.js', './sync.js', './live.js', './world-data.js', './world.js', './nav.js', './bank.js', './cats.js', './periods.js', './level.js', './notify.js', './fun.js', './arcade.js', './pet.js', './party.js', './lucky.js', './tycoon.js', './ux3.js', './ux3.css', './runway.js', './runway.css', './world.css', './motion.css', './motion.js', './manifest.webmanifest', './icons/apple-touch-icon.png', './icons/icon-192.png', './icons/icon-512.png', './vendor/qrcode.min.js', './vendor/jsQR.js'];
 
 self.addEventListener('install', (e) => {
@@ -46,10 +46,21 @@ self.addEventListener('fetch', (e) => {
 self.addEventListener('push', (e) => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch { d = { body: e.data ? e.data.text() : '' }; }
-  e.waitUntil(self.registration.showNotification(d.title || 'Gomez Family Hub', {
-    body: d.body || '', tag: d.tag || undefined, renotify: !!d.tag, data: { url: d.url || './' },
-    icon: './icons/icon-192.png', badge: './icons/icon-192.png',
-  }));
+  e.waitUntil((async () => {
+    // Tell open windows right away, so a screen you're already looking at (like a game) updates by itself
+    const ws = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    ws.forEach((w) => w.postMessage({ type: 'push', url: d.url || '', tag: d.tag || '' }));
+    await self.registration.showNotification(d.title || 'Gomez Family Hub', {
+      body: d.body || '', tag: d.tag || undefined, renotify: !!d.tag, data: { url: d.url || './' },
+      icon: './icons/icon-192.png', badge: './icons/icon-192.png',
+    });
+    // Already on that exact screen: it's updating in front of you, so tidy the notification away
+    const hash = (d.url || '').replace(/^\.?\/?/, '');
+    if (d.tag && hash.startsWith('#') && ws.some((w) => w.visibilityState === 'visible' && w.url.endsWith(hash))) {
+      await new Promise((r) => setTimeout(r, 2000));
+      (await self.registration.getNotifications({ tag: d.tag })).forEach((n) => n.close());
+    }
+  })());
 });
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();

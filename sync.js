@@ -208,13 +208,13 @@ async function kidAuth() {
 
 function stopListening() { if (Sync.unsub) { Sync.unsub(); Sync.unsub = null; } }
 
-function listen() {
+function listen(quiet) {
   const { doc, onSnapshot } = Sync.fb.fs;
   Sync.ref = doc(Sync.fb.db, 'families', Sync.cfg.familyId);
-  setStatus('connecting');
+  if (!quiet) setStatus('connecting');
   Sync.firstSnap = true;
   Sync.unsub = onSnapshot(Sync.ref, async (snap) => {
-    Sync.listenRetryN = 0;
+    Sync.listenRetryN = 0; Sync.lastSnapAt = Date.now();
     if (!snap.exists()) return setStatus('error', 'That family wasn\'t found. Check the invite code.');
     const d = snap.data();
     Sync.emails = d.emails || [];
@@ -293,6 +293,7 @@ function applyRemote(remote, rev) {
 
 function schedulePush(delay = 900) {
   if (!Sync.ref || !Sync.base) return;
+  if (Date.now() < (Sync.fastUntil || 0)) delay = Math.min(delay, 150); // a game move: send it right away
   Sync.dirty = true;
   clearTimeout(Sync.pushTimer);
   Sync.pushTimer = setTimeout(push, delay);
@@ -391,10 +392,25 @@ function wakeSync() {
   if (Sync.status === 'offline') setStatus('synced');
   checkUnpushed();
 }
+// A listener can look alive but have quietly lost its connection (iPhones do this after the app sleeps or the
+// network changes). Start a fresh one, which reads the latest copy straight away. Quiet: no "connecting" flash.
+function syncRefresh() {
+  if (!Sync.fb || !Sync.user?.emailVerified || !Sync.cfg?.familyId || Sync.cfg.joining || Sync.status === 'denied') return;
+  clearTimeout(Sync.listenTimer); stopListening(); listen(true);
+}
+// Moves in a game on two phones: push this one now instead of after the usual pause
+function syncSoon() { Sync.fastUntil = Date.now() + 2500; if (Sync.dirty && Sync.pushTimer) schedulePush(150); }
+let syncHiddenAt = 0;
 // Going to the background / closing: send waiting edits now instead of after the debounce
 function flushPush() { if (Sync.pushTimer && Sync.dirty) { clearTimeout(Sync.pushTimer); Sync.pushTimer = null; push(); } }
-window.addEventListener('online', wakeSync);
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') wakeSync(); else flushPush(); });
+window.addEventListener('online', () => (Sync.unsub ? syncRefresh() : wakeSync()));
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') { syncHiddenAt = Date.now(); flushPush(); return; }
+  if (Sync.unsub && syncHiddenAt && Date.now() - syncHiddenAt > 3000) syncRefresh(); else wakeSync(); // back after a while: don't trust the old connection
+  syncHiddenAt = 0;
+});
+// A notification arrived while the app is open (e.g. "your turn"): fetch the change now
+if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', (e) => { if (e.data?.type === 'push' && Sync.unsub) syncRefresh(); });
 window.addEventListener('pagehide', flushPush);
 window.addEventListener('unhandledrejection', (e) => console.error('unhandled rejection', e.reason));
 

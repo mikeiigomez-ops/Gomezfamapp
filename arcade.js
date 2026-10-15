@@ -41,6 +41,7 @@ function mpDo(g, who, data) {
   g.last = who; g.lastAt = Date.now();
   gBuzz();
   mpFinish(g);
+  if (g.mode === 'remote' && typeof syncSoon === 'function') syncSoon();
   save(); render();
   mpBotSoon(g);
   return true;
@@ -672,6 +673,21 @@ Object.assign(actions, {
 KID_ROUTES.push('mp');
 for (const a of ['mp-new', 'mp-quick', 'mp-sel', 'mp-start', 'mp-act', 'mp-ready', 'mp-rematch', 'mp-del', 'dg-word', 'dg-ink', 'dg-size', 'dg-undo', 'dg-send', 'ck-tap']) KID_ACTIONS.add(a);
 if (typeof PG_SKIP !== 'undefined') PG_SKIP.add('mp');
+// Waiting for someone on another phone: if nothing has come in for 20s, re-check (a quiet phone connection can
+// miss updates). The "your turn" notification also nudges the app right away (sw.js → syncRefresh).
+setInterval(() => {
+  const { name, param } = currentRoute(), me = actor();
+  if (name === 'c4' && document.visibilityState === 'visible' && typeof syncRefresh === 'function' && typeof Sync !== 'undefined' && Sync.unsub) { // Connect Four too
+    const g = state.games.find((x) => x.id === param);
+    if (g && g.mode === 'remote' && !c4Status(g).over && c4Turn(g) !== me && Date.now() - Math.max(Sync.lastSnapAt || 0, ui.mpCheckAt || 0) > 20000) { ui.mpCheckAt = Date.now(); syncRefresh(); }
+    return;
+  }
+  if (name !== 'mp' || document.visibilityState !== 'visible' || typeof syncRefresh !== 'function' || typeof Sync === 'undefined' || !Sync.unsub) return;
+  const g = state.games.find((x) => x.id === param);
+  if (!g || g.mode !== 'remote' || !GX[g.type] || mpStatus(g).over || mpNeed(g).includes(me)) return;
+  const quiet = Date.now() - Math.max(Sync.lastSnapAt || 0, ui.mpCheckAt || 0);
+  if (quiet > 20000) { ui.mpCheckAt = Date.now(); syncRefresh(); }
+}, 5000);
 if (typeof HUB_OF !== 'undefined') { HUB_OF.mp = 'play'; HUB_OF.mygames = 'play'; }
 
 // Full-screen game mode while a game is on; the robot and drawings come alive after each render
