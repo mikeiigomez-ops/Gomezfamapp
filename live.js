@@ -17,7 +17,8 @@ const liveFresh = (v) => v && v.room && Date.now() - (v.at || 0) < LIVE_TTL;
 function liveMine() {
   const me = actor(), { name, param } = currentRoute();
   if (me && name === 'world' && document.visibilityState === 'visible' && typeof worldLive === 'function') { const w = worldLive(); if (w) return { room: '', w, at: Date.now() }; }
-  if (!me || name !== 'room' || document.visibilityState !== 'visible') return { room: '', at: Date.now() };
+  if (me && document.visibilityState === 'visible' && (name === 'mp' || name === 'c4') && param) return { room: '', game: param, at: Date.now() }; // so "your turn" alerts aren't sent while you're watching
+  if (!me || name !== 'room' || document.visibilityState !== 'visible') return { room: '', at: Date.now(), ...(me && document.visibilityState === 'visible' && !Live.fallback ? { app: 1 } : {}) };
   const found = findRoom(param);
   if (!found || ui.hEdit === found.r.id) return { room: '', at: Date.now() };
   const pos = canEdit(found.mid) ? (found.r.av || { x: 72, y: 95 }) : (ui.hVis?.[param] || { x: 24, y: 97 });
@@ -36,8 +37,9 @@ async function liveSend(force) {
   const rec = liveMine();
   const key = JSON.stringify({ ...rec, at: 0 });
   if (!force && key === Live.sent) return;
-  if (!rec.room && !rec.w && !Live.sent) return; // never been anywhere: nothing to clear
-  Live.sent = rec.room || rec.w ? key : '';
+  const here = rec.room || rec.w || rec.game || rec.app;
+  if (!here && !Live.sent) return; // never been anywhere: nothing to clear
+  Live.sent = here ? key : '';
   const fs = Sync.fb.fs;
   try {
     if (!Live.fallback) await fs.setDoc(fs.doc(Sync.fb.db, 'families', Sync.cfg.familyId, 'live', me), rec);
@@ -48,7 +50,21 @@ async function liveSend(force) {
 }
 function liveBeat() {
   clearInterval(Live.beat);
-  Live.beat = setInterval(() => { if (['room', 'world'].includes(currentRoute().name)) liveSend(true); }, LIVE_BEAT);
+  Live.beat = setInterval(() => { if (['room', 'world', 'mp', 'c4'].includes(currentRoute().name) || (!Live.fallback && document.visibilityState === 'visible')) liveSend(true); }, LIVE_BEAT);
+}
+
+// Where is this person in the app right now? Fresh within a minute, else null (closed, asleep or offline).
+async function liveSpot(mid) {
+  if (!liveOn() || !mid) return null;
+  let v = Live.all[mid];
+  if (!Live.fallback) {
+    try {
+      const fs = Sync.fb.fs;
+      const snap = await Promise.race([fs.getDoc(fs.doc(Sync.fb.db, 'families', Sync.cfg.familyId, 'live', mid)), new Promise((r) => setTimeout(() => r(null), 1500))]);
+      if (snap && snap.exists()) v = snap.data();
+    } catch { /* can't tell: treat as away */ }
+  }
+  return v && Date.now() - (v.at || 0) < 60000 && (v.room || v.w || v.game || v.app) ? v : null;
 }
 
 /* ---------- Receive ---------- */
@@ -146,7 +162,8 @@ const _afterRenderLive = afterRender;
 afterRender = function () {
   _afterRenderLive();
   const r = currentRoute().name;
-  if (LIVE_ROUTES.includes(r)) { liveListen(); liveBeat(); } else { liveStop(); clearInterval(Live.beat); }
+  if (LIVE_ROUTES.includes(r)) liveListen(); else liveStop();
+  if (!Live.beat) liveBeat(); // keeps "where am I" fresh while the app is open
   livePush();
 };
 // Walking (a tap on the floor) — house.js has already moved you; send the new spot.

@@ -387,7 +387,15 @@ async function relaySend(events) {
   if (!url || !events.length || typeof Sync === 'undefined' || !Sync.user) return;
   let token; try { token = await Sync.user.getIdToken(); } catch { return; }
   for (const e of events) {
-    const subs = relayTargets(e);
+    let subs = relayTargets(e);
+    // Game turns: skip anyone who has the app open right now — the game updates in front of them, or a
+    // "your turn" banner shows inside the app. Only phones that are closed or asleep get the notification.
+    const game = /^#(mp|c4)\//.test(e.url || '') && typeof liveSpot === 'function';
+    if (game && subs.length) {
+      const here = new Set();
+      for (const m of new Set(subs.map((x) => x.member))) if (await liveSpot(m)) here.add(m);
+      subs = subs.filter((x) => !here.has(x.member));
+    }
     if (!subs.length) continue;
     try {
       const res = await fetch(url, { method: 'POST', keepalive: true, headers: { authorization: 'Bearer ' + token, 'content-type': 'application/json' },

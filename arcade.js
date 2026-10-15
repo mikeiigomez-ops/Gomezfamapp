@@ -697,9 +697,35 @@ modeClasses = function () {
   const { name, param } = currentRoute();
   if (name === 'mp') { const g = state.games.find((x) => x.id === param); document.body.classList.toggle('game-mode', !!g && !!GX[g.type] && !(['doodle', 'runway'].includes(g.type) && mpStatus(g).over)); } // stays full-screen after the end, like Connect Four (the doodle gallery scrolls)
 };
+// In the app on another screen when it becomes your turn somewhere: a small banner instead of a phone notification
+function turnBanner() {
+  const me = actor(); if (!me) return;
+  const { name, param } = currentRoute(), now = [];
+  for (const g of state.games || []) {
+    if (g.mode !== 'remote') continue;
+    if (GX[g.type] && g.p.includes(me) && !mpStatus(g).over && mpNeed(g).includes(me)) now.push([`${g.id}:${g.lastAt || g.at}`, g, GX[g.type].e, GX[g.type].name, g.p.find((x) => x !== me), 'mp/' + g.id]);
+    else if (g.type === 'c4' && [g.a, g.b].includes(me) && typeof c4Status === 'function' && !c4Status(g).over && c4Turn(g) === me) now.push([`${g.id}:${g.moves.length}`, g, '🔴', 'Connect Four', g.a === me ? g.b : g.a, 'c4/' + g.id]);
+  }
+  const first = !ui.turnSeen; ui.turnSeen ||= new Set();
+  const fresh = now.filter(([k]) => !ui.turnSeen.has(k));
+  fresh.forEach(([k]) => ui.turnSeen.add(k));
+  if (first) return; // what was already waiting when the app opened shows on the Play tab
+  const show = fresh.find(([, g, , , , to]) => to !== `${name}/${param}`);
+  if (!show) return;
+  const [, , e, gname, opp, to] = show;
+  document.querySelector('.turn-banner')?.remove();
+  const el = document.createElement('button');
+  el.className = 'turn-banner'; el.dataset.action = 'go'; el.dataset.to = to;
+  el.innerHTML = `<span>${e}</span><span class="grow"><b>Your turn!</b><small>${esc(gname)}${opp && isMember(opp) ? ` vs ${esc(playerName(opp))}` : ''}</small></span><em>Play ›</em>`;
+  document.body.appendChild(el);
+  gBuzz();
+  setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 400); }, 6000);
+}
 const _afterRenderArcade = afterRender;
 afterRender = function () {
   _afterRenderArcade();
+  try { turnBanner(); } catch (e) { console.error(e); }
+  if (currentRoute().name === 'mp' || currentRoute().name === 'c4') document.querySelector('.turn-banner')?.remove();
   const { name, param } = currentRoute();
   if (name !== 'mp') return;
   const g = state.games.find((x) => x.id === param);
