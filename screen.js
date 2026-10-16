@@ -608,6 +608,7 @@ views.play = () => {
     ]],
     ['☀️ Solo & daily', 'Just you — build, solve, collect', [
       ...(me && typeof luckyTiles === 'function' ? luckyTiles(me) : []),
+      { act: 'vale-open', e: '🎵', label: 'Windsong Vale', sub: 'Family adventure · flute, sword, dungeon', g1: '#0f766e', g2: '#1e1b4b' },
       { act: 'lw-open', e: '🌿', label: 'Letter World', sub: 'Demo · a world made of letters', g1: '#065f46', g2: '#0f172a' },
       { to: 'word', e: '🔤', label: 'Family Word', sub: wrec?.done ? (wrec.won ? `Solved in ${wrec.g.length} ✓` : 'Done today') : 'Today’s puzzle', g1: '#16a34a', g2: '#65a30d' },
       { to: 'memory', e: '🃏', label: 'Memory Match', sub: 'Find the pairs', g1: '#7c3aed', g2: '#db2777' },
@@ -698,4 +699,5 @@ viewEl.addEventListener('scroll', () => {
 }, { passive: true });
 // Letter World is its own page (a full-screen graphics demo)
 actions['lw-open'] = () => { location.href = 'letterworld.html'; };
-if (typeof KID_ACTIONS !== 'undefined') KID_ACTIONS.add('lw-open');
+actions['vale-open'] = () => { if (typeof flushSave === 'function') flushSave(); location.href = 'vale.html'; };
+if (typeof KID_ACTIONS !== 'undefined') { KID_ACTIONS.add('lw-open'); KID_ACTIONS.add('vale-open'); }

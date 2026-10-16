@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#05070a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Windsong Vale</title>
+  <style>
+    :root { --ui: rgba(6, 12, 10, .62); --line: rgba(170, 255, 200, .28); --txt: #dff7e6; --mono: ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace; }
+    html, body { margin: 0; height: 100%; background: #05070a; overflow: hidden; overscroll-behavior: none; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; font-family: var(--mono); color: var(--txt); }
+    canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+    button { font-family: var(--mono); color: var(--txt); background: var(--ui); border: 1px solid var(--line); border-radius: 14px; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); cursor: pointer; }
+    .top { position: fixed; z-index: 3; left: 0; right: 0; top: calc(env(safe-area-inset-top, 0px) + 8px); display: flex; align-items: center; gap: 8px; padding: 0 10px; pointer-events: none; }
+    .top > * { pointer-events: auto; }
+    .top a, .top button { font: 700 13px/1 var(--mono); padding: 9px 11px; text-decoration: none; color: var(--txt); background: var(--ui); border: 1px solid var(--line); border-radius: 12px; }
+    .stats { display: flex; gap: 10px; align-items: center; padding: 6px 10px; border-radius: 12px; background: var(--ui); border: 1px solid var(--line); font-weight: 800; font-size: 15px; white-space: nowrap; }
+    .stats .hp { color: #ff5a6e; letter-spacing: 1px; font-size: 17px; } .stats .gl { color: #6ff0c8; } .stats .ky { color: #ffd257; }
+    .grow { flex: 1; }
+    .pad { position: fixed; z-index: 3; right: calc(env(safe-area-inset-right, 0px) + 14px); bottom: calc(env(safe-area-inset-bottom, 0px) + 18px); display: grid; grid-template-columns: auto auto; gap: 10px; align-items: end; }
+    .pad button { width: 64px; height: 64px; border-radius: 50%; font-size: 26px; display: grid; place-items: center; }
+    .pad #bSword { width: 84px; height: 84px; font-size: 34px; grid-row: span 2; border-color: rgba(255, 220, 160, .5); }
+    .pad small { position: absolute; margin-top: 50px; font-size: 10px; font-weight: 800; opacity: .8; }
+    .pad button[hidden] { display: none; }
+    #bAct { position: relative; font-size: 13px; font-weight: 800; }
+    .stick { position: fixed; z-index: 2; width: 110px; height: 110px; margin: -55px 0 0 -55px; border-radius: 50%; border: 1px dashed rgba(200, 255, 220, .35); pointer-events: none; display: none; }
+    .stick i { position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%; background: rgba(200, 255, 220, .25); }
+    .dlg { position: fixed; z-index: 6; left: 12px; right: 12px; bottom: calc(env(safe-area-inset-bottom, 0px) + 14px); max-width: 560px; margin: 0 auto; padding: 14px 16px 16px; border-radius: 16px; background: rgba(4, 8, 7, .9); border: 1px solid var(--line); font-size: 15.5px; line-height: 1.45; min-height: 62px; }
+    .dlg b { display: block; color: #ffd98a; font-size: 13px; margin-bottom: 4px; letter-spacing: .05em; }
+    .dlg i { position: absolute; right: 14px; bottom: 8px; font-style: normal; opacity: .6; font-size: 12px; animation: blink 1s infinite; }
+    .dlg .choices { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .dlg .choices button { padding: 9px 11px; font-size: 13px; font-weight: 700; }
+    @keyframes blink { 50% { opacity: .15; } }
+    .flute { position: fixed; z-index: 6; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom, 0px) + 10px); margin: 0 auto; width: min(100% - 20px, 460px); padding: 12px; border-radius: 18px; background: rgba(4, 8, 7, .9); border: 1px solid var(--line); }
+    .flute .notes { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+    .flute .notes button { height: 64px; font-size: 28px; border-radius: 16px; }
+    .flute .notes button:active, .flute .notes button.hit { background: rgba(120, 255, 200, .3); }
+    .flute .played { text-align: center; font-size: 22px; letter-spacing: 6px; min-height: 30px; margin: 4px 0 8px; color: #8ff0d0; }
+    .flute .book { font-size: 12.5px; line-height: 1.7; opacity: .9; margin-top: 8px; }
+    .flute .book span { color: #8ff0d0; letter-spacing: 3px; }
+    .flute .x { position: absolute; right: 10px; top: 8px; padding: 6px 10px; font-size: 12px; }
+    .msg { position: fixed; z-index: 7; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 64px); transform: translateX(-50%); padding: 9px 14px; border-radius: 12px; background: rgba(4, 8, 7, .88); border: 1px solid var(--line); font-weight: 700; font-size: 14px; line-height: 1.35; text-align: center; width: max-content; max-width: calc(100% - 36px); transition: opacity .4s; pointer-events: none; }
+    .tags { position: fixed; inset: 0; z-index: 2; pointer-events: none; }
+    .tags span { position: absolute; transform: translate(-50%, -100%); font: 700 11px/1 var(--mono); color: #fff; text-shadow: 0 1px 4px #000, 0 0 2px #000; white-space: nowrap; }
+    .tags span.ghost { color: #b9d4ff; opacity: .85; }
+    .title { position: fixed; inset: 0; z-index: 8; display: grid; place-items: center; background: radial-gradient(circle at 50% 40%, rgba(5, 14, 10, .55), rgba(2, 4, 4, .92)); padding: 20px; text-align: center; }
+    .title h1 { margin: 0; font-size: 34px; letter-spacing: .14em; color: #e9fff1; text-shadow: 0 0 18px rgba(120, 255, 190, .45); }
+    .title p { margin: 8px 0 18px; opacity: .8; font-size: 13.5px; line-height: 1.5; }
+    .title .go { font-size: 17px; font-weight: 800; padding: 14px 26px; border-radius: 16px; border-color: rgba(255, 220, 160, .6); }
+    .title .hall { margin: 18px auto 0; max-width: 360px; text-align: left; font-size: 12.5px; line-height: 1.7; opacity: .9; }
+    .title .hall b { color: #ffd98a; }
+    .hurt { position: fixed; inset: 0; z-index: 1; pointer-events: none; box-shadow: inset 0 0 120px rgba(255, 30, 40, .55); opacity: 0; transition: opacity .25s; }
+    .err { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; z-index: 9; background: #05070a; }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div class="hurt" id="hurt"></div>
+  <div class="tags" id="tags"></div>
+  <div class="top">
+    <a href="./#play" aria-label="Back to the app">‹</a>
+    <div class="stats"><span class="hp" id="hp">♥♥♥</span><span class="gl" id="gl">◆ 0</span><span class="ky" id="ky"></span></div>
+    <span class="grow"></span>
+    <button id="bNote" aria-label="Leave a note for the family">📝</button>
+    <button id="bSound" aria-label="Sound">🔊</button>
+  </div>
+  <div class="pad">
+    <button id="bFlute" aria-label="Wind Flute" hidden>🎵</button>
+    <button id="bSword" aria-label="Sword">⚔️</button>
+    <button id="bAct" aria-label="Action">✋</button>
+  </div>
+  <div class="stick" id="stick"><i></i></div>
+  <div class="msg" id="msg" style="opacity:0"></div>
+  <script src="vale.js"></script>
+</body>
+</html>
