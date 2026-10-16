@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#05070a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Letter World</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #05070a; overflow: hidden; overscroll-behavior: none; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+    canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+    .hud { position: fixed; z-index: 2; display: flex; gap: 8px; top: calc(env(safe-area-inset-top, 0px) + 10px); }
+    .hud.l { left: 12px; } .hud.r { right: 12px; }
+    .hud button, .hud a { font: 700 14px/1 ui-monospace, Menlo, Consolas, monospace; color: #cfe9d6; background: rgba(5, 10, 8, .55); border: 1px solid rgba(160, 255, 190, .25); border-radius: 12px; padding: 10px 12px; text-decoration: none; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+    .title { position: fixed; z-index: 2; left: 0; right: 0; top: calc(env(safe-area-inset-top, 0px) + 62px); text-align: center; color: #e8fff0; font: 800 15px/1.3 ui-monospace, Menlo, Consolas, monospace; letter-spacing: .08em; text-shadow: 0 2px 10px #000; pointer-events: none; transition: opacity 1.2s; }
+    .title small { display: block; font-weight: 600; font-size: 11.5px; opacity: .7; letter-spacing: .03em; }
+    .tag { position: fixed; z-index: 2; transform: translate(-50%, -100%); color: #fff; font: 700 12px/1 ui-monospace, Menlo, Consolas, monospace; text-shadow: 0 1px 4px #000, 0 0 2px #000; pointer-events: none; white-space: nowrap; }
+    .stick { position: fixed; z-index: 2; width: 110px; height: 110px; margin: -55px 0 0 -55px; border-radius: 50%; border: 1px dashed rgba(200, 255, 220, .35); pointer-events: none; display: none; }
+    .stick i { position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%; background: rgba(200, 255, 220, .25); }
+    .err { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; color: #cfe9d6; font: 15px/1.5 ui-monospace, Menlo, monospace; text-align: center; }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div class="hud l"><a href="./#play" aria-label="Back to the app">‹ Back</a></div>
+  <div class="hud r"><button id="night" aria-label="Day or night">🌙</button><button id="detail" aria-label="Detail">HD</button></div>
+  <div class="title" id="title">LETTER WORLD<small>drag anywhere to walk · demo</small></div>
+  <div class="tag" id="tag">You</div>
+  <div class="stick" id="stick"><i></i></div>
+  <script src="letterworld.js"></script>
+</body>
+</html>

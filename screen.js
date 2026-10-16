@@ -608,6 +608,7 @@ views.play = () => {
     ]],
     ['☀️ Solo & daily', 'Just you — build, solve, collect', [
       ...(me && typeof luckyTiles === 'function' ? luckyTiles(me) : []),
+      { act: 'lw-open', e: '🌿', label: 'Letter World', sub: 'Demo · a world made of letters', g1: '#065f46', g2: '#0f172a' },
       { to: 'word', e: '🔤', label: 'Family Word', sub: wrec?.done ? (wrec.won ? `Solved in ${wrec.g.length} ✓` : 'Done today') : 'Today’s puzzle', g1: '#16a34a', g2: '#65a30d' },
       { to: 'memory', e: '🃏', label: 'Memory Match', sub: 'Find the pairs', g1: '#7c3aed', g2: '#db2777' },
       { act: 'trivia-open', e: '🧠', label: 'Family Trivia', sub: triv ? `${triv} new questions!` : 'How well do you know us?', g1: '#0284c7', g2: '#06b6d4', badge: triv || '' },
@@ -695,3 +696,6 @@ viewEl.addEventListener('scroll', () => {
   const stuck = viewEl.scrollTop > 4 && tabs.getBoundingClientRect().top <= viewEl.getBoundingClientRect().top + 2;
   if (stuck !== tabs.classList.contains('stuck')) tabs.classList.toggle('stuck', stuck);
 }, { passive: true });
+// Letter World is its own page (a full-screen graphics demo)
+actions['lw-open'] = () => { location.href = 'letterworld.html'; };
+if (typeof KID_ACTIONS !== 'undefined') KID_ACTIONS.add('lw-open');
